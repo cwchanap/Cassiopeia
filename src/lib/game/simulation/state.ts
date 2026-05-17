@@ -4,30 +4,31 @@ import {
 	cooldown,
 	DASH_COOLDOWN,
 	DASH_DISTANCE,
-	LIGHT_ATTACK_COOLDOWN,
-	LIGHT_ATTACK_DAMAGE,
-	LIGHT_ATTACK_RANGE,
+	LIGHT_ATTACK_TIMING,
 	MAX_QI,
 	MENTOR_INTERACT_RANGE,
 	normaliseMove,
 	PLAYER_SPEED,
 	QI_BURST_COOLDOWN,
 	QI_BURST_COST,
-	QI_BURST_DAMAGE,
-	QI_BURST_RANGE,
+	QI_BURST_TIMING,
 	RIVAL_ATTACK_COOLDOWN,
 	RIVAL_ATTACK_DAMAGE,
 	RIVAL_ATTACK_RANGE,
 	RIVAL_SPEED,
 	distance
 } from './combat';
+import type { AttackTiming } from './combat';
 import type {
 	ActiveGamePhase,
+	CombatActionKind,
 	CombatActionState,
 	CombatEffect,
+	FighterState,
 	GameState,
 	HudSnapshot,
 	InputSnapshot,
+	PlayerActionStatus,
 	Vec2
 } from './types';
 
@@ -119,6 +120,9 @@ export function stepGame(state: GameState, input: InputSnapshot, deltaTime: numb
 		const qiBeforeAttacks = state.player.qi;
 		handlePlayerAttacks(state, input);
 		updateRival(state, dt);
+		advanceCombatAction(state.player, dt);
+		advanceCombatAction(state.rival, dt);
+		resolvePlayerActiveHit(state);
 		resolveEndState(state);
 		if (state.phase === 'duel' && state.player.qi === qiBeforeAttacks) {
 			state.player.qi = Math.min(MAX_QI, state.player.qi + dt * 5);
@@ -138,10 +142,26 @@ export function toHudSnapshot(state: GameState): HudSnapshot {
 		dashCooldown: state.player.dashCooldown,
 		attackCooldown: state.player.attackCooldown,
 		qiCooldown: state.player.qiCooldown,
-		playerActionStatus: 'Ready',
+		playerActionStatus: getPlayerActionStatus(state.player.combatAction),
 		showRestart: state.phase === 'victory' || state.phase === 'defeat',
 		isPaused: state.phase === 'paused'
 	};
+}
+
+function getPlayerActionStatus(combatAction: CombatActionState): PlayerActionStatus {
+	if (combatAction.phase === 'hitstun') {
+		return 'Staggered';
+	}
+
+	if (combatAction.phase === 'recovery') {
+		return 'Recovering';
+	}
+
+	if (combatAction.phase === 'startup' || combatAction.phase === 'active') {
+		return 'Striking';
+	}
+
+	return 'Ready';
 }
 
 function togglePause(state: GameState): void {
@@ -229,27 +249,120 @@ function handlePhaseProgression(state: GameState, input: InputSnapshot): void {
 }
 
 function handlePlayerAttacks(state: GameState, input: InputSnapshot): void {
-	if (
-		input.lightAttack &&
-		state.player.attackCooldown === 0 &&
-		canHit(state.player, state.rival, LIGHT_ATTACK_RANGE)
-	) {
-		state.rival.health = Math.max(0, state.rival.health - LIGHT_ATTACK_DAMAGE);
-		state.player.attackCooldown = LIGHT_ATTACK_COOLDOWN;
-		addEffect(state, 'hit', state.rival.position);
+	if (!canStartAction(state.player)) {
+		return;
 	}
 
-	if (
-		input.qiBurst &&
-		state.player.qiCooldown === 0 &&
-		state.player.qi >= QI_BURST_COST &&
-		canHit(state.player, state.rival, QI_BURST_RANGE)
-	) {
-		state.rival.health = Math.max(0, state.rival.health - QI_BURST_DAMAGE);
+	if (input.lightAttack) {
+		startAttack(state.player, 'lightAttack', LIGHT_ATTACK_TIMING);
+		return;
+	}
+
+	if (input.qiBurst && state.player.qiCooldown === 0 && state.player.qi >= QI_BURST_COST) {
+		startAttack(state.player, 'qiBurst', QI_BURST_TIMING);
 		state.player.qi -= QI_BURST_COST;
 		state.player.qiCooldown = QI_BURST_COOLDOWN;
-		addEffect(state, 'qi', state.rival.position);
 	}
+}
+
+function canStartAction(fighter: FighterState): boolean {
+	return fighter.active && fighter.health > 0 && fighter.combatAction.phase === 'idle';
+}
+
+function startAttack(
+	fighter: FighterState,
+	kind: CombatActionKind,
+	timing: AttackTiming
+): void {
+	fighter.combatAction = {
+		kind,
+		phase: 'startup',
+		elapsed: 0,
+		duration: timing.startup,
+		hasHit: false
+	};
+}
+
+function enterHitstun(fighter: FighterState, duration: number): void {
+	if (fighter.health <= 0) {
+		return;
+	}
+
+	fighter.combatAction = {
+		kind: 'none',
+		phase: 'hitstun',
+		elapsed: 0,
+		duration,
+		hasHit: false
+	};
+}
+
+function advanceCombatAction(fighter: FighterState, deltaTime: number): void {
+	let remaining = deltaTime;
+
+	while (remaining > 0 && fighter.combatAction.phase !== 'idle') {
+		const action = fighter.combatAction;
+		const timeLeft = action.duration - action.elapsed;
+
+		if (remaining < timeLeft) {
+			action.elapsed += remaining;
+			return;
+		}
+
+		remaining -= Math.max(0, timeLeft);
+		advanceCombatActionPhase(fighter);
+	}
+}
+
+function advanceCombatActionPhase(fighter: FighterState): void {
+	const action = fighter.combatAction;
+
+	if (action.phase === 'startup') {
+		const timing = getActionTiming(action.kind);
+		action.phase = 'active';
+		action.elapsed = 0;
+		action.duration = timing.active;
+		return;
+	}
+
+	if (action.phase === 'active') {
+		const timing = getActionTiming(action.kind);
+		action.phase = 'recovery';
+		action.elapsed = 0;
+		action.duration = timing.recovery;
+		return;
+	}
+
+	if (action.phase === 'recovery' || action.phase === 'hitstun') {
+		fighter.combatAction = idleCombatAction();
+	}
+}
+
+function getActionTiming(kind: CombatActionKind): AttackTiming {
+	if (kind === 'qiBurst') {
+		return QI_BURST_TIMING;
+	}
+
+	return LIGHT_ATTACK_TIMING;
+}
+
+function resolvePlayerActiveHit(state: GameState): void {
+	const action = state.player.combatAction;
+
+	if (
+		action.phase !== 'active' ||
+		action.hasHit ||
+		!state.rival.active ||
+		!canHit(state.player, state.rival, getActionTiming(action.kind).range)
+	) {
+		return;
+	}
+
+	const timing = getActionTiming(action.kind);
+	state.rival.health = Math.max(0, state.rival.health - timing.damage);
+	action.hasHit = true;
+	addEffect(state, action.kind === 'qiBurst' ? 'qi' : 'hit', state.rival.position);
+	enterHitstun(state.rival, timing.hitstun);
 }
 
 function updateRival(state: GameState, deltaTime: number): void {
