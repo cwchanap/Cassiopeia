@@ -97,6 +97,10 @@
 				<span>Dash</span>
 				<strong>{cooldownText(hud.dashCooldown)}</strong>
 			</div>
+			<div>
+				<span>Action</span>
+				<strong>{hud.playerActionStatus}</strong>
+			</div>
 			{#if hud.phase === 'duel' || hud.phase === 'victory'}
 				<div>
 					<span>Rival</span>
@@ -247,7 +251,9 @@
 	}
 
 	.status-cluster strong {
-		font-size: 1rem;
+		min-width: 0;
+		font-size: 0.95rem;
+		overflow-wrap: anywhere;
 	}
 
 	.prompt {
@@ -314,7 +320,7 @@
 			bottom: 118px;
 			left: 14px;
 			width: auto;
-			grid-template-columns: repeat(4, minmax(0, 1fr));
+			grid-template-columns: repeat(auto-fit, minmax(62px, 1fr));
 		}
 
 		.status-cluster div {

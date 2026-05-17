@@ -457,7 +457,7 @@ function updatePrompt(state: GameState): void {
 	}
 
 	if (state.phase === 'duel') {
-		state.prompt = 'J: light attack  K: qi burst  Space: qinggong dash';
+		state.prompt = 'J: strike  K: qi burst  Space: dash';
 		return;
 	}
 
