@@ -23,6 +23,7 @@ import {
 } from './combat';
 import type {
 	ActiveGamePhase,
+	CombatActionState,
 	CombatEffect,
 	GameState,
 	HudSnapshot,
@@ -37,6 +38,16 @@ const OBJECTIVES: Record<ActiveGamePhase, string> = {
 	victory: 'Victory',
 	defeat: 'Defeat'
 };
+
+function idleCombatAction(): CombatActionState {
+	return {
+		kind: 'none',
+		phase: 'idle',
+		elapsed: 0,
+		duration: 0,
+		hasHit: false
+	};
+}
 
 export function createInitialGameState(): GameState {
 	return {
@@ -53,7 +64,8 @@ export function createInitialGameState(): GameState {
 			attackCooldown: 0,
 			qiCooldown: 0,
 			rivalAttackCooldown: 0,
-			active: true
+			active: true,
+			combatAction: idleCombatAction()
 		},
 		rival: {
 			position: { x: 0.8, z: 0 },
@@ -64,7 +76,8 @@ export function createInitialGameState(): GameState {
 			attackCooldown: 0,
 			qiCooldown: 0,
 			rivalAttackCooldown: 0,
-			active: false
+			active: false,
+			combatAction: idleCombatAction()
 		},
 		mentor: { position: { x: -4, z: -3 } },
 		effects: [],
@@ -125,6 +138,7 @@ export function toHudSnapshot(state: GameState): HudSnapshot {
 		dashCooldown: state.player.dashCooldown,
 		attackCooldown: state.player.attackCooldown,
 		qiCooldown: state.player.qiCooldown,
+		playerActionStatus: 'Ready',
 		showRestart: state.phase === 'victory' || state.phase === 'defeat',
 		isPaused: state.phase === 'paused'
 	};

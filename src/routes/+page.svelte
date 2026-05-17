@@ -15,6 +15,7 @@
 		dashCooldown: 0,
 		attackCooldown: 0,
 		qiCooldown: 0,
+		playerActionStatus: 'Ready',
 		showRestart: false,
 		isPaused: false
 	});

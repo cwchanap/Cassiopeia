@@ -5,6 +5,11 @@ import {
 	stepGame,
 	toHudSnapshot
 } from './state';
+import {
+	LIGHT_ATTACK_TIMING,
+	QI_BURST_COST,
+	QI_BURST_TIMING
+} from './combat';
 import type { GameState, InputSnapshot } from './types';
 
 const idleInput: InputSnapshot = {
@@ -17,6 +22,8 @@ const idleInput: InputSnapshot = {
 	interact: false,
 	pause: false
 };
+
+const frame = 1 / 60;
 
 function setupDuel(): GameState {
 	const state = createInitialGameState();
@@ -32,7 +39,7 @@ function setupDuel(): GameState {
 function advance(state: GameState, seconds: number): void {
 	let remaining = seconds;
 	while (remaining > 0) {
-		const dt = Math.min(1 / 60, remaining);
+		const dt = Math.min(frame, remaining);
 		stepGame(state, idleInput, dt);
 		remaining -= dt;
 	}
@@ -55,7 +62,7 @@ describe('wuxia simulation state', () => {
 		state.player.position.x = -4;
 		state.player.position.z = -3;
 
-		stepGame(state, { ...idleInput, interact: true }, 1 / 60);
+		stepGame(state, { ...idleInput, interact: true }, frame);
 
 		expect(state.phase).toBe('trainDash');
 		expect(state.objective).toBe('Practice qinggong dash');
@@ -67,7 +74,7 @@ describe('wuxia simulation state', () => {
 		state.phase = 'trainDash';
 		state.player.dashCooldown = 0;
 
-		stepGame(state, { ...idleInput, dash: true }, 1 / 60);
+		stepGame(state, { ...idleInput, dash: true }, frame);
 
 		expect(state.phase).toBe('duel');
 		expect(state.objective).toBe('Defeat the rival disciple');
@@ -77,31 +84,32 @@ describe('wuxia simulation state', () => {
 	it('light attack waits for its active window, damages once, then recovers', () => {
 		const state = setupDuel();
 
-		stepGame(state, { ...idleInput, lightAttack: true }, 1 / 60);
+		stepGame(state, { ...idleInput, lightAttack: true }, frame);
 		expect(state.player.combatAction.kind).toBe('lightAttack');
 		expect(state.player.combatAction.phase).toBe('startup');
 		expect(state.rival.health).toBe(100);
 
-		advance(state, 0.08);
+		const startupProbe = LIGHT_ATTACK_TIMING.startup * (2 / 3);
+		advance(state, startupProbe);
 		expect(state.rival.health).toBe(100);
 
-		advance(state, 0.08);
-		expect(state.rival.health).toBe(88);
+		advance(state, LIGHT_ATTACK_TIMING.startup - startupProbe + LIGHT_ATTACK_TIMING.active / 2);
+		expect(state.rival.health).toBe(100 - LIGHT_ATTACK_TIMING.damage);
 		expect(state.player.combatAction.hasHit).toBe(true);
 
-		advance(state, 0.08);
-		expect(state.rival.health).toBe(88);
+		advance(state, LIGHT_ATTACK_TIMING.active / 2 + frame);
+		expect(state.rival.health).toBe(100 - LIGHT_ATTACK_TIMING.damage);
 		expect(state.player.combatAction.phase).toBe('recovery');
 
-		advance(state, 0.25);
+		advance(state, LIGHT_ATTACK_TIMING.recovery + frame);
 		expect(state.player.combatAction.phase).toBe('idle');
 	});
 
 	it('ignores attack input while the player is already committed', () => {
 		const state = setupDuel();
 
-		stepGame(state, { ...idleInput, lightAttack: true }, 1 / 60);
-		stepGame(state, { ...idleInput, qiBurst: true }, 1 / 60);
+		stepGame(state, { ...idleInput, lightAttack: true }, frame);
+		stepGame(state, { ...idleInput, qiBurst: true }, frame);
 
 		expect(state.player.combatAction.kind).toBe('lightAttack');
 		expect(state.player.qi).toBe(60);
@@ -112,14 +120,14 @@ describe('wuxia simulation state', () => {
 		state.player.qi = 60;
 		state.rival.position = { x: 1.5, z: 0 };
 
-		stepGame(state, { ...idleInput, qiBurst: true }, 1 / 60);
+		stepGame(state, { ...idleInput, qiBurst: true }, frame);
 		expect(state.player.combatAction.kind).toBe('qiBurst');
 		expect(state.player.combatAction.phase).toBe('startup');
-		expect(state.player.qi).toBe(25);
+		expect(state.player.qi).toBe(60 - QI_BURST_COST);
 		expect(state.rival.health).toBe(100);
 
-		advance(state, 0.26);
-		expect(state.rival.health).toBe(72);
+		advance(state, QI_BURST_TIMING.startup + frame);
+		expect(state.rival.health).toBe(100 - QI_BURST_TIMING.damage);
 		expect(state.player.qiCooldown).toBeGreaterThan(0);
 	});
 
@@ -128,10 +136,10 @@ describe('wuxia simulation state', () => {
 
 		expect(toHudSnapshot(state).playerActionStatus).toBe('Ready');
 
-		stepGame(state, { ...idleInput, lightAttack: true }, 1 / 60);
+		stepGame(state, { ...idleInput, lightAttack: true }, frame);
 		expect(toHudSnapshot(state).playerActionStatus).toBe('Striking');
 
-		advance(state, 0.22);
+		advance(state, LIGHT_ATTACK_TIMING.startup + LIGHT_ATTACK_TIMING.active + frame);
 		expect(toHudSnapshot(state).playerActionStatus).toBe('Recovering');
 	});
 
@@ -139,13 +147,13 @@ describe('wuxia simulation state', () => {
 		const state = setupDuel();
 		state.rival.health = 1;
 
-		stepGame(state, { ...idleInput, lightAttack: true }, 1 / 60);
-		advance(state, 0.16);
+		stepGame(state, { ...idleInput, lightAttack: true }, frame);
+		advance(state, LIGHT_ATTACK_TIMING.startup + LIGHT_ATTACK_TIMING.active / 2);
 		expect(state.phase).toBe('victory');
 
 		const defeated = setupDuel();
 		defeated.player.health = 0;
-		stepGame(defeated, idleInput, 1 / 60);
+		stepGame(defeated, idleInput, frame);
 		expect(defeated.phase).toBe('defeat');
 
 		const restarted = restartGame();

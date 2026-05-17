@@ -375,7 +375,14 @@ function createInitialRenderState(): GameState {
 			attackCooldown: 0,
 			qiCooldown: 0,
 			rivalAttackCooldown: 0,
-			active: true
+			active: true,
+			combatAction: {
+				kind: 'none',
+				phase: 'idle',
+				elapsed: 0,
+				duration: 0,
+				hasHit: false
+			}
 		},
 		rival: {
 			position: { x: 0.8, z: 0 },
@@ -386,7 +393,14 @@ function createInitialRenderState(): GameState {
 			attackCooldown: 0,
 			qiCooldown: 0,
 			rivalAttackCooldown: 0,
-			active: false
+			active: false,
+			combatAction: {
+				kind: 'none',
+				phase: 'idle',
+				elapsed: 0,
+				duration: 0,
+				hasHit: false
+			}
 		},
 		mentor: { position: { x: -4, z: -3 } },
 		effects: [],
