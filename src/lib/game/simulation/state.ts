@@ -363,6 +363,8 @@ function collectActiveHit(
 	const action = attacker.combatAction;
 
 	if (
+		!attacker.active ||
+		attacker.health <= 0 ||
 		action.phase !== 'active' ||
 		action.hasHit ||
 		target.health <= 0 ||

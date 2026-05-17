@@ -196,6 +196,23 @@ describe('wuxia simulation state', () => {
 		expect(state.phase).toBe('victory');
 	});
 
+	it('dead active attacker cannot deal damage', () => {
+		const state = setupDuel();
+		state.rival.health = 0;
+		state.rival.combatAction = {
+			kind: 'rivalStrike',
+			phase: 'active',
+			elapsed: 0,
+			duration: RIVAL_STRIKE_TIMING.active,
+			hasHit: false
+		};
+
+		stepGame(state, idleInput, frame);
+
+		expect(state.player.health).toBe(100);
+		expect(state.phase).toBe('victory');
+	});
+
 	it('reports player action status through the HUD snapshot', () => {
 		const state = setupDuel();
 
