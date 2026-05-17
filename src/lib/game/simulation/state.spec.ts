@@ -113,7 +113,7 @@ describe('wuxia simulation state', () => {
 		stepGame(state, { ...idleInput, qiBurst: true }, frame);
 
 		expect(state.player.combatAction.kind).toBe('lightAttack');
-		expect(state.player.qi).toBeGreaterThan(qiBeforeBurstInput - QI_BURST_COST);
+		expect(state.player.qi).toBeGreaterThanOrEqual(qiBeforeBurstInput);
 	});
 
 	it('qi burst consumes qi at action start and damages during its active window', () => {
