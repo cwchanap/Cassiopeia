@@ -105,6 +105,23 @@ describe('wuxia simulation state', () => {
 		expect(state.player.combatAction.phase).toBe('idle');
 	});
 
+	it('resolves a player hit when the final active slice transitions to recovery', () => {
+		const state = setupDuel();
+
+		stepGame(state, { ...idleInput, lightAttack: true }, frame);
+		state.rival.position = { x: LIGHT_ATTACK_TIMING.range + 1, z: 0 };
+
+		advance(state, LIGHT_ATTACK_TIMING.startup - frame + LIGHT_ATTACK_TIMING.active / 2);
+		expect(state.player.combatAction.phase).toBe('active');
+		expect(state.rival.health).toBe(100);
+
+		state.rival.position = { x: LIGHT_ATTACK_TIMING.range * 0.5, z: 0 };
+		stepGame(state, idleInput, LIGHT_ATTACK_TIMING.active / 2);
+
+		expect(state.rival.health).toBe(100 - LIGHT_ATTACK_TIMING.damage);
+		expect(state.player.combatAction.phase).toBe('recovery');
+	});
+
 	it('ignores attack input while the player is already committed', () => {
 		const state = setupDuel();
 

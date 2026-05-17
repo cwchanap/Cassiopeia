@@ -120,6 +120,7 @@ export function stepGame(state: GameState, input: InputSnapshot, deltaTime: numb
 		const qiBeforeAttacks = state.player.qi;
 		handlePlayerAttacks(state, input);
 		updateRival(state, dt);
+		resolvePlayerActiveHit(state);
 		advanceCombatAction(state.player, dt);
 		advanceCombatAction(state.rival, dt);
 		resolvePlayerActiveHit(state);
