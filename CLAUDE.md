@@ -1,31 +1,79 @@
-## Project Configuration
+# CLAUDE.md
 
-- **Language**: TypeScript
-- **Package Manager**: bun
-- **Add-ons**: prettier, eslint, vitest, playwright, tailwindcss, sveltekit-adapter, mcp
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
----
+## Project
 
-You are able to use the Svelte MCP server, where you have access to comprehensive Svelte 5 and SvelteKit documentation. Here's how to use the available tools effectively:
+Cassiopeia is a SvelteKit + Three.js prototype of a 3D Wuxia RPG ("Mountain Sect Initiate"). A single route (`src/routes/+page.svelte`) hosts a third-person courtyard scene where the player meets a mentor, trains a qinggong dash, and duels a rival disciple.
 
-## Available Svelte MCP Tools:
+- **Language**: TypeScript (strict), Svelte 5 (runes mode forced for all non-`node_modules` files in `svelte.config.js`)
+- **Package manager**: bun
+- **Stack**: SvelteKit + Vite + Tailwind v4 + Three.js (no game engine; vanilla Three.js)
+- **Design spec / implementation plan**: `docs/superpowers/specs/` and `docs/superpowers/plans/` — read these before changing gameplay or architecture.
 
-### 1. list-sections
+## Commands
 
-Use this FIRST to discover all available documentation sections. Returns a structured list with titles, use_cases, and paths.
-When asked about Svelte or SvelteKit topics, ALWAYS use this tool at the start of the chat to find relevant sections.
+```sh
+bun run dev          # vite dev server
+bun run build        # production build (used by Playwright webServer)
+bun run preview      # preview production build on :4173
+bun run check        # svelte-kit sync && svelte-check (typecheck)
+bun run lint         # prettier --check + eslint
+bun run format       # prettier --write
+bun run test:unit    # vitest (both client + server projects)
+bun run test:e2e     # playwright install && playwright test
+bun run test         # unit (--run) + e2e
+```
 
-### 2. get-documentation
+Run a single test:
 
-Retrieves full documentation content for specific sections. Accepts single or multiple sections.
-After calling the list-sections tool, you MUST analyze the returned documentation sections (especially the use_cases field) and then use the get-documentation tool to fetch ALL documentation sections that are relevant for the user's task.
+```sh
+bun x vitest run src/lib/game/simulation/state.spec.ts
+bun x vitest run -t 'duel start'                     # by name
+bun x playwright test src/routes/wuxia-mvp.e2e.ts    # e2e file
+```
 
-### 3. svelte-autofixer
+Vitest is split into two projects (see `vite.config.ts`):
 
-Analyzes Svelte code and returns issues and suggestions.
-You MUST use this tool whenever writing Svelte code before sending it to the user. Keep calling it until no issues or suggestions are returned.
+- **client**: browser-mode (Playwright/Chromium headless), picks up `*.svelte.{test,spec}.{js,ts}`. Used for component tests via `vitest-browser-svelte`.
+- **server**: Node, picks up the rest of `*.{test,spec}.{js,ts}`. Used for pure simulation logic.
 
-### 4. playground-link
+Playwright e2e tests live alongside routes with the `.e2e.ts` suffix (see `playwright.config.ts` `testMatch`); the webServer builds + previews the app on port 4173 — they do **not** share the dev server.
 
-Generates a Svelte Playground link with the provided code.
-After completing the code, ask the user if they want a playground link. Only call this tool after user confirmation and NEVER if code was written to files in their project.
+## Architecture
+
+The codebase enforces a strict separation between the SvelteKit shell, a pure-TypeScript simulation, a Three.js renderer, and an input controller. They communicate only through plain data (`InputSnapshot`, `GameState`, `HudSnapshot`).
+
+```
+src/routes/+page.svelte
+  └─ createGameRuntime({ host, onHudUpdate, onError })
+       ├─ createInputController(host)        ─► InputSnapshot   (input/)
+       ├─ stepGame(state, input, dt)          (simulation/)
+       ├─ createWuxiaScene(host).render(state) (render/, Three.js)
+       └─ toHudSnapshot(state) ─► onHudUpdate (drives Svelte HUD)
+```
+
+- **`src/lib/game/runtime/createGameRuntime.ts`** owns the `requestAnimationFrame` loop, ties everything together, and is the only place that touches lifecycle (`start` / `restart` / `dispose`). It catches Three.js init errors and surfaces them through `onError` so the route can render the fallback panel. `dispose` is idempotent and must remain so — the page's `Attachment` returns it as the cleanup callback.
+- **`src/lib/game/simulation/`** (`state.ts`, `combat.ts`, `types.ts`) is pure TypeScript. It must not import Three.js, DOM, or Svelte. `stepGame` is the only mutator; `toHudSnapshot` is the only read path for UI. Constants and helpers (ranges, speeds, cooldowns, distance) live in `combat.ts`.
+- **`src/lib/game/render/`** owns Three.js. `createWuxiaScene` allocates geometries/materials into a `SceneResources` registry so `dispose()` can tear them down deterministically. `camera.ts` is a pure function (`computeWuxiaCameraPose`) so camera framing is unit-testable without a renderer.
+- **`src/lib/game/input/createInputController.ts`** translates DOM events into a single `InputSnapshot` per frame. Edge-triggered actions (`dash`, `lightAttack`, `qiBurst`, `interact`, `pause`) are consumed inside `getSnapshot()` — call it exactly once per frame.
+
+When extending gameplay: add fields to `GameState`/`InputSnapshot`/`HudSnapshot` in `simulation/types.ts`, update `stepGame` and `toHudSnapshot`, then let the renderer and HUD pick up the new snapshot. Don't add gameplay rules into the Three.js layer.
+
+The page-level Svelte component uses Svelte 5 runes (`$state`, `$derived`, `$props`) and the new `{@attach}` syntax to mount the runtime on a `<div>`. Keep this pattern when adding new mount points.
+
+## Conventions
+
+- **Prettier**: tabs, single quotes, no trailing commas, 100-col print width. `prettier-plugin-svelte` and `prettier-plugin-tailwindcss` are active.
+- **ESLint**: flat config in `eslint.config.js` extends `js`, `typescript-eslint`, and `eslint-plugin-svelte`, then `prettier`. `no-undef` is intentionally off because typescript-eslint covers it.
+- **`$lib` alias** is the only configured path alias (SvelteKit default). Use `$lib/game/...` rather than relative paths from routes.
+- **Adapter is `adapter-auto`** — no specific deployment target is committed; switch adapters in `svelte.config.js` when targeting a real environment.
+
+## Svelte MCP
+
+The `svelte` MCP server (`.mcp.json`) provides authoritative Svelte 5 / SvelteKit docs. Prefer it over training knowledge.
+
+- `list-sections` first to find relevant docs (call at the start of any Svelte work).
+- `get-documentation` to fetch the sections that match the task's `use_cases`.
+- `svelte-autofixer` after writing or modifying any `.svelte` code — keep calling until it returns no issues.
+- `playground-link` only on user request, and never when the code was written into project files.
