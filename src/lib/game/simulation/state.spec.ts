@@ -1,15 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-	createInitialGameState,
-	restartGame,
-	stepGame,
-	toHudSnapshot
-} from './state';
-import {
-	LIGHT_ATTACK_TIMING,
-	QI_BURST_COST,
-	QI_BURST_TIMING
-} from './combat';
+import { createInitialGameState, restartGame, stepGame, toHudSnapshot } from './state';
+import { LIGHT_ATTACK_TIMING, QI_BURST_COST, QI_BURST_TIMING, RIVAL_STRIKE_TIMING } from './combat';
 import type { GameState, InputSnapshot } from './types';
 
 const idleInput: InputSnapshot = {
@@ -147,6 +138,62 @@ describe('wuxia simulation state', () => {
 		advance(state, QI_BURST_TIMING.startup + frame);
 		expect(state.rival.health).toBe(100 - QI_BURST_TIMING.damage);
 		expect(state.player.qiCooldown).toBeGreaterThan(0);
+	});
+
+	it('rival startup delays damage instead of applying damage instantly', () => {
+		const state = setupDuel();
+
+		stepGame(state, idleInput, frame);
+
+		expect(state.rival.combatAction.kind).toBe('rivalStrike');
+		expect(state.rival.combatAction.phase).toBe('startup');
+		expect(state.player.health).toBe(100);
+
+		advance(state, RIVAL_STRIKE_TIMING.startup + frame);
+
+		expect(state.player.health).toBe(100 - RIVAL_STRIKE_TIMING.damage);
+		expect(state.rival.combatAction.hasHit).toBe(true);
+	});
+
+	it('player hit interrupts rival startup through hitstun', () => {
+		const state = setupDuel();
+
+		stepGame(state, idleInput, frame);
+		stepGame(state, { ...idleInput, lightAttack: true }, frame);
+		advance(state, LIGHT_ATTACK_TIMING.startup + frame);
+
+		expect(state.rival.health).toBe(100 - LIGHT_ATTACK_TIMING.damage);
+		expect(state.rival.combatAction.phase).toBe('hitstun');
+
+		advance(state, RIVAL_STRIKE_TIMING.startup);
+
+		expect(state.player.health).toBe(100);
+	});
+
+	it('simultaneous active attacks both resolve before end-state checks', () => {
+		const state = setupDuel();
+		state.player.health = RIVAL_STRIKE_TIMING.damage;
+		state.rival.health = LIGHT_ATTACK_TIMING.damage;
+		state.player.combatAction = {
+			kind: 'lightAttack',
+			phase: 'active',
+			elapsed: 0,
+			duration: LIGHT_ATTACK_TIMING.active,
+			hasHit: false
+		};
+		state.rival.combatAction = {
+			kind: 'rivalStrike',
+			phase: 'active',
+			elapsed: 0,
+			duration: RIVAL_STRIKE_TIMING.active,
+			hasHit: false
+		};
+
+		stepGame(state, idleInput, frame);
+
+		expect(state.player.health).toBe(0);
+		expect(state.rival.health).toBe(0);
+		expect(state.phase).toBe('victory');
 	});
 
 	it('reports player action status through the HUD snapshot', () => {

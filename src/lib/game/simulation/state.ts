@@ -12,10 +12,9 @@ import {
 	QI_BURST_COOLDOWN,
 	QI_BURST_COST,
 	QI_BURST_TIMING,
-	RIVAL_ATTACK_COOLDOWN,
-	RIVAL_ATTACK_DAMAGE,
 	RIVAL_ATTACK_RANGE,
 	RIVAL_SPEED,
+	RIVAL_STRIKE_TIMING,
 	distance
 } from './combat';
 import type { AttackTiming } from './combat';
@@ -31,6 +30,15 @@ import type {
 	PlayerActionStatus,
 	Vec2
 } from './types';
+
+type PendingHit = {
+	attacker: FighterState;
+	target: FighterState;
+	damage: number;
+	hitstun: number;
+	effect: CombatEffect['kind'];
+	position: Vec2;
+};
 
 const OBJECTIVES: Record<ActiveGamePhase, string> = {
 	seekMentor: 'Meet the mentor',
@@ -120,10 +128,10 @@ export function stepGame(state: GameState, input: InputSnapshot, deltaTime: numb
 		const qiBeforeAttacks = state.player.qi;
 		handlePlayerAttacks(state, input);
 		updateRival(state, dt);
-		resolvePlayerActiveHit(state);
+		resolveActiveHits(state);
 		advanceCombatAction(state.player, dt);
 		advanceCombatAction(state.rival, dt);
-		resolvePlayerActiveHit(state);
+		resolveActiveHits(state);
 		resolveEndState(state);
 		if (state.phase === 'duel' && state.player.qi === qiBeforeAttacks) {
 			state.player.qi = Math.min(MAX_QI, state.player.qi + dt * 5);
@@ -270,11 +278,7 @@ function canStartAction(fighter: FighterState): boolean {
 	return fighter.active && fighter.health > 0 && fighter.combatAction.phase === 'idle';
 }
 
-function startAttack(
-	fighter: FighterState,
-	kind: CombatActionKind,
-	timing: AttackTiming
-): void {
+function startAttack(fighter: FighterState, kind: CombatActionKind, timing: AttackTiming): void {
 	fighter.combatAction = {
 		kind,
 		phase: 'startup',
@@ -344,30 +348,62 @@ function getActionTiming(kind: CombatActionKind): AttackTiming {
 		return QI_BURST_TIMING;
 	}
 
+	if (kind === 'rivalStrike') {
+		return RIVAL_STRIKE_TIMING;
+	}
+
 	return LIGHT_ATTACK_TIMING;
 }
 
-function resolvePlayerActiveHit(state: GameState): void {
-	const action = state.player.combatAction;
+function collectActiveHit(
+	attacker: FighterState,
+	target: FighterState,
+	effect: CombatEffect['kind']
+): PendingHit | null {
+	const action = attacker.combatAction;
 
 	if (
 		action.phase !== 'active' ||
 		action.hasHit ||
-		!state.rival.active ||
-		!canHit(state.player, state.rival, getActionTiming(action.kind).range)
+		target.health <= 0 ||
+		!canHit(attacker, target, getActionTiming(action.kind).range)
 	) {
-		return;
+		return null;
 	}
 
 	const timing = getActionTiming(action.kind);
-	state.rival.health = Math.max(0, state.rival.health - timing.damage);
-	action.hasHit = true;
-	addEffect(state, action.kind === 'qiBurst' ? 'qi' : 'hit', state.rival.position);
-	enterHitstun(state.rival, timing.hitstun);
+	return {
+		attacker,
+		target,
+		damage: timing.damage,
+		hitstun: timing.hitstun,
+		effect,
+		position: target.position
+	};
+}
+
+function resolveActiveHits(state: GameState): void {
+	const playerHit = collectActiveHit(
+		state.player,
+		state.rival,
+		state.player.combatAction.kind === 'qiBurst' ? 'qi' : 'hit'
+	);
+	const rivalHit = collectActiveHit(state.rival, state.player, 'hit');
+	const hits = [playerHit, rivalHit].filter((hit): hit is PendingHit => hit !== null);
+
+	for (const hit of hits) {
+		hit.target.health = Math.max(0, hit.target.health - hit.damage);
+		hit.attacker.combatAction.hasHit = true;
+		addEffect(state, hit.effect, hit.position);
+	}
+
+	for (const hit of hits) {
+		enterHitstun(hit.target, hit.hitstun);
+	}
 }
 
 function updateRival(state: GameState, deltaTime: number): void {
-	if (!state.rival.active) {
+	if (!state.rival.active || state.rival.health <= 0) {
 		return;
 	}
 
@@ -375,7 +411,7 @@ function updateRival(state: GameState, deltaTime: number): void {
 	const dz = state.player.position.z - state.rival.position.z;
 	const range = Math.hypot(dx, dz);
 
-	if (range > RIVAL_ATTACK_RANGE && range > 0.01) {
+	if (range > RIVAL_ATTACK_RANGE && range > 0.01 && state.rival.combatAction.phase === 'idle') {
 		state.rival.position = clampToCourtyard({
 			x: state.rival.position.x + (dx / range) * RIVAL_SPEED * deltaTime,
 			z: state.rival.position.z + (dz / range) * RIVAL_SPEED * deltaTime
@@ -383,10 +419,8 @@ function updateRival(state: GameState, deltaTime: number): void {
 		state.rival.heading = Math.atan2(dx, dz);
 	}
 
-	if (range <= RIVAL_ATTACK_RANGE && state.rival.rivalAttackCooldown === 0) {
-		state.player.health = Math.max(0, state.player.health - RIVAL_ATTACK_DAMAGE);
-		state.rival.rivalAttackCooldown = RIVAL_ATTACK_COOLDOWN;
-		addEffect(state, 'hit', state.player.position);
+	if (range <= RIVAL_ATTACK_RANGE && canStartAction(state.rival)) {
+		startAttack(state.rival, 'rivalStrike', RIVAL_STRIKE_TIMING);
 	}
 }
 
