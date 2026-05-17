@@ -18,6 +18,42 @@ export const RIVAL_ATTACK_DAMAGE = 6;
 export const RIVAL_ATTACK_COOLDOWN = 0.75;
 export const MAX_QI = 100;
 
+export type AttackTiming = {
+	startup: number;
+	active: number;
+	recovery: number;
+	hitstun: number;
+	damage: number;
+	range: number;
+};
+
+export const LIGHT_ATTACK_TIMING: AttackTiming = {
+	startup: 0.12,
+	active: 0.1,
+	recovery: 0.18,
+	hitstun: 0.22,
+	damage: LIGHT_ATTACK_DAMAGE,
+	range: LIGHT_ATTACK_RANGE
+};
+
+export const QI_BURST_TIMING: AttackTiming = {
+	startup: 0.25,
+	active: 0.16,
+	recovery: 0.42,
+	hitstun: 0.34,
+	damage: QI_BURST_DAMAGE,
+	range: QI_BURST_RANGE
+};
+
+export const RIVAL_STRIKE_TIMING: AttackTiming = {
+	startup: 0.32,
+	active: 0.12,
+	recovery: 0.35,
+	hitstun: 0.24,
+	damage: RIVAL_ATTACK_DAMAGE,
+	range: RIVAL_ATTACK_RANGE
+};
+
 export function distance(a: Vec2, b: Vec2): number {
 	const dx = a.x - b.x;
 	const dz = a.z - b.z;

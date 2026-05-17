@@ -7,6 +7,20 @@ export type Vec2 = {
 	z: number;
 };
 
+export type CombatActionKind = 'none' | 'lightAttack' | 'qiBurst' | 'rivalStrike';
+
+export type CombatActionPhase = 'idle' | 'startup' | 'active' | 'recovery' | 'hitstun';
+
+export type CombatActionState = {
+	kind: CombatActionKind;
+	phase: CombatActionPhase;
+	elapsed: number;
+	duration: number;
+	hasHit: boolean;
+};
+
+export type PlayerActionStatus = 'Ready' | 'Striking' | 'Recovering' | 'Staggered';
+
 export type FighterState = {
 	position: Vec2;
 	heading: number;
@@ -17,6 +31,7 @@ export type FighterState = {
 	qiCooldown: number;
 	rivalAttackCooldown: number;
 	active: boolean;
+	combatAction: CombatActionState;
 };
 
 export type InputSnapshot = {
@@ -60,6 +75,7 @@ export type HudSnapshot = {
 	dashCooldown: number;
 	attackCooldown: number;
 	qiCooldown: number;
+	playerActionStatus: PlayerActionStatus;
 	showRestart: boolean;
 	isPaused: boolean;
 };
