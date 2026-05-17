@@ -18,10 +18,11 @@ test('plays through the Wuxia MVP opening and restart loop', async ({ page }) =>
 
 	await page.keyboard.press('Space');
 	await expect(page.getByTestId('objective-chip')).toContainText('Defeat the rival disciple');
+	await expect(page.getByTestId('status-cluster')).toContainText('Action');
 
-	for (let i = 0; i < 15; i += 1) {
+	for (let i = 0; i < 26; i += 1) {
 		await page.keyboard.press('j');
-		await page.waitForTimeout(150);
+		await page.waitForTimeout(230);
 	}
 
 	await expect(page.getByTestId('end-state')).toBeVisible();
