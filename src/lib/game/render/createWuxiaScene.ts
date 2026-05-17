@@ -58,11 +58,21 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 	function render(snapshot: GameState): void {
 		resize();
 
-		applyFighter(player, snapshot.player.position, snapshot.player.heading);
-		applyFighter(rival, snapshot.rival.position, snapshot.rival.heading);
+		applyFighter(
+			player,
+			snapshot.player.position,
+			snapshot.player.heading,
+			snapshot.player.combatAction
+		);
+		applyFighter(
+			rival,
+			snapshot.rival.position,
+			snapshot.rival.heading,
+			snapshot.rival.combatAction
+		);
 		rival.visible =
 			snapshot.rival.active || snapshot.phase === 'duel' || snapshot.phase === 'victory';
-		applyFighter(mentor, snapshot.mentor.position, Math.PI * 0.25);
+		applyFighter(mentor, snapshot.mentor.position, Math.PI * 0.25, createIdleRenderAction());
 		syncEffects(snapshot.effects, effects, resources, scene);
 
 		const cameraPose = computeWuxiaCameraPose({
@@ -306,9 +316,77 @@ function createDisciple(color: number, resources: SceneResources): THREE.Group {
 	return group;
 }
 
-function applyFighter(group: THREE.Group, position: Vec2, heading: number): void {
-	group.position.set(position.x, 0, position.z);
-	group.rotation.y = heading;
+function applyFighter(
+	group: THREE.Group,
+	position: Vec2,
+	heading: number,
+	action: GameState['player']['combatAction']
+): void {
+	const pose = getActionPose(action);
+	group.position.set(position.x, pose.y, position.z);
+	group.rotation.set(pose.pitch, heading + pose.yawOffset, pose.roll);
+	group.scale.set(1 + pose.widthScale, 1 + pose.heightScale, 1 + pose.depthScale);
+}
+
+function getActionPose(action: GameState['player']['combatAction']) {
+	if (action.phase === 'hitstun') {
+		return {
+			y: 0,
+			pitch: -0.12,
+			roll: 0.16,
+			yawOffset: 0,
+			widthScale: 0.02,
+			heightScale: -0.04,
+			depthScale: 0.02
+		};
+	}
+
+	if (action.phase === 'startup') {
+		return {
+			y: 0,
+			pitch: 0.08,
+			roll: 0,
+			yawOffset: -0.08,
+			widthScale: 0,
+			heightScale: 0.02,
+			depthScale: 0.03
+		};
+	}
+
+	if (action.phase === 'active') {
+		const qiBurst = action.kind === 'qiBurst';
+		return {
+			y: 0,
+			pitch: 0.18,
+			roll: 0,
+			yawOffset: qiBurst ? 0.2 : 0.12,
+			widthScale: qiBurst ? 0.08 : 0.02,
+			heightScale: 0,
+			depthScale: qiBurst ? 0.12 : 0.08
+		};
+	}
+
+	if (action.phase === 'recovery') {
+		return {
+			y: 0,
+			pitch: -0.05,
+			roll: 0,
+			yawOffset: 0.05,
+			widthScale: 0,
+			heightScale: -0.02,
+			depthScale: 0
+		};
+	}
+
+	return {
+		y: 0,
+		pitch: 0,
+		roll: 0,
+		yawOffset: 0,
+		widthScale: 0,
+		heightScale: 0,
+		depthScale: 0
+	};
 }
 
 function syncEffects(
@@ -376,13 +454,7 @@ function createInitialRenderState(): GameState {
 			qiCooldown: 0,
 			rivalAttackCooldown: 0,
 			active: true,
-			combatAction: {
-				kind: 'none',
-				phase: 'idle',
-				elapsed: 0,
-				duration: 0,
-				hasHit: false
-			}
+			combatAction: createIdleRenderAction()
 		},
 		rival: {
 			position: { x: 0.8, z: 0 },
@@ -394,18 +466,22 @@ function createInitialRenderState(): GameState {
 			qiCooldown: 0,
 			rivalAttackCooldown: 0,
 			active: false,
-			combatAction: {
-				kind: 'none',
-				phase: 'idle',
-				elapsed: 0,
-				duration: 0,
-				hasHit: false
-			}
+			combatAction: createIdleRenderAction()
 		},
 		mentor: { position: { x: -4, z: -3 } },
 		effects: [],
 		elapsed: 0,
 		nextEffectId: 1
+	};
+}
+
+function createIdleRenderAction() {
+	return {
+		kind: 'none' as const,
+		phase: 'idle' as const,
+		elapsed: 0,
+		duration: 0,
+		hasHit: false
 	};
 }
 
