@@ -71,6 +71,95 @@
 		};
 	};
 
+	const manageBagFocus: Attachment<HTMLDivElement> = (node) => {
+		const previouslyFocused =
+			document.activeElement instanceof HTMLElement ? document.activeElement : null;
+		const focusableSelector = [
+			'a[href]',
+			'button:not([disabled])',
+			'input:not([disabled])',
+			'select:not([disabled])',
+			'textarea:not([disabled])',
+			'[tabindex]:not([tabindex="-1"])'
+		].join(',');
+		let disposed = false;
+
+		function getFocusableElements(): HTMLElement[] {
+			return Array.from(node.querySelectorAll<HTMLElement>(focusableSelector)).filter(
+				(element) => element.tabIndex >= 0 && element.getAttribute('aria-hidden') !== 'true'
+			);
+		}
+
+		function focusFirstAvailableElement(): void {
+			const [firstFocusable] = getFocusableElements();
+			(firstFocusable ?? node).focus();
+		}
+
+		function handleKeydown(event: KeyboardEvent): void {
+			if (event.key !== 'Tab') {
+				return;
+			}
+
+			const focusableElements = getFocusableElements();
+			if (focusableElements.length === 0) {
+				event.preventDefault();
+				node.focus();
+				return;
+			}
+
+			const firstFocusable = focusableElements[0];
+			const lastFocusable = focusableElements[focusableElements.length - 1];
+			const activeElement = document.activeElement;
+
+			if (activeElement === node) {
+				event.preventDefault();
+				(event.shiftKey ? lastFocusable : firstFocusable).focus();
+				return;
+			}
+
+			if (event.shiftKey && activeElement === firstFocusable) {
+				event.preventDefault();
+				lastFocusable.focus();
+				return;
+			}
+
+			if (!event.shiftKey && activeElement === lastFocusable) {
+				event.preventDefault();
+				firstFocusable.focus();
+				return;
+			}
+
+			if (!(activeElement instanceof Node) || !node.contains(activeElement)) {
+				event.preventDefault();
+				(event.shiftKey ? lastFocusable : firstFocusable).focus();
+			}
+		}
+
+		function handleFocusIn(event: FocusEvent): void {
+			if (event.target instanceof Node && !node.contains(event.target)) {
+				focusFirstAvailableElement();
+			}
+		}
+
+		queueMicrotask(() => {
+			if (!disposed) {
+				focusFirstAvailableElement();
+			}
+		});
+		document.addEventListener('keydown', handleKeydown, true);
+		document.addEventListener('focusin', handleFocusIn, true);
+
+		return () => {
+			disposed = true;
+			document.removeEventListener('keydown', handleKeydown, true);
+			document.removeEventListener('focusin', handleFocusIn, true);
+
+			if (previouslyFocused?.isConnected) {
+				previouslyFocused.focus();
+			}
+		};
+	};
+
 	function restart(): void {
 		errorMessage = null;
 		runtime?.restart();
@@ -182,6 +271,8 @@
 				role="dialog"
 				aria-modal="true"
 				aria-labelledby="bag-panel-title"
+				tabindex="-1"
+				{@attach manageBagFocus}
 			>
 				<header>
 					<h2 id="bag-panel-title">Bag</h2>
@@ -205,7 +296,7 @@
 								>
 									Use
 								</button>
-								<div class="slot-actions" aria-label={`Assign ${item.name}`}>
+								<div class="slot-actions" role="group" aria-label={`Assign ${item.name}`}>
 									<button
 										type="button"
 										data-testid={`bag-assign-${item.itemId}-slot-1`}
