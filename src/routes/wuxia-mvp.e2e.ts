@@ -1,12 +1,19 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
-const rewardItemTestIdsByName: Record<string, string> = {
-	'Lesser Healing Pill': 'bag-item-lesser_healing_pill',
-	'Lesser Qi Pill': 'bag-item-lesser_qi_pill',
-	'Tempered Practice Sword': 'bag-item-tempered_practice_sword',
-	'Reinforced Training Robe': 'bag-item-reinforced_training_robe',
-	'Jade Breathing Charm': 'bag-item-jade_breathing_charm'
+const rewardItemsByName: Record<string, { testId: string; countBeforeReward: number }> = {
+	'Lesser Healing Pill': { testId: 'bag-item-lesser_healing_pill', countBeforeReward: 3 },
+	'Lesser Qi Pill': { testId: 'bag-item-lesser_qi_pill', countBeforeReward: 1 },
+	'Tempered Practice Sword': { testId: 'bag-item-tempered_practice_sword', countBeforeReward: 0 },
+	'Reinforced Training Robe': { testId: 'bag-item-reinforced_training_robe', countBeforeReward: 0 },
+	'Jade Breathing Charm': { testId: 'bag-item-jade_breathing_charm', countBeforeReward: 0 }
 };
+
+async function expectBagItemCount(page: Page, testId: string, count: number): Promise<void> {
+	const bagItem = page.getByTestId(testId);
+
+	await expect(bagItem).toBeVisible();
+	await expect(bagItem.locator('small')).toHaveText(`x${count}`);
+}
 
 test('plays through the Wuxia MVP opening, item loop, reward, and restart', async ({ page }) => {
 	await page.goto('/');
@@ -40,7 +47,9 @@ test('plays through the Wuxia MVP opening, item loop, reward, and restart', asyn
 	await expect(page.getByTestId('status-cluster')).toContainText('Action');
 
 	await page.keyboard.press('k');
-	await expect(page.getByTestId('status-cluster')).toContainText(/(?:6[5-9]|[78][0-9]|9[0-9])\/100/);
+	await expect(page.getByTestId('status-cluster')).toContainText(
+		/(?:6[5-9]|[78][0-9]|9[0-9])\/100/
+	);
 	await page.keyboard.press('2');
 	await expect(page.getByTestId('item-feedback')).toHaveText('Used Lesser Qi Pill');
 	await expect(page.getByTestId('quick-slot-2')).toContainText('x1');
@@ -53,28 +62,32 @@ test('plays through the Wuxia MVP opening, item loop, reward, and restart', asyn
 	await expect(page.getByTestId('end-state')).toBeVisible();
 	await expect(page.getByTestId('game-prompt')).toContainText('Won:');
 	const rewardPrompt = await page.getByTestId('game-prompt').innerText();
-	const rewardName = rewardPrompt.match(/Won: (?<name>.+?) x\d+/)?.groups?.name;
+	const rewardMatch = rewardPrompt.match(/Won: (?<name>.+?) x(?<count>\d+)/);
+	const rewardName = rewardMatch?.groups?.name;
+	const rewardCount = Number(rewardMatch?.groups?.count);
 
-	if (!rewardName) {
+	if (!rewardName || !Number.isInteger(rewardCount) || rewardCount <= 0) {
 		throw new Error(`Expected victory reward in prompt: ${rewardPrompt}`);
 	}
 
-	const rewardItemTestId = rewardItemTestIdsByName[rewardName];
+	const rewardItem = rewardItemsByName[rewardName];
 
-	if (!rewardItemTestId) {
+	if (!rewardItem) {
 		throw new Error(`No bag test id mapping for reward: ${rewardName}`);
 	}
+
+	const expectedRewardItemCount = rewardItem.countBeforeReward + rewardCount;
 
 	await page.getByTestId('restart-button').click();
 	await expect(page.getByTestId('objective-chip')).toContainText('Meet the mentor');
 
 	await page.getByTestId('bag-toggle').click();
 	await expect(page.getByTestId('bag-panel')).toBeVisible();
-	await expect(page.getByTestId(rewardItemTestId)).toBeVisible();
+	await expectBagItemCount(page, rewardItem.testId, expectedRewardItemCount);
 
 	await page.reload();
 	await expect(page.getByTestId('game-shell')).toBeVisible();
 	await page.getByTestId('bag-toggle').click();
 	await expect(page.getByTestId('bag-panel')).toBeVisible();
-	await expect(page.getByTestId(rewardItemTestId)).toBeVisible();
+	await expectBagItemCount(page, rewardItem.testId, expectedRewardItemCount);
 });
