@@ -176,9 +176,15 @@
 		{/if}
 
 		{#if hud.inventory.isOpen}
-			<section class="bag-panel" data-testid="bag-panel" aria-label="Inventory bag">
+			<div
+				class="bag-panel"
+				data-testid="bag-panel"
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby="bag-panel-title"
+			>
 				<header>
-					<strong>Bag</strong>
+					<h2 id="bag-panel-title">Bag</h2>
 					<button type="button" data-testid="bag-close" onclick={closeInventory}>Close</button>
 				</header>
 
@@ -192,17 +198,35 @@
 									<span>{item.description}</span>
 								</div>
 								<small>x{item.count}</small>
-								<button type="button" onclick={() => useItem(item.itemId)}>Use</button>
+								<button
+									type="button"
+									data-testid={`bag-use-${item.itemId}`}
+									onclick={() => useItem(item.itemId)}
+								>
+									Use
+								</button>
 								<div class="slot-actions" aria-label={`Assign ${item.name}`}>
-									<button type="button" onclick={() => assignQuickSlot(1, item.itemId)}
-										>Slot 1</button
+									<button
+										type="button"
+										data-testid={`bag-assign-${item.itemId}-slot-1`}
+										onclick={() => assignQuickSlot(1, item.itemId)}
 									>
-									<button type="button" onclick={() => assignQuickSlot(2, item.itemId)}
-										>Slot 2</button
+										Slot 1
+									</button>
+									<button
+										type="button"
+										data-testid={`bag-assign-${item.itemId}-slot-2`}
+										onclick={() => assignQuickSlot(2, item.itemId)}
 									>
-									<button type="button" onclick={() => assignQuickSlot(3, item.itemId)}
-										>Slot 3</button
+										Slot 2
+									</button>
+									<button
+										type="button"
+										data-testid={`bag-assign-${item.itemId}-slot-3`}
+										onclick={() => assignQuickSlot(3, item.itemId)}
 									>
+										Slot 3
+									</button>
 								</div>
 							</article>
 						{:else}
@@ -229,6 +253,7 @@
 								<small>{item.isEquipped ? 'Equipped' : `x${item.count}`}</small>
 								<button
 									type="button"
+									data-testid={`bag-equip-${item.itemId}`}
 									disabled={item.isEquipped}
 									onclick={() => equipItem(item.itemId)}
 								>
@@ -240,7 +265,7 @@
 						{/each}
 					</section>
 				</div>
-			</section>
+			</div>
 		{/if}
 
 		{#if hud.isPaused}
@@ -475,6 +500,11 @@
 		gap: 12px;
 	}
 
+	.bag-panel header h2 {
+		margin: 0;
+		font-size: 1rem;
+	}
+
 	.bag-grid {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -580,9 +610,9 @@
 		}
 
 		.status-cluster {
-			top: auto;
+			top: 96px;
 			right: 14px;
-			bottom: 118px;
+			bottom: auto;
 			left: 14px;
 			width: auto;
 			grid-template-columns: repeat(auto-fit, minmax(62px, 1fr));
@@ -598,7 +628,7 @@
 
 		.quick-slots {
 			right: 14px;
-			bottom: 72px;
+			bottom: 76px;
 			left: 14px;
 			width: auto;
 		}
@@ -608,7 +638,7 @@
 		}
 
 		.item-feedback {
-			bottom: 138px;
+			bottom: 176px;
 		}
 
 		.bag-grid {
