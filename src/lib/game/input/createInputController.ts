@@ -96,7 +96,9 @@ export function createInputController(target: HTMLElement): InputController {
 			lightAttack,
 			qiBurst,
 			interact,
-			pause
+			pause,
+			quickSlot: null,
+			toggleInventory: false
 		};
 
 		dash = false;

@@ -448,7 +448,9 @@ function createInitialRenderState(): GameState {
 			position: { x: 0, z: 0 },
 			heading: 0,
 			health: 100,
+			maxHealth: 100,
 			qi: 60,
+			maxQi: 60,
 			dashCooldown: 0,
 			attackCooldown: 0,
 			qiCooldown: 0,
@@ -460,7 +462,9 @@ function createInitialRenderState(): GameState {
 			position: { x: 0.8, z: 0 },
 			heading: Math.PI,
 			health: 100,
+			maxHealth: 100,
 			qi: 0,
+			maxQi: 0,
 			dashCooldown: 0,
 			attackCooldown: 0,
 			qiCooldown: 0,
@@ -471,7 +475,25 @@ function createInitialRenderState(): GameState {
 		mentor: { position: { x: -4, z: -3 } },
 		effects: [],
 		elapsed: 0,
-		nextEffectId: 1
+		nextEffectId: 1,
+		items: {
+			version: 1,
+			inventory: {},
+			equipment: {
+				weapon: null,
+				robe: null,
+				accessory: null
+			},
+			quickSlots: {
+				1: null,
+				2: null,
+				3: null
+			},
+			rewardSeed: 1,
+			lastReward: null
+		},
+		inventoryOpen: false,
+		itemFeedback: null
 	};
 }
 

@@ -10,14 +10,25 @@
 		objective: 'Meet the mentor',
 		prompt: 'Find the mentor at the shrine gate',
 		playerHealth: 100,
+		playerMaxHealth: 100,
 		playerQi: 60,
+		playerMaxQi: 60,
 		rivalHealth: 100,
 		dashCooldown: 0,
 		attackCooldown: 0,
 		qiCooldown: 0,
 		playerActionStatus: 'Ready',
 		showRestart: false,
-		isPaused: false
+		isPaused: false,
+		inventory: {
+			isOpen: false,
+			consumables: [],
+			equipment: [],
+			equipmentSlots: [],
+			quickSlots: [],
+			feedback: null,
+			lastRewardText: null
+		}
 	});
 
 	const phaseLabel = $derived(
