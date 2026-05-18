@@ -92,4 +92,33 @@ describe('item save adapter', () => {
 
 		expect(saveItemProgress(createStarterItemProgress(), storage)).toBe(false);
 	});
+
+	it('handles inaccessible default browser storage', () => {
+		const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+
+		Object.defineProperty(globalThis, 'window', {
+			configurable: true,
+			get() {
+				return {
+					get localStorage() {
+						throw new Error('SecurityError');
+					}
+				};
+			}
+		});
+
+		try {
+			const progress = loadItemProgress();
+
+			expect(progress.inventory.lesser_healing_pill).toBe(3);
+			expect(progress.equipment.weapon).toBe('training_sword');
+			expect(saveItemProgress(createStarterItemProgress())).toBe(false);
+		} finally {
+			if (originalWindow) {
+				Object.defineProperty(globalThis, 'window', originalWindow);
+			} else {
+				delete (globalThis as { window?: Window }).window;
+			}
+		}
+	});
 });

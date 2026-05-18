@@ -7,9 +7,13 @@ import type { ItemProgress } from '$lib/game/simulation/types';
 
 export const ITEM_SAVE_KEY = 'cassiopeia.itemProgress.v1';
 
-export function loadItemProgress(storage: Storage = window.localStorage): ItemProgress {
+function getDefaultStorage(): Storage {
+	return window.localStorage;
+}
+
+export function loadItemProgress(storage?: Storage): ItemProgress {
 	try {
-		const raw = storage.getItem(ITEM_SAVE_KEY);
+		const raw = (storage ?? getDefaultStorage()).getItem(ITEM_SAVE_KEY);
 		if (!raw) {
 			return createStarterItemProgress();
 		}
@@ -22,10 +26,13 @@ export function loadItemProgress(storage: Storage = window.localStorage): ItemPr
 
 export function saveItemProgress(
 	progress: ItemProgress,
-	storage: Storage = window.localStorage
+	storage?: Storage
 ): boolean {
 	try {
-		storage.setItem(ITEM_SAVE_KEY, JSON.stringify(cloneItemProgress(progress)));
+		(storage ?? getDefaultStorage()).setItem(
+			ITEM_SAVE_KEY,
+			JSON.stringify(cloneItemProgress(progress))
+		);
 		return true;
 	} catch {
 		return false;
