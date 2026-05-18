@@ -1,5 +1,13 @@
 import { expect, test } from '@playwright/test';
 
+const rewardItemTestIdsByName: Record<string, string> = {
+	'Lesser Healing Pill': 'bag-item-lesser_healing_pill',
+	'Lesser Qi Pill': 'bag-item-lesser_qi_pill',
+	'Tempered Practice Sword': 'bag-item-tempered_practice_sword',
+	'Reinforced Training Robe': 'bag-item-reinforced_training_robe',
+	'Jade Breathing Charm': 'bag-item-jade_breathing_charm'
+};
+
 test('plays through the Wuxia MVP opening, item loop, reward, and restart', async ({ page }) => {
 	await page.goto('/');
 	await page.evaluate(() => localStorage.clear());
@@ -10,6 +18,7 @@ test('plays through the Wuxia MVP opening, item loop, reward, and restart', asyn
 	await expect(page.locator('canvas')).toBeVisible();
 	await expect(page.getByTestId('status-cluster')).toContainText('110/110');
 	await expect(page.getByTestId('quick-slot-1')).toContainText('Heal Pill');
+	await expect(page.getByTestId('quick-slot-2')).toContainText('x2');
 
 	await page.getByTestId('bag-toggle').click();
 	await expect(page.getByTestId('bag-panel')).toBeVisible();
@@ -31,9 +40,10 @@ test('plays through the Wuxia MVP opening, item loop, reward, and restart', asyn
 	await expect(page.getByTestId('status-cluster')).toContainText('Action');
 
 	await page.keyboard.press('k');
-	await page.waitForTimeout(320);
+	await expect(page.getByTestId('status-cluster')).toContainText(/(?:6[5-9]|[78][0-9]|9[0-9])\/100/);
 	await page.keyboard.press('2');
-	await expect(page.getByTestId('item-feedback')).toContainText(/Used Lesser Qi Pill|Qi is full/);
+	await expect(page.getByTestId('item-feedback')).toHaveText('Used Lesser Qi Pill');
+	await expect(page.getByTestId('quick-slot-2')).toContainText('x1');
 
 	for (let i = 0; i < 24; i += 1) {
 		await page.keyboard.press('j');
@@ -42,11 +52,25 @@ test('plays through the Wuxia MVP opening, item loop, reward, and restart', asyn
 
 	await expect(page.getByTestId('end-state')).toBeVisible();
 	await expect(page.getByTestId('game-prompt')).toContainText('Won:');
+	const rewardPrompt = await page.getByTestId('game-prompt').innerText();
+	const rewardName = rewardPrompt.match(/Won: (?<name>.+?) x\d+/)?.groups?.name;
+
+	if (!rewardName) {
+		throw new Error(`Expected victory reward in prompt: ${rewardPrompt}`);
+	}
+
+	const rewardItemTestId = rewardItemTestIdsByName[rewardName];
+
+	if (!rewardItemTestId) {
+		throw new Error(`No bag test id mapping for reward: ${rewardName}`);
+	}
+
+	expect(rewardItemTestId).toBe('bag-item-reinforced_training_robe');
 
 	await page.getByTestId('restart-button').click();
 	await expect(page.getByTestId('objective-chip')).toContainText('Meet the mentor');
 
 	await page.getByTestId('bag-toggle').click();
 	await expect(page.getByTestId('bag-panel')).toBeVisible();
-	await expect(page.getByTestId('bag-item-training_sword')).toBeVisible();
+	await expect(page.getByTestId(rewardItemTestId)).toBeVisible();
 });
