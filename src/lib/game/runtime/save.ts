@@ -24,10 +24,7 @@ export function loadItemProgress(storage?: Storage): ItemProgress {
 	}
 }
 
-export function saveItemProgress(
-	progress: ItemProgress,
-	storage?: Storage
-): boolean {
+export function saveItemProgress(progress: ItemProgress, storage?: Storage): boolean {
 	try {
 		(storage ?? getDefaultStorage()).setItem(
 			ITEM_SAVE_KEY,

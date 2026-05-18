@@ -296,17 +296,23 @@ describe('item system rules', () => {
 		expect(equipItem(progress, 'tempered_practice_sword')).toBe('Equipped Tempered Practice Sword');
 		expect(progress.equipment.weapon).toBe('tempered_practice_sword');
 
-		expect(equipItem(progress, 'lesser_healing_pill')).toBe('Lesser Healing Pill cannot be equipped');
+		expect(equipItem(progress, 'lesser_healing_pill')).toBe(
+			'Lesser Healing Pill cannot be equipped'
+		);
 		expect(progress.equipment.weapon).toBe('tempered_practice_sword');
 	});
 
 	it('assigns only consumables to quick slots', () => {
 		const progress = createStarterItemProgress();
 
-		expect(assignQuickSlot(progress, 3, 'lesser_qi_pill')).toBe('Assigned Lesser Qi Pill to slot 3');
+		expect(assignQuickSlot(progress, 3, 'lesser_qi_pill')).toBe(
+			'Assigned Lesser Qi Pill to slot 3'
+		);
 		expect(progress.quickSlots[3]).toBe('lesser_qi_pill');
 
-		expect(assignQuickSlot(progress, 1, 'training_sword')).toBe('Training Sword cannot be assigned');
+		expect(assignQuickSlot(progress, 1, 'training_sword')).toBe(
+			'Training Sword cannot be assigned'
+		);
 		expect(progress.quickSlots[1]).toBe('lesser_healing_pill');
 
 		expect(assignQuickSlot(progress, 2, null)).toBe('Cleared slot 2');
@@ -550,7 +556,10 @@ export function derivePlayerItemStats(progress: ItemProgress): PlayerItemStats {
 	return stats;
 }
 
-export function getPlayerAttackDamage(progress: ItemProgress, kind: 'lightAttack' | 'qiBurst'): number {
+export function getPlayerAttackDamage(
+	progress: ItemProgress,
+	kind: 'lightAttack' | 'qiBurst'
+): number {
 	const stats = derivePlayerItemStats(progress);
 
 	if (kind === 'lightAttack') {
@@ -693,7 +702,11 @@ export function createHudInventorySnapshot(
 			slot,
 			label: equipmentSlotLabels[slot],
 			item: progress.equipment[slot]
-				? toHudInventoryItem(progress, progress.equipment[slot], progress.inventory[progress.equipment[slot]] ?? 0)
+				? toHudInventoryItem(
+						progress,
+						progress.equipment[slot],
+						progress.inventory[progress.equipment[slot]] ?? 0
+					)
 				: null
 		})),
 		quickSlots: ([1, 2, 3] as QuickSlotNumber[]).map((slot) => toHudQuickSlot(progress, slot)),
@@ -798,7 +811,10 @@ function normalizeEquipment(raw: unknown, inventory: ItemProgress['inventory']):
 	return equipment;
 }
 
-function normalizeQuickSlots(raw: unknown, inventory: ItemProgress['inventory']): ItemProgress['quickSlots'] {
+function normalizeQuickSlots(
+	raw: unknown,
+	inventory: ItemProgress['inventory']
+): ItemProgress['quickSlots'] {
 	const quickSlots: ItemProgress['quickSlots'] = {
 		1: null,
 		2: null,
@@ -986,7 +1002,11 @@ Expected: FAIL because `src/lib/game/runtime/save.ts` does not exist yet.
 Create `src/lib/game/runtime/save.ts` with this complete file:
 
 ```ts
-import { cloneItemProgress, createStarterItemProgress, normalizeItemProgress } from '$lib/game/simulation/items';
+import {
+	cloneItemProgress,
+	createStarterItemProgress,
+	normalizeItemProgress
+} from '$lib/game/simulation/items';
 import type { ItemProgress } from '$lib/game/simulation/types';
 
 export const ITEM_SAVE_KEY = 'cassiopeia.itemProgress.v1';
@@ -1313,11 +1333,11 @@ export function toHudSnapshot(state: GameState): HudSnapshot {
 In `src/lib/game/simulation/state.ts`, replace the `damage` assignment in `collectActiveHit` with this code:
 
 ```ts
-	const timing = getActionTiming(action.kind);
-	const damage =
-		attacker === state.player && (action.kind === 'lightAttack' || action.kind === 'qiBurst')
-			? getPlayerAttackDamage(state.items, action.kind)
-			: timing.damage;
+const timing = getActionTiming(action.kind);
+const damage =
+	attacker === state.player && (action.kind === 'lightAttack' || action.kind === 'qiBurst')
+		? getPlayerAttackDamage(state.items, action.kind)
+		: timing.damage;
 ```
 
 Change the `collectActiveHit` signature to receive `state`:
@@ -1499,10 +1519,7 @@ Add this key handling inside `onKeydown`, after the existing `escape` branch:
 Update the snapshot object:
 
 ```ts
-			interact,
-			pause,
-			quickSlot,
-			toggleInventory
+(interact, pause, quickSlot, toggleInventory);
 ```
 
 Reset the edge fields at the end of `getSnapshot()`:
@@ -1534,8 +1551,7 @@ import {
 Import these types:
 
 ```ts
-InventoryCommand,
-ItemId
+(InventoryCommand, ItemId);
 ```
 
 Change the `stepGame` signature:
@@ -1552,33 +1568,32 @@ export function stepGame(
 At the start of `stepGame`, after `dt` is calculated and before pause handling, add:
 
 ```ts
-	processInventoryCommands(state, commands);
-	processInventoryInput(state, input);
+processInventoryCommands(state, commands);
+processInventoryInput(state, input);
 ```
 
 Replace the existing pause branch with:
 
 ```ts
-	if (input.pause) {
-		if (state.inventoryOpen) {
-			state.inventoryOpen = false;
-			updatePrompt(state);
-			return;
-		}
-
-		togglePause(state);
+if (input.pause) {
+	if (state.inventoryOpen) {
+		state.inventoryOpen = false;
+		updatePrompt(state);
 		return;
 	}
+
+	togglePause(state);
+	return;
+}
 ```
 
 Then add this inventory-open return immediately after the pause branch:
 
 ```ts
-
-	if (state.inventoryOpen) {
-		updatePrompt(state);
-		return;
-	}
+if (state.inventoryOpen) {
+	updatePrompt(state);
+	return;
+}
 ```
 
 Remove `MAX_QI` from the `state.ts` import list after replacing qi regeneration with `state.player.maxQi`.
@@ -1586,30 +1601,30 @@ Remove `MAX_QI` from the `state.ts` import list after replacing qi regeneration 
 The start of `stepGame` should now follow this order:
 
 ```ts
-	processInventoryCommands(state, commands);
-	processInventoryInput(state, input);
+processInventoryCommands(state, commands);
+processInventoryInput(state, input);
 
-	if (input.pause) {
-		if (state.inventoryOpen) {
-			state.inventoryOpen = false;
-			updatePrompt(state);
-			return;
-		}
-
-		togglePause(state);
-		return;
-	}
-
+if (input.pause) {
 	if (state.inventoryOpen) {
+		state.inventoryOpen = false;
 		updatePrompt(state);
 		return;
 	}
+
+	togglePause(state);
+	return;
+}
+
+if (state.inventoryOpen) {
+	updatePrompt(state);
+	return;
+}
 ```
 
 Inside the duel branch, before `handlePlayerAttacks(state, input);`, add:
 
 ```ts
-		handleQuickSlotUse(state, input.quickSlot);
+handleQuickSlotUse(state, input.quickSlot);
 ```
 
 Add these helper functions near `handlePlayerAttacks`:
@@ -1692,15 +1707,15 @@ function refreshPlayerStats(state: GameState): void {
 In `resolveEndState`, replace the victory branch with this version:
 
 ```ts
-	if (state.rival.health <= 0) {
-		const reward = grantVictoryReward(state.items);
-		state.itemFeedback = `Won: ${formatReward(reward)}`;
-		state.phase = 'victory';
-		state.previousPhase = 'victory';
-		state.objective = OBJECTIVES.victory;
-		state.rival.active = false;
-		return;
-	}
+if (state.rival.health <= 0) {
+	const reward = grantVictoryReward(state.items);
+	state.itemFeedback = `Won: ${formatReward(reward)}`;
+	state.phase = 'victory';
+	state.previousPhase = 'victory';
+	state.objective = OBJECTIVES.victory;
+	state.rival.active = false;
+	return;
+}
 ```
 
 This is safe because `resolveEndState` only runs while `state.phase === 'duel'`.
@@ -1708,18 +1723,18 @@ This is safe because `resolveEndState` only runs while `state.phase === 'duel'`.
 In `updatePrompt`, replace the victory prompt with:
 
 ```ts
-		state.prompt = state.items.lastReward
-			? `Victory. Won: ${formatReward(state.items.lastReward)}.`
-			: 'Victory. Restart to train again.';
+state.prompt = state.items.lastReward
+	? `Victory. Won: ${formatReward(state.items.lastReward)}.`
+	: 'Victory. Restart to train again.';
 ```
 
 Add an inventory prompt branch before the phase-specific prompt checks:
 
 ```ts
-	if (state.inventoryOpen) {
-		state.prompt = 'Bag open';
-		return;
-	}
+if (state.inventoryOpen) {
+	state.prompt = 'Bag open';
+	return;
+}
 ```
 
 - [ ] **Step 6: Run focused tests**
@@ -1755,7 +1770,13 @@ In `src/lib/game/runtime/createGameRuntime.ts`, import save helpers and command 
 
 ```ts
 import { loadItemProgress, saveItemProgress } from '$lib/game/runtime/save';
-import type { GameState, HudSnapshot, InventoryCommand, ItemId, QuickSlotNumber } from '$lib/game/simulation/types';
+import type {
+	GameState,
+	HudSnapshot,
+	InventoryCommand,
+	ItemId,
+	QuickSlotNumber
+} from '$lib/game/simulation/types';
 ```
 
 Replace `GameRuntime` with:
@@ -1785,21 +1806,21 @@ let lastSavedItems = JSON.stringify(state.items);
 Add this helper after `publish()`:
 
 ```ts
-	function persistItemsIfChanged(): void {
-		const nextSavedItems = JSON.stringify(state.items);
-		if (nextSavedItems === lastSavedItems) {
-			return;
-		}
-
-		saveItemProgress(state.items);
-		lastSavedItems = nextSavedItems;
+function persistItemsIfChanged(): void {
+	const nextSavedItems = JSON.stringify(state.items);
+	if (nextSavedItems === lastSavedItems) {
+		return;
 	}
+
+	saveItemProgress(state.items);
+	lastSavedItems = nextSavedItems;
+}
 ```
 
 In `loop`, after `publish();`, add:
 
 ```ts
-		persistItemsIfChanged();
+persistItemsIfChanged();
 ```
 
 - [ ] **Step 3: Add command dispatch methods**
@@ -1807,80 +1828,80 @@ In `loop`, after `publish();`, add:
 Inside `createGameRuntime`, add this helper before `restart()`:
 
 ```ts
-	function runInventoryCommand(command: InventoryCommand): void {
-		if (disposed) {
-			return;
-		}
-
-		stepGame(
-			state,
-			{
-				moveX: 0,
-				moveZ: 0,
-				cameraDelta: 0,
-				dash: false,
-				lightAttack: false,
-				qiBurst: false,
-				interact: false,
-				pause: false,
-				quickSlot: null,
-				toggleInventory: false
-			},
-			0,
-			[command]
-		);
-		publish();
-		persistItemsIfChanged();
+function runInventoryCommand(command: InventoryCommand): void {
+	if (disposed) {
+		return;
 	}
+
+	stepGame(
+		state,
+		{
+			moveX: 0,
+			moveZ: 0,
+			cameraDelta: 0,
+			dash: false,
+			lightAttack: false,
+			qiBurst: false,
+			interact: false,
+			pause: false,
+			quickSlot: null,
+			toggleInventory: false
+		},
+		0,
+		[command]
+	);
+	publish();
+	persistItemsIfChanged();
+}
 ```
 
 Replace `restart()` with:
 
 ```ts
-	function restart(): void {
-		state = restartGame(state.items);
-		publish();
-		persistItemsIfChanged();
-	}
+function restart(): void {
+	state = restartGame(state.items);
+	publish();
+	persistItemsIfChanged();
+}
 ```
 
 Add these runtime methods after `restart()`:
 
 ```ts
-	function toggleInventory(): void {
-		runInventoryCommand({ type: 'toggleInventory' });
-	}
+function toggleInventory(): void {
+	runInventoryCommand({ type: 'toggleInventory' });
+}
 
-	function closeInventory(): void {
-		runInventoryCommand({ type: 'closeInventory' });
-	}
+function closeInventory(): void {
+	runInventoryCommand({ type: 'closeInventory' });
+}
 
-	function useInventoryItem(itemId: ItemId): void {
-		runInventoryCommand({ type: 'useItem', itemId });
-	}
+function useInventoryItem(itemId: ItemId): void {
+	runInventoryCommand({ type: 'useItem', itemId });
+}
 
-	function equipItem(itemId: ItemId): void {
-		runInventoryCommand({ type: 'equipItem', itemId });
-	}
+function equipItem(itemId: ItemId): void {
+	runInventoryCommand({ type: 'equipItem', itemId });
+}
 
-	function assignQuickSlot(slot: QuickSlotNumber, itemId: ItemId | null): void {
-		runInventoryCommand({ type: 'assignQuickSlot', slot, itemId });
-	}
+function assignQuickSlot(slot: QuickSlotNumber, itemId: ItemId | null): void {
+	runInventoryCommand({ type: 'assignQuickSlot', slot, itemId });
+}
 ```
 
 Replace the returned object:
 
 ```ts
-	return {
-		start,
-		restart,
-		toggleInventory,
-		closeInventory,
-		useInventoryItem,
-		equipItem,
-		assignQuickSlot,
-		dispose
-	};
+return {
+	start,
+	restart,
+	toggleInventory,
+	closeInventory,
+	useInventoryItem,
+	equipItem,
+	assignQuickSlot,
+	dispose
+};
 ```
 
 - [ ] **Step 4: Run runtime-related tests and typecheck**
@@ -1958,25 +1979,25 @@ Add this `inventory` object inside the initial `hud`:
 Add these helper functions below `restart()`:
 
 ```ts
-	function toggleInventory(): void {
-		runtime?.toggleInventory();
-	}
+function toggleInventory(): void {
+	runtime?.toggleInventory();
+}
 
-	function closeInventory(): void {
-		runtime?.closeInventory();
-	}
+function closeInventory(): void {
+	runtime?.closeInventory();
+}
 
-	function useItem(itemId: ItemId): void {
-		runtime?.useInventoryItem(itemId);
-	}
+function useItem(itemId: ItemId): void {
+	runtime?.useInventoryItem(itemId);
+}
 
-	function equipItem(itemId: ItemId): void {
-		runtime?.equipItem(itemId);
-	}
+function equipItem(itemId: ItemId): void {
+	runtime?.equipItem(itemId);
+}
 
-	function assignQuickSlot(slot: QuickSlotNumber, itemId: ItemId | null): void {
-		runtime?.assignQuickSlot(slot, itemId);
-	}
+function assignQuickSlot(slot: QuickSlotNumber, itemId: ItemId | null): void {
+	runtime?.assignQuickSlot(slot, itemId);
+}
 ```
 
 - [ ] **Step 2: Render max-aware status and quick slots**
@@ -2091,179 +2112,179 @@ Add this block before the pause panel:
 Update the shared panel selector:
 
 ```css
-	.objective-chip,
-	.status-cluster,
-	.quick-slots,
-	.prompt,
-	.item-feedback,
-	.pause-panel,
-	.end-state,
-	.fallback-panel,
-	.bag-panel {
-		border: 1px solid rgba(235, 225, 194, 0.28);
-		background: rgba(22, 32, 29, 0.68);
-		box-shadow: 0 18px 48px rgba(0, 0, 0, 0.2);
-		backdrop-filter: blur(12px);
-	}
+.objective-chip,
+.status-cluster,
+.quick-slots,
+.prompt,
+.item-feedback,
+.pause-panel,
+.end-state,
+.fallback-panel,
+.bag-panel {
+	border: 1px solid rgba(235, 225, 194, 0.28);
+	background: rgba(22, 32, 29, 0.68);
+	box-shadow: 0 18px 48px rgba(0, 0, 0, 0.2);
+	backdrop-filter: blur(12px);
+}
 ```
 
 Add these styles after `.status-cluster strong`:
 
 ```css
-	.quick-slots {
-		position: absolute;
-		right: 24px;
-		bottom: 92px;
-		display: grid;
-		grid-template-columns: repeat(4, minmax(58px, 1fr));
-		gap: 8px;
-		width: min(360px, calc(100vw - 48px));
-		padding: 10px;
-		border-radius: 8px;
-		pointer-events: auto;
-	}
+.quick-slots {
+	position: absolute;
+	right: 24px;
+	bottom: 92px;
+	display: grid;
+	grid-template-columns: repeat(4, minmax(58px, 1fr));
+	gap: 8px;
+	width: min(360px, calc(100vw - 48px));
+	padding: 10px;
+	border-radius: 8px;
+	pointer-events: auto;
+}
 
-	.quick-slots button {
-		display: grid;
-		gap: 2px;
-		min-width: 0;
-		padding: 8px;
-	}
+.quick-slots button {
+	display: grid;
+	gap: 2px;
+	min-width: 0;
+	padding: 8px;
+}
 
-	.quick-slots button:disabled {
-		opacity: 0.58;
-	}
+.quick-slots button:disabled {
+	opacity: 0.58;
+}
 
-	.quick-slots span,
-	.quick-slots small {
-		font-size: 0.68rem;
-	}
+.quick-slots span,
+.quick-slots small {
+	font-size: 0.68rem;
+}
 
-	.quick-slots strong {
-		font-size: 0.76rem;
-		overflow-wrap: anywhere;
-	}
+.quick-slots strong {
+	font-size: 0.76rem;
+	overflow-wrap: anywhere;
+}
 
-	.bag-button {
-		background: #cdd8c3;
-	}
+.bag-button {
+	background: #cdd8c3;
+}
 ```
 
 Add these styles after `.prompt`:
 
 ```css
-	.item-feedback {
-		position: absolute;
-		left: 50%;
-		bottom: 158px;
-		max-width: min(420px, calc(100vw - 48px));
-		margin: 0;
-		padding: 8px 12px;
-		transform: translateX(-50%);
-		border-radius: 8px;
-		color: #f5edd8;
-		text-align: center;
-	}
+.item-feedback {
+	position: absolute;
+	left: 50%;
+	bottom: 158px;
+	max-width: min(420px, calc(100vw - 48px));
+	margin: 0;
+	padding: 8px 12px;
+	transform: translateX(-50%);
+	border-radius: 8px;
+	color: #f5edd8;
+	text-align: center;
+}
 
-	.bag-panel {
-		position: absolute;
-		top: 50%;
-		left: 50%;
-		display: grid;
-		gap: 14px;
-		width: min(820px, calc(100vw - 48px));
-		max-height: min(720px, calc(100vh - 48px));
-		padding: 18px;
-		transform: translate(-50%, -50%);
-		border-radius: 8px;
-		pointer-events: auto;
-		overflow: auto;
-	}
+.bag-panel {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	display: grid;
+	gap: 14px;
+	width: min(820px, calc(100vw - 48px));
+	max-height: min(720px, calc(100vh - 48px));
+	padding: 18px;
+	transform: translate(-50%, -50%);
+	border-radius: 8px;
+	pointer-events: auto;
+	overflow: auto;
+}
 
-	.bag-panel header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 12px;
-	}
+.bag-panel header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
 
-	.bag-grid {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 14px;
-	}
+.bag-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 14px;
+}
 
-	.bag-section {
-		display: grid;
-		align-content: start;
-		gap: 10px;
-	}
+.bag-section {
+	display: grid;
+	align-content: start;
+	gap: 10px;
+}
 
-	.bag-section h2 {
-		margin: 0;
-		color: #bed5c9;
-		font-size: 0.76rem;
-		text-transform: uppercase;
-	}
+.bag-section h2 {
+	margin: 0;
+	color: #bed5c9;
+	font-size: 0.76rem;
+	text-transform: uppercase;
+}
 
-	.bag-row,
-	.equipped-row {
-		display: grid;
-		gap: 8px;
-		padding: 10px;
-		border-radius: 6px;
-		background: rgba(234, 239, 218, 0.08);
-	}
+.bag-row,
+.equipped-row {
+	display: grid;
+	gap: 8px;
+	padding: 10px;
+	border-radius: 6px;
+	background: rgba(234, 239, 218, 0.08);
+}
 
-	.bag-row {
-		grid-template-columns: minmax(0, 1fr) auto auto;
-		align-items: center;
-	}
+.bag-row {
+	grid-template-columns: minmax(0, 1fr) auto auto;
+	align-items: center;
+}
 
-	.bag-row span,
-	.empty-list {
-		color: #d3dfd7;
-		font-size: 0.82rem;
-	}
+.bag-row span,
+.empty-list {
+	color: #d3dfd7;
+	font-size: 0.82rem;
+}
 
-	.slot-actions {
-		grid-column: 1 / -1;
-		display: flex;
-		flex-wrap: wrap;
-		gap: 8px;
-	}
+.slot-actions {
+	grid-column: 1 / -1;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
 
-	.slot-actions button {
-		padding: 7px 9px;
-	}
+.slot-actions button {
+	padding: 7px 9px;
+}
 
-	.equipped-list {
-		display: grid;
-		gap: 8px;
-	}
+.equipped-list {
+	display: grid;
+	gap: 8px;
+}
 
-	.equipped-row {
-		grid-template-columns: 88px minmax(0, 1fr);
-	}
+.equipped-row {
+	grid-template-columns: 88px minmax(0, 1fr);
+}
 ```
 
 Add mobile styles inside the media query:
 
 ```css
-		.quick-slots {
-			right: 14px;
-			bottom: 72px;
-			left: 14px;
-			width: auto;
-		}
+.quick-slots {
+	right: 14px;
+	bottom: 72px;
+	left: 14px;
+	width: auto;
+}
 
-		.item-feedback {
-			bottom: 138px;
-		}
+.item-feedback {
+	bottom: 138px;
+}
 
-		.bag-grid {
-			grid-template-columns: 1fr;
-		}
+.bag-grid {
+	grid-template-columns: 1fr;
+}
 ```
 
 - [ ] **Step 5: Run the Svelte autofixer and fix all reported issues**
