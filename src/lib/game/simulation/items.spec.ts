@@ -87,6 +87,12 @@ describe('item system rules', () => {
 		expect(normalized.equipment.weapon).toBe('training_sword');
 	});
 
+	it('falls back to the starter kit when required save sections are missing', () => {
+		const normalized = normalizeItemProgress({ version: 1 });
+
+		expect(normalized).toEqual(createStarterItemProgress());
+	});
+
 	it('uses healing and qi consumables only when they apply a benefit', () => {
 		const progress = createStarterItemProgress();
 

@@ -30,8 +30,11 @@ test('plays through the Wuxia MVP opening, item loop, reward, and restart', asyn
 	await page.getByTestId('bag-toggle').click();
 	await expect(page.getByTestId('bag-panel')).toBeVisible();
 	await expect(page.getByTestId('bag-item-training_sword')).toContainText('Equipped');
+	await page.getByTestId('bag-assign-lesser_qi_pill-slot-3').click();
+	await expect(page.getByTestId('item-feedback')).toHaveText('Assigned Lesser Qi Pill to slot 3');
 	await page.getByTestId('bag-close').click();
 	await expect(page.getByTestId('bag-panel')).toBeHidden();
+	await expect(page.getByTestId('quick-slot-3')).toContainText('Qi Pill');
 
 	await page.keyboard.down('a');
 	await page.keyboard.down('w');
@@ -50,9 +53,9 @@ test('plays through the Wuxia MVP opening, item loop, reward, and restart', asyn
 	await expect(page.getByTestId('status-cluster')).toContainText(
 		/(?:6[5-9]|[78][0-9]|9[0-9])\/100/
 	);
-	await page.keyboard.press('2');
+	await page.keyboard.press('3');
 	await expect(page.getByTestId('item-feedback')).toHaveText('Used Lesser Qi Pill');
-	await expect(page.getByTestId('quick-slot-2')).toContainText('x1');
+	await expect(page.getByTestId('quick-slot-3')).toContainText('x1');
 
 	for (let i = 0; i < 24; i += 1) {
 		await page.keyboard.press('j');

@@ -146,7 +146,7 @@ export function createStarterItemProgress(): ItemProgress {
 }
 
 export function normalizeItemProgress(raw: unknown): ItemProgress {
-	if (!isRecord(raw) || raw.version !== SAVE_VERSION) {
+	if (!isRecord(raw) || raw.version !== SAVE_VERSION || !hasRequiredSaveSections(raw)) {
 		return createStarterItemProgress();
 	}
 
@@ -494,6 +494,16 @@ function nextRewardSeed(seed: number): number {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasRequiredSaveSections(raw: Record<string, unknown>): boolean {
+	return (
+		isRecord(raw.inventory) &&
+		isRecord(raw.equipment) &&
+		isRecord(raw.quickSlots) &&
+		typeof raw.rewardSeed === 'number' &&
+		Number.isFinite(raw.rewardSeed)
+	);
 }
 
 function isItemId(value: unknown): value is ItemId {

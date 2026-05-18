@@ -52,8 +52,9 @@ export function createGameRuntime(options: RuntimeOptions): GameRuntime {
 			return;
 		}
 
-		saveItemProgress(state.items);
-		lastSavedItems = nextSavedItems;
+		if (saveItemProgress(state.items)) {
+			lastSavedItems = nextSavedItems;
+		}
 	}
 
 	function loop(now: number): void {
