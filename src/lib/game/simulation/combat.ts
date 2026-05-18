@@ -16,6 +16,7 @@ export const RIVAL_SPEED = 2.1;
 export const RIVAL_ATTACK_RANGE = 1.1;
 export const RIVAL_ATTACK_DAMAGE = 6;
 export const RIVAL_ATTACK_COOLDOWN = 0.75;
+export const PLAYER_BASE_HEALTH = 100;
 export const MAX_QI = 100;
 
 export type AttackTiming = {

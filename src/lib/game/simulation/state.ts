@@ -5,9 +5,9 @@ import {
 	DASH_COOLDOWN,
 	DASH_DISTANCE,
 	LIGHT_ATTACK_TIMING,
-	MAX_QI,
 	MENTOR_INTERACT_RANGE,
 	normaliseMove,
+	PLAYER_BASE_HEALTH,
 	PLAYER_SPEED,
 	QI_BURST_COOLDOWN,
 	QI_BURST_COST,
@@ -17,6 +17,13 @@ import {
 	RIVAL_STRIKE_TIMING,
 	distance
 } from './combat';
+import {
+	cloneItemProgress,
+	createHudInventorySnapshot,
+	createStarterItemProgress,
+	derivePlayerItemStats,
+	getPlayerAttackDamage
+} from './items';
 import type { AttackTiming } from './combat';
 import type {
 	ActiveGamePhase,
@@ -58,7 +65,10 @@ function idleCombatAction(): CombatActionState {
 	};
 }
 
-export function createInitialGameState(): GameState {
+export function createInitialGameState(itemProgress = createStarterItemProgress()): GameState {
+	const items = cloneItemProgress(itemProgress);
+	const playerStats = derivePlayerItemStats(items);
+
 	return {
 		phase: 'seekMentor',
 		previousPhase: 'seekMentor',
@@ -67,8 +77,10 @@ export function createInitialGameState(): GameState {
 		player: {
 			position: { x: 0, z: 0 },
 			heading: 0,
-			health: 100,
-			qi: 60,
+			health: playerStats.maxHealth,
+			maxHealth: playerStats.maxHealth,
+			qi: playerStats.maxQi,
+			maxQi: playerStats.maxQi,
 			dashCooldown: 0,
 			attackCooldown: 0,
 			qiCooldown: 0,
@@ -79,8 +91,10 @@ export function createInitialGameState(): GameState {
 		rival: {
 			position: { x: 0.8, z: 0 },
 			heading: Math.PI,
-			health: 100,
+			health: PLAYER_BASE_HEALTH,
+			maxHealth: PLAYER_BASE_HEALTH,
 			qi: 0,
+			maxQi: 0,
 			dashCooldown: 0,
 			attackCooldown: 0,
 			qiCooldown: 0,
@@ -91,12 +105,15 @@ export function createInitialGameState(): GameState {
 		mentor: { position: { x: -4, z: -3 } },
 		effects: [],
 		elapsed: 0,
-		nextEffectId: 1
+		nextEffectId: 1,
+		items,
+		inventoryOpen: false,
+		itemFeedback: null
 	};
 }
 
-export function restartGame(): GameState {
-	return createInitialGameState();
+export function restartGame(itemProgress = createStarterItemProgress()): GameState {
+	return createInitialGameState(itemProgress);
 }
 
 export function stepGame(state: GameState, input: InputSnapshot, deltaTime: number): void {
@@ -134,7 +151,7 @@ export function stepGame(state: GameState, input: InputSnapshot, deltaTime: numb
 		resolveActiveHits(state);
 		resolveEndState(state);
 		if (state.phase === 'duel' && state.player.qi === qiBeforeAttacks) {
-			state.player.qi = Math.min(MAX_QI, state.player.qi + dt * 5);
+			state.player.qi = Math.min(state.player.maxQi, state.player.qi + dt * 5);
 		}
 	}
 	updatePrompt(state);
@@ -146,14 +163,17 @@ export function toHudSnapshot(state: GameState): HudSnapshot {
 		objective: state.objective,
 		prompt: state.prompt,
 		playerHealth: Math.round(state.player.health),
+		playerMaxHealth: Math.round(state.player.maxHealth),
 		playerQi: Math.round(state.player.qi),
+		playerMaxQi: Math.round(state.player.maxQi),
 		rivalHealth: Math.round(state.rival.health),
 		dashCooldown: state.player.dashCooldown,
 		attackCooldown: state.player.attackCooldown,
 		qiCooldown: state.player.qiCooldown,
 		playerActionStatus: getPlayerActionStatus(state.player.combatAction),
 		showRestart: state.phase === 'victory' || state.phase === 'defeat',
-		isPaused: state.phase === 'paused'
+		isPaused: state.phase === 'paused',
+		inventory: createHudInventorySnapshot(state.items, state.inventoryOpen, state.itemFeedback)
 	};
 }
 
@@ -356,6 +376,7 @@ function getActionTiming(kind: CombatActionKind): AttackTiming {
 }
 
 function collectActiveHit(
+	state: GameState,
 	attacker: FighterState,
 	target: FighterState,
 	effect: CombatEffect['kind']
@@ -374,10 +395,14 @@ function collectActiveHit(
 	}
 
 	const timing = getActionTiming(action.kind);
+	const damage =
+		attacker === state.player && (action.kind === 'lightAttack' || action.kind === 'qiBurst')
+			? getPlayerAttackDamage(state.items, action.kind)
+			: timing.damage;
 	return {
 		attacker,
 		target,
-		damage: timing.damage,
+		damage,
 		hitstun: timing.hitstun,
 		effect,
 		position: target.position
@@ -386,11 +411,12 @@ function collectActiveHit(
 
 function resolveActiveHits(state: GameState): void {
 	const playerHit = collectActiveHit(
+		state,
 		state.player,
 		state.rival,
 		state.player.combatAction.kind === 'qiBurst' ? 'qi' : 'hit'
 	);
-	const rivalHit = collectActiveHit(state.rival, state.player, 'hit');
+	const rivalHit = collectActiveHit(state, state.rival, state.player, 'hit');
 	const hits = [playerHit, rivalHit].filter((hit): hit is PendingHit => hit !== null);
 
 	for (const hit of hits) {

@@ -11,7 +11,9 @@ const idleInput: InputSnapshot = {
 	lightAttack: false,
 	qiBurst: false,
 	interact: false,
-	pause: false
+	pause: false,
+	quickSlot: null,
+	toggleInventory: false
 };
 
 const frame = 1 / 60;
@@ -42,7 +44,7 @@ describe('wuxia simulation state', () => {
 
 		expect(state.phase).toBe('seekMentor');
 		expect(state.objective).toBe('Meet the mentor');
-		expect(state.player.health).toBe(100);
+		expect(state.player.health).toBe(110);
 		expect(state.rival.health).toBe(100);
 		expect(state.player.combatAction.phase).toBe('idle');
 		expect(state.rival.combatAction.phase).toBe('idle');
@@ -85,11 +87,11 @@ describe('wuxia simulation state', () => {
 		expect(state.rival.health).toBe(100);
 
 		advance(state, LIGHT_ATTACK_TIMING.startup - startupProbe + LIGHT_ATTACK_TIMING.active / 2);
-		expect(state.rival.health).toBe(100 - LIGHT_ATTACK_TIMING.damage);
+		expect(state.rival.health).toBe(100 - LIGHT_ATTACK_TIMING.damage - 2);
 		expect(state.player.combatAction.hasHit).toBe(true);
 
 		advance(state, LIGHT_ATTACK_TIMING.active / 2 + frame);
-		expect(state.rival.health).toBe(100 - LIGHT_ATTACK_TIMING.damage);
+		expect(state.rival.health).toBe(100 - LIGHT_ATTACK_TIMING.damage - 2);
 		expect(state.player.combatAction.phase).toBe('recovery');
 
 		advance(state, LIGHT_ATTACK_TIMING.recovery + frame);
@@ -109,7 +111,7 @@ describe('wuxia simulation state', () => {
 		state.rival.position = { x: LIGHT_ATTACK_TIMING.range * 0.5, z: 0 };
 		stepGame(state, idleInput, LIGHT_ATTACK_TIMING.active / 2);
 
-		expect(state.rival.health).toBe(100 - LIGHT_ATTACK_TIMING.damage);
+		expect(state.rival.health).toBe(100 - LIGHT_ATTACK_TIMING.damage - 2);
 		expect(state.player.combatAction.phase).toBe('recovery');
 	});
 
@@ -136,7 +138,7 @@ describe('wuxia simulation state', () => {
 		expect(state.rival.health).toBe(100);
 
 		advance(state, QI_BURST_TIMING.startup + frame);
-		expect(state.rival.health).toBe(100 - QI_BURST_TIMING.damage);
+		expect(state.rival.health).toBe(100 - QI_BURST_TIMING.damage - 4);
 		expect(state.player.qiCooldown).toBeGreaterThan(0);
 	});
 
@@ -147,11 +149,11 @@ describe('wuxia simulation state', () => {
 
 		expect(state.rival.combatAction.kind).toBe('rivalStrike');
 		expect(state.rival.combatAction.phase).toBe('startup');
-		expect(state.player.health).toBe(100);
+		expect(state.player.health).toBe(110);
 
 		advance(state, RIVAL_STRIKE_TIMING.startup + frame);
 
-		expect(state.player.health).toBe(100 - RIVAL_STRIKE_TIMING.damage);
+		expect(state.player.health).toBe(110 - RIVAL_STRIKE_TIMING.damage);
 		expect(state.rival.combatAction.hasHit).toBe(true);
 	});
 
@@ -162,12 +164,12 @@ describe('wuxia simulation state', () => {
 		stepGame(state, { ...idleInput, lightAttack: true }, frame);
 		advance(state, LIGHT_ATTACK_TIMING.startup + frame);
 
-		expect(state.rival.health).toBe(100 - LIGHT_ATTACK_TIMING.damage);
+		expect(state.rival.health).toBe(100 - LIGHT_ATTACK_TIMING.damage - 2);
 		expect(state.rival.combatAction.phase).toBe('hitstun');
 
 		advance(state, RIVAL_STRIKE_TIMING.startup);
 
-		expect(state.player.health).toBe(100);
+		expect(state.player.health).toBe(110);
 	});
 
 	it('simultaneous active attacks both resolve before end-state checks', () => {
@@ -209,7 +211,7 @@ describe('wuxia simulation state', () => {
 
 		stepGame(state, idleInput, frame);
 
-		expect(state.player.health).toBe(100);
+		expect(state.player.health).toBe(110);
 		expect(state.phase).toBe('victory');
 	});
 
@@ -223,6 +225,48 @@ describe('wuxia simulation state', () => {
 
 		advance(state, LIGHT_ATTACK_TIMING.startup + LIGHT_ATTACK_TIMING.active + frame);
 		expect(toHudSnapshot(state).playerActionStatus).toBe('Recovering');
+	});
+
+	it('starts from equipment-derived max health and qi', () => {
+		const state = createInitialGameState();
+		const hud = toHudSnapshot(state);
+
+		expect(state.player.maxHealth).toBe(110);
+		expect(state.player.health).toBe(110);
+		expect(state.player.maxQi).toBe(100);
+		expect(state.player.qi).toBe(100);
+		expect(hud.playerHealth).toBe(110);
+		expect(hud.playerMaxHealth).toBe(110);
+		expect(hud.playerQi).toBe(100);
+		expect(hud.playerMaxQi).toBe(100);
+		expect(hud.inventory.quickSlots[0]).toMatchObject({
+			slot: 1,
+			itemId: 'lesser_healing_pill',
+			count: 3
+		});
+	});
+
+	it('applies equipment damage bonuses to player attacks', () => {
+		const state = setupDuel();
+
+		stepGame(state, { ...idleInput, lightAttack: true }, frame);
+		advance(state, LIGHT_ATTACK_TIMING.startup + LIGHT_ATTACK_TIMING.active / 2);
+
+		expect(state.rival.health).toBe(100 - LIGHT_ATTACK_TIMING.damage - 2);
+	});
+
+	it('restarts with the current item progress and derived stats', () => {
+		const state = createInitialGameState();
+		state.items.inventory.jade_breathing_charm = 1;
+		state.items.equipment.accessory = 'jade_breathing_charm';
+
+		const restarted = restartGame(state.items);
+
+		expect(restarted.player.maxHealth).toBe(110);
+		expect(restarted.player.health).toBe(110);
+		expect(restarted.player.maxQi).toBe(120);
+		expect(restarted.player.qi).toBe(120);
+		expect(restarted.items.equipment.accessory).toBe('jade_breathing_charm');
 	});
 
 	it('enters victory, defeat, and restart states deterministically', () => {

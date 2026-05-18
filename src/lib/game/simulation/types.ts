@@ -25,7 +25,9 @@ export type FighterState = {
 	position: Vec2;
 	heading: number;
 	health: number;
+	maxHealth: number;
 	qi: number;
+	maxQi: number;
 	dashCooldown: number;
 	attackCooldown: number;
 	qiCooldown: number;
@@ -43,6 +45,8 @@ export type InputSnapshot = {
 	qiBurst: boolean;
 	interact: boolean;
 	pause: boolean;
+	quickSlot: QuickSlotNumber | null;
+	toggleInventory: boolean;
 };
 
 export type CombatEffect = {
@@ -182,6 +186,9 @@ export type GameState = {
 	effects: CombatEffect[];
 	elapsed: number;
 	nextEffectId: number;
+	items: ItemProgress;
+	inventoryOpen: boolean;
+	itemFeedback: string | null;
 };
 
 export type HudSnapshot = {
@@ -189,7 +196,9 @@ export type HudSnapshot = {
 	objective: string;
 	prompt: string | null;
 	playerHealth: number;
+	playerMaxHealth: number;
 	playerQi: number;
+	playerMaxQi: number;
 	rivalHealth: number;
 	dashCooldown: number;
 	attackCooldown: number;
@@ -197,4 +206,5 @@ export type HudSnapshot = {
 	playerActionStatus: PlayerActionStatus;
 	showRestart: boolean;
 	isPaused: boolean;
+	inventory: HudInventorySnapshot;
 };
