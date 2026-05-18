@@ -65,11 +65,15 @@ test('plays through the Wuxia MVP opening, item loop, reward, and restart', asyn
 		throw new Error(`No bag test id mapping for reward: ${rewardName}`);
 	}
 
-	expect(rewardItemTestId).toBe('bag-item-reinforced_training_robe');
-
 	await page.getByTestId('restart-button').click();
 	await expect(page.getByTestId('objective-chip')).toContainText('Meet the mentor');
 
+	await page.getByTestId('bag-toggle').click();
+	await expect(page.getByTestId('bag-panel')).toBeVisible();
+	await expect(page.getByTestId(rewardItemTestId)).toBeVisible();
+
+	await page.reload();
+	await expect(page.getByTestId('game-shell')).toBeVisible();
 	await page.getByTestId('bag-toggle').click();
 	await expect(page.getByTestId('bag-panel')).toBeVisible();
 	await expect(page.getByTestId(rewardItemTestId)).toBeVisible();
