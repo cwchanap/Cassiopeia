@@ -1,16 +1,28 @@
 import { createInputController, type InputController } from '$lib/game/input/createInputController';
 import { createWuxiaScene, type WuxiaScene } from '$lib/game/render/createWuxiaScene';
+import { loadItemProgress, saveItemProgress } from '$lib/game/runtime/save';
 import {
 	createInitialGameState,
 	restartGame,
 	stepGame,
 	toHudSnapshot
 } from '$lib/game/simulation/state';
-import type { GameState, HudSnapshot } from '$lib/game/simulation/types';
+import type {
+	GameState,
+	HudSnapshot,
+	InventoryCommand,
+	ItemId,
+	QuickSlotNumber
+} from '$lib/game/simulation/types';
 
 export type GameRuntime = {
 	start(): void;
 	restart(): void;
+	toggleInventory(): void;
+	closeInventory(): void;
+	useInventoryItem(itemId: ItemId): void;
+	equipItem(itemId: ItemId): void;
+	assignQuickSlot(slot: QuickSlotNumber, itemId: ItemId | null): void;
 	dispose(): void;
 };
 
@@ -21,7 +33,8 @@ export type RuntimeOptions = {
 };
 
 export function createGameRuntime(options: RuntimeOptions): GameRuntime {
-	let state: GameState = createInitialGameState();
+	let state: GameState = createInitialGameState(loadItemProgress());
+	let lastSavedItems = JSON.stringify(state.items);
 	let input: InputController | null = null;
 	let scene: WuxiaScene | null = null;
 	let frameId: number | null = null;
@@ -31,6 +44,16 @@ export function createGameRuntime(options: RuntimeOptions): GameRuntime {
 
 	function publish(): void {
 		options.onHudUpdate(toHudSnapshot(state));
+	}
+
+	function persistItemsIfChanged(): void {
+		const nextSavedItems = JSON.stringify(state.items);
+		if (nextSavedItems === lastSavedItems) {
+			return;
+		}
+
+		saveItemProgress(state.items);
+		lastSavedItems = nextSavedItems;
 	}
 
 	function loop(now: number): void {
@@ -44,6 +67,7 @@ export function createGameRuntime(options: RuntimeOptions): GameRuntime {
 		stepGame(state, input.getSnapshot(), deltaTime);
 		scene.render(state, deltaTime);
 		publish();
+		persistItemsIfChanged();
 
 		frameId = window.requestAnimationFrame(loop);
 	}
@@ -67,9 +91,56 @@ export function createGameRuntime(options: RuntimeOptions): GameRuntime {
 		}
 	}
 
-	function restart(): void {
-		state = restartGame();
+	function runInventoryCommand(command: InventoryCommand): void {
+		if (disposed) {
+			return;
+		}
+
+		stepGame(
+			state,
+			{
+				moveX: 0,
+				moveZ: 0,
+				cameraDelta: 0,
+				dash: false,
+				lightAttack: false,
+				qiBurst: false,
+				interact: false,
+				pause: false,
+				quickSlot: null,
+				toggleInventory: false
+			},
+			0,
+			[command]
+		);
 		publish();
+		persistItemsIfChanged();
+	}
+
+	function restart(): void {
+		state = restartGame(state.items);
+		publish();
+		persistItemsIfChanged();
+	}
+
+	function toggleInventory(): void {
+		runInventoryCommand({ type: 'toggleInventory' });
+	}
+
+	function closeInventory(): void {
+		runInventoryCommand({ type: 'closeInventory' });
+	}
+
+	function useInventoryItem(itemId: ItemId): void {
+		runInventoryCommand({ type: 'useItem', itemId });
+	}
+
+	function equipItem(itemId: ItemId): void {
+		runInventoryCommand({ type: 'equipItem', itemId });
+	}
+
+	function assignQuickSlot(slot: QuickSlotNumber, itemId: ItemId | null): void {
+		runInventoryCommand({ type: 'assignQuickSlot', slot, itemId });
 	}
 
 	function dispose(): void {
@@ -86,5 +157,14 @@ export function createGameRuntime(options: RuntimeOptions): GameRuntime {
 		scene = null;
 	}
 
-	return { start, restart, dispose };
+	return {
+		start,
+		restart,
+		toggleInventory,
+		closeInventory,
+		useInventoryItem,
+		equipItem,
+		assignQuickSlot,
+		dispose
+	};
 }
