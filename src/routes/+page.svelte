@@ -206,7 +206,7 @@
 		aria-label="Mountain sect courtyard"
 	></div>
 
-	<div class="hud-layer" aria-live="polite">
+	<div class="hud-layer" class:inventory-open={hud.inventory.isOpen} aria-live="polite">
 		<section class="objective-chip" data-testid="objective-chip" aria-label="Current objective">
 			<span>{phaseLabel}</span>
 			<strong>{hud.objective}</strong>
@@ -438,6 +438,21 @@
 		position: absolute;
 		inset: 0;
 		pointer-events: none;
+	}
+
+	.hud-layer.inventory-open {
+		pointer-events: auto;
+	}
+
+	.hud-layer.inventory-open .quick-slots,
+	.hud-layer.inventory-open .pause-panel,
+	.hud-layer.inventory-open .end-state,
+	.hud-layer.inventory-open .fallback-panel {
+		pointer-events: none;
+	}
+
+	.hud-layer.inventory-open .bag-panel {
+		pointer-events: auto;
 	}
 
 	.objective-chip,
@@ -719,17 +734,17 @@
 
 		.quick-slots {
 			right: 14px;
-			bottom: 76px;
+			bottom: 104px;
 			left: 14px;
 			width: auto;
 		}
 
 		.prompt {
-			bottom: 18px;
+			bottom: 8px;
 		}
 
 		.item-feedback {
-			bottom: 176px;
+			bottom: 212px;
 		}
 
 		.bag-grid {
