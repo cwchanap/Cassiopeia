@@ -23,6 +23,8 @@ export function createInputController(target: HTMLElement): InputController {
 	let qiBurst = false;
 	let interact = false;
 	let pause = false;
+	let quickSlot: InputSnapshot['quickSlot'] = null;
+	let toggleInventory = false;
 	let pointerDragging = false;
 	let previousPointerX = 0;
 	let pointerDelta = 0;
@@ -54,6 +56,10 @@ export function createInputController(target: HTMLElement): InputController {
 			interact = true;
 		} else if (key === 'escape') {
 			pause = true;
+		} else if (key === '1' || key === '2' || key === '3') {
+			quickSlot = Number(key) as InputSnapshot['quickSlot'];
+		} else if (key === 'i' || key === 'b') {
+			toggleInventory = true;
 		}
 	}
 
@@ -97,8 +103,8 @@ export function createInputController(target: HTMLElement): InputController {
 			qiBurst,
 			interact,
 			pause,
-			quickSlot: null,
-			toggleInventory: false
+			quickSlot,
+			toggleInventory
 		};
 
 		dash = false;
@@ -106,6 +112,8 @@ export function createInputController(target: HTMLElement): InputController {
 		qiBurst = false;
 		interact = false;
 		pause = false;
+		quickSlot = null;
+		toggleInventory = false;
 		pointerDelta = 0;
 
 		return snapshot;

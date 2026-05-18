@@ -18,11 +18,16 @@ import {
 	distance
 } from './combat';
 import {
+	assignQuickSlot,
 	cloneItemProgress,
 	createHudInventorySnapshot,
 	createStarterItemProgress,
 	derivePlayerItemStats,
-	getPlayerAttackDamage
+	equipItem,
+	formatReward,
+	getPlayerAttackDamage,
+	grantVictoryReward,
+	useConsumable
 } from './items';
 import type { AttackTiming } from './combat';
 import type {
@@ -34,6 +39,8 @@ import type {
 	GameState,
 	HudSnapshot,
 	InputSnapshot,
+	InventoryCommand,
+	ItemId,
 	PlayerActionStatus,
 	Vec2
 } from './types';
@@ -116,11 +123,30 @@ export function restartGame(itemProgress = createStarterItemProgress()): GameSta
 	return createInitialGameState(itemProgress);
 }
 
-export function stepGame(state: GameState, input: InputSnapshot, deltaTime: number): void {
+export function stepGame(
+	state: GameState,
+	input: InputSnapshot,
+	deltaTime: number,
+	commands: InventoryCommand[] = []
+): void {
 	const dt = Math.min(Math.max(deltaTime, 0), 0.05);
 
+	processInventoryCommands(state, commands);
+	processInventoryInput(state, input);
+
 	if (input.pause) {
+		if (state.inventoryOpen) {
+			state.inventoryOpen = false;
+			updatePrompt(state);
+			return;
+		}
+
 		togglePause(state);
+		return;
+	}
+
+	if (state.inventoryOpen) {
+		updatePrompt(state);
 		return;
 	}
 
@@ -143,6 +169,7 @@ export function stepGame(state: GameState, input: InputSnapshot, deltaTime: numb
 
 	if (state.phase === 'duel') {
 		const qiBeforeAttacks = state.player.qi;
+		handleQuickSlotUse(state, input.quickSlot);
 		handlePlayerAttacks(state, input);
 		updateRival(state, dt);
 		resolveActiveHits(state);
@@ -292,6 +319,77 @@ function handlePlayerAttacks(state: GameState, input: InputSnapshot): void {
 		state.player.qi -= QI_BURST_COST;
 		state.player.qiCooldown = QI_BURST_COOLDOWN;
 	}
+}
+
+function processInventoryCommands(state: GameState, commands: InventoryCommand[]): void {
+	for (const command of commands) {
+		if (command.type === 'toggleInventory') {
+			state.inventoryOpen = !state.inventoryOpen;
+			state.itemFeedback = state.inventoryOpen ? 'Bag opened' : 'Bag closed';
+			continue;
+		}
+
+		if (command.type === 'closeInventory') {
+			state.inventoryOpen = false;
+			state.itemFeedback = 'Bag closed';
+			continue;
+		}
+
+		if (command.type === 'useItem') {
+			useInventoryItem(state, command.itemId);
+			continue;
+		}
+
+		if (command.type === 'equipItem') {
+			state.itemFeedback = equipItem(state.items, command.itemId);
+			refreshPlayerStats(state);
+			continue;
+		}
+
+		state.itemFeedback = assignQuickSlot(state.items, command.slot, command.itemId);
+	}
+}
+
+function processInventoryInput(state: GameState, input: InputSnapshot): void {
+	if (input.toggleInventory) {
+		state.inventoryOpen = !state.inventoryOpen;
+		state.itemFeedback = state.inventoryOpen ? 'Bag opened' : 'Bag closed';
+	}
+}
+
+function handleQuickSlotUse(state: GameState, slot: InputSnapshot['quickSlot']): void {
+	if (slot === null) {
+		return;
+	}
+
+	const itemId = state.items.quickSlots[slot];
+	if (!itemId) {
+		state.itemFeedback = `Slot ${slot} is empty`;
+		return;
+	}
+
+	useInventoryItem(state, itemId);
+}
+
+function useInventoryItem(state: GameState, itemId: ItemId): void {
+	const result = useConsumable(state.items, itemId, {
+		health: state.player.health,
+		maxHealth: state.player.maxHealth,
+		qi: state.player.qi,
+		maxQi: state.player.maxQi
+	});
+
+	state.player.health = result.resources.health;
+	state.player.qi = result.resources.qi;
+	state.itemFeedback = result.feedback;
+}
+
+function refreshPlayerStats(state: GameState): void {
+	const stats = derivePlayerItemStats(state.items);
+	state.player.maxHealth = stats.maxHealth;
+	state.player.maxQi = stats.maxQi;
+	state.player.health = Math.min(state.player.health, state.player.maxHealth);
+	state.player.qi = Math.min(state.player.qi, state.player.maxQi);
 }
 
 function canStartAction(fighter: FighterState): boolean {
@@ -454,6 +552,8 @@ function updateRival(state: GameState, deltaTime: number): void {
 
 function resolveEndState(state: GameState): void {
 	if (state.rival.health <= 0) {
+		const reward = grantVictoryReward(state.items);
+		state.itemFeedback = `Won: ${formatReward(reward)}`;
 		state.phase = 'victory';
 		state.previousPhase = 'victory';
 		state.objective = OBJECTIVES.victory;
@@ -469,6 +569,11 @@ function resolveEndState(state: GameState): void {
 }
 
 function updatePrompt(state: GameState): void {
+	if (state.inventoryOpen) {
+		state.prompt = 'Bag open';
+		return;
+	}
+
 	if (state.phase === 'seekMentor') {
 		state.prompt =
 			distance(state.player.position, state.mentor.position) <= MENTOR_INTERACT_RANGE
@@ -488,7 +593,9 @@ function updatePrompt(state: GameState): void {
 	}
 
 	if (state.phase === 'victory') {
-		state.prompt = 'Victory. Restart to train again.';
+		state.prompt = state.items.lastReward
+			? `Victory. Won: ${formatReward(state.items.lastReward)}.`
+			: 'Victory. Restart to train again.';
 		return;
 	}
 

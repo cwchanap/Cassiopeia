@@ -269,6 +269,88 @@ describe('wuxia simulation state', () => {
 		expect(restarted.items.equipment.accessory).toBe('jade_breathing_charm');
 	});
 
+	it('opens the inventory overlay and pauses combat simulation', () => {
+		const state = setupDuel();
+
+		stepGame(state, { ...idleInput, toggleInventory: true }, frame);
+		expect(state.inventoryOpen).toBe(true);
+
+		advance(state, RIVAL_STRIKE_TIMING.startup + frame);
+
+		expect(state.rival.combatAction.phase).toBe('idle');
+		expect(state.player.health).toBe(state.player.maxHealth);
+		expect(toHudSnapshot(state).inventory.isOpen).toBe(true);
+	});
+
+	it('closes inventory with pause input before toggling the pause phase', () => {
+		const state = setupDuel();
+		state.inventoryOpen = true;
+
+		stepGame(state, { ...idleInput, pause: true }, frame);
+
+		expect(state.inventoryOpen).toBe(false);
+		expect(state.phase).toBe('duel');
+	});
+
+	it('uses quick-slot consumables during the duel', () => {
+		const state = setupDuel();
+		state.player.health = 50;
+
+		stepGame(state, { ...idleInput, quickSlot: 1 }, frame);
+
+		expect(state.player.health).toBe(85);
+		expect(state.items.inventory.lesser_healing_pill).toBe(2);
+		expect(state.itemFeedback).toBe('Used Lesser Healing Pill');
+	});
+
+	it('keeps consumables when quick-slot use has no benefit', () => {
+		const state = setupDuel();
+
+		stepGame(state, { ...idleInput, quickSlot: 1 }, frame);
+
+		expect(state.player.health).toBe(state.player.maxHealth);
+		expect(state.items.inventory.lesser_healing_pill).toBe(3);
+		expect(state.itemFeedback).toBe('Health is full');
+	});
+
+	it('handles bag commands for equip, assign, and use', () => {
+		const state = setupDuel();
+		state.items.inventory.tempered_practice_sword = 1;
+		state.player.health = 50;
+
+		stepGame(state, idleInput, 0, [{ type: 'equipItem', itemId: 'tempered_practice_sword' }]);
+		expect(state.items.equipment.weapon).toBe('tempered_practice_sword');
+		expect(state.itemFeedback).toBe('Equipped Tempered Practice Sword');
+
+		stepGame(state, idleInput, 0, [
+			{ type: 'assignQuickSlot', slot: 3, itemId: 'lesser_healing_pill' }
+		]);
+		expect(state.items.quickSlots[3]).toBe('lesser_healing_pill');
+
+		stepGame(state, idleInput, 0, [{ type: 'useItem', itemId: 'lesser_healing_pill' }]);
+		expect(state.player.health).toBe(85);
+		expect(state.items.inventory.lesser_healing_pill).toBe(2);
+	});
+
+	it('grants one victory reward on the victory transition', () => {
+		const state = setupDuel();
+		state.rival.health = 1;
+
+		stepGame(state, { ...idleInput, lightAttack: true }, frame);
+		advance(state, LIGHT_ATTACK_TIMING.startup + LIGHT_ATTACK_TIMING.active / 2);
+
+		const firstReward = state.items.lastReward;
+		const inventoryAfterVictory = { ...state.items.inventory };
+
+		stepGame(state, idleInput, frame);
+
+		expect(state.phase).toBe('victory');
+		expect(firstReward).not.toBeNull();
+		expect(state.items.lastReward).toEqual(firstReward);
+		expect(state.items.inventory).toEqual(inventoryAfterVictory);
+		expect(toHudSnapshot(state).inventory.lastRewardText).toContain('x');
+	});
+
 	it('enters victory, defeat, and restart states deterministically', () => {
 		const state = setupDuel();
 		state.rival.health = 1;
