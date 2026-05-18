@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { createGameRuntime, type GameRuntime } from '$lib/game/runtime/createGameRuntime';
-	import type { HudSnapshot } from '$lib/game/simulation/types';
+	import type { HudSnapshot, ItemId, QuickSlotNumber } from '$lib/game/simulation/types';
 	import type { Attachment } from 'svelte/attachments';
 
 	let runtime: GameRuntime | null = null;
@@ -10,9 +10,9 @@
 		objective: 'Meet the mentor',
 		prompt: 'Find the mentor at the shrine gate',
 		playerHealth: 100,
-		playerMaxHealth: 100,
-		playerQi: 60,
-		playerMaxQi: 60,
+		playerMaxHealth: 110,
+		playerQi: 100,
+		playerMaxQi: 100,
 		rivalHealth: 100,
 		dashCooldown: 0,
 		attackCooldown: 0,
@@ -24,8 +24,16 @@
 			isOpen: false,
 			consumables: [],
 			equipment: [],
-			equipmentSlots: [],
-			quickSlots: [],
+			equipmentSlots: [
+				{ slot: 'weapon', label: 'Weapon', item: null },
+				{ slot: 'robe', label: 'Robe', item: null },
+				{ slot: 'accessory', label: 'Accessory', item: null }
+			],
+			quickSlots: [
+				{ slot: 1, itemId: null, label: 'Empty', count: 0, usable: false },
+				{ slot: 2, itemId: null, label: 'Empty', count: 0, usable: false },
+				{ slot: 3, itemId: null, label: 'Empty', count: 0, usable: false }
+			],
 			feedback: null,
 			lastRewardText: null
 		}
@@ -68,6 +76,26 @@
 		runtime?.restart();
 	}
 
+	function toggleInventory(): void {
+		runtime?.toggleInventory();
+	}
+
+	function closeInventory(): void {
+		runtime?.closeInventory();
+	}
+
+	function useItem(itemId: ItemId): void {
+		runtime?.useInventoryItem(itemId);
+	}
+
+	function equipItem(itemId: ItemId): void {
+		runtime?.equipItem(itemId);
+	}
+
+	function assignQuickSlot(slot: QuickSlotNumber, itemId: ItemId | null): void {
+		runtime?.assignQuickSlot(slot, itemId);
+	}
+
 	function cooldownText(value: number): string {
 		return value <= 0 ? 'Ready' : `${value.toFixed(1)}s`;
 	}
@@ -98,11 +126,11 @@
 		<section class="status-cluster" data-testid="status-cluster" aria-label="Player status">
 			<div>
 				<span>Health</span>
-				<strong>{hud.playerHealth}</strong>
+				<strong>{hud.playerHealth}/{hud.playerMaxHealth}</strong>
 			</div>
 			<div>
 				<span>Qi</span>
-				<strong>{hud.playerQi}</strong>
+				<strong>{hud.playerQi}/{hud.playerMaxQi}</strong>
 			</div>
 			<div>
 				<span>Dash</span>
@@ -120,8 +148,99 @@
 			{/if}
 		</section>
 
+		<section class="quick-slots" data-testid="quick-slots" aria-label="Quick slots">
+			{#each hud.inventory.quickSlots as slot (slot.slot)}
+				<button
+					type="button"
+					class:empty={!slot.itemId}
+					disabled={!slot.usable}
+					data-testid={`quick-slot-${slot.slot}`}
+					onclick={() => slot.itemId && useItem(slot.itemId)}
+				>
+					<span>{slot.slot}</span>
+					<strong>{slot.label}</strong>
+					<small>{slot.itemId ? `x${slot.count}` : 'Empty'}</small>
+				</button>
+			{/each}
+			<button type="button" class="bag-button" data-testid="bag-toggle" onclick={toggleInventory}>
+				Bag
+			</button>
+		</section>
+
 		{#if hud.prompt}
 			<p class="prompt" data-testid="game-prompt">{hud.prompt}</p>
+		{/if}
+
+		{#if hud.inventory.feedback}
+			<p class="item-feedback" data-testid="item-feedback">{hud.inventory.feedback}</p>
+		{/if}
+
+		{#if hud.inventory.isOpen}
+			<section class="bag-panel" data-testid="bag-panel" aria-label="Inventory bag">
+				<header>
+					<strong>Bag</strong>
+					<button type="button" data-testid="bag-close" onclick={closeInventory}>Close</button>
+				</header>
+
+				<div class="bag-grid">
+					<section class="bag-section" aria-label="Consumables">
+						<h2>Consumables</h2>
+						{#each hud.inventory.consumables as item (item.itemId)}
+							<article class="bag-row" data-testid={`bag-item-${item.itemId}`}>
+								<div>
+									<strong>{item.name}</strong>
+									<span>{item.description}</span>
+								</div>
+								<small>x{item.count}</small>
+								<button type="button" onclick={() => useItem(item.itemId)}>Use</button>
+								<div class="slot-actions" aria-label={`Assign ${item.name}`}>
+									<button type="button" onclick={() => assignQuickSlot(1, item.itemId)}
+										>Slot 1</button
+									>
+									<button type="button" onclick={() => assignQuickSlot(2, item.itemId)}
+										>Slot 2</button
+									>
+									<button type="button" onclick={() => assignQuickSlot(3, item.itemId)}
+										>Slot 3</button
+									>
+								</div>
+							</article>
+						{:else}
+							<p class="empty-list">No consumables</p>
+						{/each}
+					</section>
+
+					<section class="bag-section" aria-label="Equipment">
+						<h2>Equipment</h2>
+						<div class="equipped-list">
+							{#each hud.inventory.equipmentSlots as slot (slot.slot)}
+								<div class="equipped-row">
+									<span>{slot.label}</span>
+									<strong>{slot.item ? slot.item.name : 'Empty'}</strong>
+								</div>
+							{/each}
+						</div>
+						{#each hud.inventory.equipment as item (item.itemId)}
+							<article class="bag-row" data-testid={`bag-item-${item.itemId}`}>
+								<div>
+									<strong>{item.name}</strong>
+									<span>{item.description}</span>
+								</div>
+								<small>{item.isEquipped ? 'Equipped' : `x${item.count}`}</small>
+								<button
+									type="button"
+									disabled={item.isEquipped}
+									onclick={() => equipItem(item.itemId)}
+								>
+									Equip
+								</button>
+							</article>
+						{:else}
+							<p class="empty-list">No equipment</p>
+						{/each}
+					</section>
+				</div>
+			</section>
 		{/if}
 
 		{#if hud.isPaused}
@@ -207,10 +326,13 @@
 
 	.objective-chip,
 	.status-cluster,
+	.quick-slots,
 	.prompt,
+	.item-feedback,
 	.pause-panel,
 	.end-state,
-	.fallback-panel {
+	.fallback-panel,
+	.bag-panel {
 		border: 1px solid rgba(235, 225, 194, 0.28);
 		background: rgba(22, 32, 29, 0.68);
 		box-shadow: 0 18px 48px rgba(0, 0, 0, 0.2);
@@ -267,6 +389,44 @@
 		overflow-wrap: anywhere;
 	}
 
+	.quick-slots {
+		position: absolute;
+		right: 24px;
+		bottom: 92px;
+		display: grid;
+		grid-template-columns: repeat(4, minmax(58px, 1fr));
+		gap: 8px;
+		width: min(360px, calc(100vw - 48px));
+		padding: 10px;
+		border-radius: 8px;
+		pointer-events: auto;
+	}
+
+	.quick-slots button {
+		display: grid;
+		gap: 2px;
+		min-width: 0;
+		padding: 8px;
+	}
+
+	.quick-slots button:disabled {
+		opacity: 0.58;
+	}
+
+	.quick-slots span,
+	.quick-slots small {
+		font-size: 0.68rem;
+	}
+
+	.quick-slots strong {
+		font-size: 0.76rem;
+		overflow-wrap: anywhere;
+	}
+
+	.bag-button {
+		background: #cdd8c3;
+	}
+
 	.prompt {
 		position: absolute;
 		left: 50%;
@@ -278,6 +438,100 @@
 		border-radius: 8px;
 		color: #f5edd8;
 		text-align: center;
+	}
+
+	.item-feedback {
+		position: absolute;
+		left: 50%;
+		bottom: 158px;
+		max-width: min(420px, calc(100vw - 48px));
+		margin: 0;
+		padding: 8px 12px;
+		transform: translateX(-50%);
+		border-radius: 8px;
+		color: #f5edd8;
+		text-align: center;
+	}
+
+	.bag-panel {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		display: grid;
+		gap: 14px;
+		width: min(820px, calc(100vw - 48px));
+		max-height: min(720px, calc(100vh - 48px));
+		padding: 18px;
+		transform: translate(-50%, -50%);
+		border-radius: 8px;
+		pointer-events: auto;
+		overflow: auto;
+	}
+
+	.bag-panel header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+	}
+
+	.bag-grid {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 14px;
+	}
+
+	.bag-section {
+		display: grid;
+		align-content: start;
+		gap: 10px;
+	}
+
+	.bag-section h2 {
+		margin: 0;
+		color: #bed5c9;
+		font-size: 0.76rem;
+		text-transform: uppercase;
+	}
+
+	.bag-row,
+	.equipped-row {
+		display: grid;
+		gap: 8px;
+		padding: 10px;
+		border-radius: 6px;
+		background: rgba(234, 239, 218, 0.08);
+	}
+
+	.bag-row {
+		grid-template-columns: minmax(0, 1fr) auto auto;
+		align-items: center;
+	}
+
+	.bag-row span,
+	.empty-list {
+		color: #d3dfd7;
+		font-size: 0.82rem;
+	}
+
+	.slot-actions {
+		grid-column: 1 / -1;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+	}
+
+	.slot-actions button {
+		padding: 7px 9px;
+	}
+
+	.equipped-list {
+		display: grid;
+		gap: 8px;
+	}
+
+	.equipped-row {
+		grid-template-columns: 88px minmax(0, 1fr);
 	}
 
 	.pause-panel,
@@ -342,8 +596,23 @@
 			font-size: 0.62rem;
 		}
 
+		.quick-slots {
+			right: 14px;
+			bottom: 72px;
+			left: 14px;
+			width: auto;
+		}
+
 		.prompt {
 			bottom: 18px;
+		}
+
+		.item-feedback {
+			bottom: 138px;
+		}
+
+		.bag-grid {
+			grid-template-columns: 1fr;
 		}
 	}
 </style>
