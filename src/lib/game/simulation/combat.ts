@@ -1,6 +1,5 @@
 import type { FighterState, Vec2 } from './types';
 
-export const COURTYARD_HALF_SIZE = 7;
 export const MENTOR_INTERACT_RANGE = 1.5;
 export const LIGHT_ATTACK_RANGE = 1.35;
 export const QI_BURST_RANGE = 2.75;
@@ -59,13 +58,6 @@ export function distance(a: Vec2, b: Vec2): number {
 	const dx = a.x - b.x;
 	const dz = a.z - b.z;
 	return Math.hypot(dx, dz);
-}
-
-export function clampToCourtyard(position: Vec2): Vec2 {
-	return {
-		x: Math.max(-COURTYARD_HALF_SIZE, Math.min(COURTYARD_HALF_SIZE, position.x)),
-		z: Math.max(-COURTYARD_HALF_SIZE, Math.min(COURTYARD_HALF_SIZE, position.z))
-	};
 }
 
 export function canHit(attacker: FighterState, target: FighterState, range: number): boolean {

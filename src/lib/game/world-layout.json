@@ -1,0 +1,871 @@
+{
+	"bounds": {
+		"minX": -58,
+		"maxX": 48,
+		"minZ": -68,
+		"maxZ": 56
+	},
+	"buildings": [
+		{
+			"name": "TeaHouse",
+			"x": -5,
+			"z": -10,
+			"width": 4,
+			"depth": 3,
+			"turn": 0
+		},
+		{
+			"name": "Herbalist",
+			"x": 5,
+			"z": -10,
+			"width": 3.6,
+			"depth": 2.8,
+			"turn": 0
+		},
+		{
+			"name": "EastHome",
+			"x": 11,
+			"z": -14,
+			"width": 3.5,
+			"depth": 2.7,
+			"turn": -1
+		},
+		{
+			"name": "WestLodge",
+			"x": -10,
+			"z": -2.1,
+			"width": 4.2,
+			"depth": 3,
+			"turn": 1
+		},
+		{
+			"name": "WestHome",
+			"x": -10,
+			"z": 3.4,
+			"width": 3.5,
+			"depth": 2.7,
+			"turn": 1
+		},
+		{
+			"name": "SilkShop",
+			"x": -6,
+			"z": -18.5,
+			"width": 4,
+			"depth": 3.2,
+			"turn": 1
+		},
+		{
+			"name": "TeaMerchant",
+			"x": 6,
+			"z": -19,
+			"width": 4.4,
+			"depth": 3.2,
+			"turn": -1
+		},
+		{
+			"name": "NorthHome",
+			"x": -6,
+			"z": -26,
+			"width": 3.8,
+			"depth": 3,
+			"turn": 1
+		},
+		{
+			"name": "ScholarHome",
+			"x": 6,
+			"z": -26,
+			"width": 3.8,
+			"depth": 3,
+			"turn": -1
+		},
+		{
+			"name": "AncestralHall",
+			"x": 0,
+			"z": -32,
+			"width": 6,
+			"depth": 3.5,
+			"turn": 0
+		},
+		{
+			"name": "WestFarmhouse",
+			"x": -24,
+			"z": -10,
+			"width": 4,
+			"depth": 3,
+			"turn": 1
+		},
+		{
+			"name": "PotterHouse",
+			"x": -24,
+			"z": 2,
+			"width": 3.7,
+			"depth": 3,
+			"turn": 1
+		},
+		{
+			"name": "OrchardCottage",
+			"x": -24,
+			"z": 15,
+			"width": 3.8,
+			"depth": 2.8,
+			"turn": 0
+		},
+		{
+			"name": "RiceFarmhouse",
+			"x": 29,
+			"z": 17,
+			"width": 4.2,
+			"depth": 3,
+			"turn": 0
+		},
+		{
+			"name": "FarmBarn",
+			"x": 35,
+			"z": -23,
+			"width": 4.5,
+			"depth": 3.5,
+			"turn": 0
+		},
+		{
+			"name": "BambooShrine",
+			"x": -44,
+			"z": -18,
+			"width": 5.5,
+			"depth": 4,
+			"turn": 0,
+			"kind": "shrine"
+		},
+		{
+			"name": "CloudrestHall",
+			"x": 0,
+			"z": -59,
+			"width": 9,
+			"depth": 5,
+			"turn": 0,
+			"kind": "monastery"
+		},
+		{
+			"name": "MonasteryLibrary",
+			"x": -9,
+			"z": -49,
+			"width": 5,
+			"depth": 4,
+			"turn": 1
+		},
+		{
+			"name": "MonasteryDormitory",
+			"x": 9,
+			"z": -49,
+			"width": 5,
+			"depth": 4,
+			"turn": -1
+		},
+		{
+			"name": "RiverInn",
+			"x": 29,
+			"z": 49,
+			"width": 5,
+			"depth": 3.6,
+			"turn": 0
+		},
+		{
+			"name": "FerryHouse",
+			"x": 40,
+			"z": 40,
+			"width": 4,
+			"depth": 3,
+			"turn": -1
+		},
+		{
+			"name": "MarketStorehouse",
+			"x": 38,
+			"z": 49,
+			"width": 4,
+			"depth": 3,
+			"turn": 0
+		},
+		{
+			"name": "SilkStall",
+			"x": 26,
+			"z": 34,
+			"width": 3,
+			"depth": 2.2,
+			"turn": 0,
+			"kind": "stall"
+		},
+		{
+			"name": "MedicineStall",
+			"x": 34,
+			"z": 34,
+			"width": 3,
+			"depth": 2.2,
+			"turn": 0,
+			"kind": "stall"
+		},
+		{
+			"name": "TeaStall",
+			"x": 25,
+			"z": 45,
+			"width": 3,
+			"depth": 2.2,
+			"turn": 2,
+			"kind": "stall"
+		},
+		{
+			"name": "FruitStall",
+			"x": 34,
+			"z": 45,
+			"width": 3,
+			"depth": 2.2,
+			"turn": 2,
+			"kind": "stall"
+		}
+	],
+	"river": {
+		"minX": 18,
+		"maxX": 21,
+		"minZ": -76,
+		"maxZ": 64
+	},
+	"bridges": [
+		{
+			"z": 0,
+			"width": 3.2
+		},
+		{
+			"z": 23,
+			"width": 3.2
+		},
+		{
+			"z": -40,
+			"width": 3.2
+		},
+		{
+			"z": 40,
+			"width": 4
+		}
+	],
+	"roads": [
+		{
+			"x": 0,
+			"z": -19,
+			"width": 4,
+			"depth": 24,
+			"stone": true
+		},
+		{
+			"x": -1.75,
+			"z": -22.5,
+			"width": 32.5,
+			"depth": 1.8,
+			"stone": true
+		},
+		{
+			"x": 12.5,
+			"z": 0,
+			"width": 10,
+			"depth": 3,
+			"stone": false
+		},
+		{
+			"x": 14.5,
+			"z": 12,
+			"width": 3,
+			"depth": 27,
+			"stone": false
+		},
+		{
+			"x": 25,
+			"z": 0,
+			"width": 8,
+			"depth": 3,
+			"stone": false
+		},
+		{
+			"x": 29,
+			"z": -10,
+			"width": 3,
+			"depth": 22,
+			"stone": false
+		},
+		{
+			"x": 26,
+			"z": 23,
+			"width": 24,
+			"depth": 3,
+			"stone": false
+		},
+		{
+			"x": -17,
+			"z": 6,
+			"width": 3,
+			"depth": 53,
+			"stone": false
+		},
+		{
+			"x": -12,
+			"z": 8.5,
+			"width": 12,
+			"depth": 3,
+			"stone": false
+		},
+		{
+			"x": -1,
+			"z": 24,
+			"width": 35,
+			"depth": 3,
+			"stone": false
+		},
+		{
+			"x": -31,
+			"z": 8.5,
+			"width": 29,
+			"depth": 3,
+			"stone": false
+		},
+		{
+			"x": -44,
+			"z": -3,
+			"width": 3,
+			"depth": 26,
+			"stone": false
+		},
+		{
+			"x": -44,
+			"z": -11,
+			"width": 12,
+			"depth": 10,
+			"stone": true
+		},
+		{
+			"x": -34.5,
+			"z": -23,
+			"width": 38,
+			"depth": 2.5,
+			"stone": false
+		},
+		{
+			"x": -17,
+			"z": -21,
+			"width": 3,
+			"depth": 7,
+			"stone": false
+		},
+		{
+			"x": 12,
+			"z": -32,
+			"width": 3,
+			"depth": 19,
+			"stone": true
+		},
+		{
+			"x": 14.5,
+			"z": -40,
+			"width": 31,
+			"depth": 3.2,
+			"stone": true
+		},
+		{
+			"x": 29,
+			"z": -30,
+			"width": 3,
+			"depth": 22,
+			"stone": false
+		},
+		{
+			"x": 0,
+			"z": -49,
+			"width": 14,
+			"depth": 20,
+			"stone": true
+		},
+		{
+			"x": 14.5,
+			"z": 33,
+			"width": 3,
+			"depth": 20,
+			"stone": false
+		},
+		{
+			"x": 28,
+			"z": 40,
+			"width": 28,
+			"depth": 4,
+			"stone": true
+		},
+		{
+			"x": 30,
+			"z": 40,
+			"width": 16,
+			"depth": 17,
+			"stone": false
+		},
+		{
+			"x": 22.8,
+			"z": 40,
+			"width": 3,
+			"depth": 23,
+			"stone": false
+		},
+		{
+			"x": -52,
+			"z": -7,
+			"width": 2.5,
+			"depth": 34,
+			"stone": false
+		},
+		{
+			"x": -48,
+			"z": 8.5,
+			"width": 10,
+			"depth": 3,
+			"stone": false
+		}
+	],
+	"fields": [
+		{
+			"x": 25,
+			"z": -8,
+			"width": 4,
+			"depth": 10,
+			"crop": "rice"
+		},
+		{
+			"x": 35,
+			"z": -8,
+			"width": 7,
+			"depth": 11,
+			"crop": "rice"
+		},
+		{
+			"x": 27,
+			"z": 8,
+			"width": 7,
+			"depth": 9,
+			"crop": "rice"
+		},
+		{
+			"x": 36,
+			"z": 9,
+			"width": 6,
+			"depth": 10,
+			"crop": "tea"
+		},
+		{
+			"x": -9,
+			"z": 16,
+			"width": 8,
+			"depth": 8,
+			"crop": "tea"
+		},
+		{
+			"x": 4,
+			"z": 17,
+			"width": 8,
+			"depth": 7,
+			"crop": "tea"
+		}
+	],
+	"trees": [
+		{
+			"x": -29,
+			"z": 23
+		},
+		{
+			"x": -24,
+			"z": 23
+		},
+		{
+			"x": -20,
+			"z": 23
+		},
+		{
+			"x": -29,
+			"z": 29
+		},
+		{
+			"x": -24,
+			"z": 29
+		},
+		{
+			"x": -20,
+			"z": 29
+		},
+		{
+			"x": -30,
+			"z": -24
+		},
+		{
+			"x": -20,
+			"z": -28
+		},
+		{
+			"x": -13,
+			"z": -29
+		},
+		{
+			"x": 13,
+			"z": -29
+		},
+		{
+			"x": 11,
+			"z": 8
+		},
+		{
+			"x": 8,
+			"z": 29
+		},
+		{
+			"x": 36,
+			"z": 29
+		},
+		{
+			"x": 25,
+			"z": -29
+		},
+		{
+			"x": -28,
+			"z": -2
+		},
+		{
+			"x": -54,
+			"z": -19,
+			"kind": "bamboo"
+		},
+		{
+			"x": -54,
+			"z": -14,
+			"kind": "bamboo"
+		},
+		{
+			"x": -54,
+			"z": -9,
+			"kind": "bamboo"
+		},
+		{
+			"x": -54,
+			"z": -4,
+			"kind": "bamboo"
+		},
+		{
+			"x": -54,
+			"z": 1,
+			"kind": "bamboo"
+		},
+		{
+			"x": -54,
+			"z": 6,
+			"kind": "bamboo"
+		},
+		{
+			"x": -50,
+			"z": -4,
+			"kind": "bamboo"
+		},
+		{
+			"x": -50,
+			"z": 1,
+			"kind": "bamboo"
+		},
+		{
+			"x": -50,
+			"z": 6,
+			"kind": "bamboo"
+		},
+		{
+			"x": -46,
+			"z": -4,
+			"kind": "bamboo"
+		},
+		{
+			"x": -46,
+			"z": 1,
+			"kind": "bamboo"
+		},
+		{
+			"x": -46,
+			"z": 6,
+			"kind": "bamboo"
+		},
+		{
+			"x": -42,
+			"z": -4,
+			"kind": "bamboo"
+		},
+		{
+			"x": -42,
+			"z": 1,
+			"kind": "bamboo"
+		},
+		{
+			"x": -42,
+			"z": 6,
+			"kind": "bamboo"
+		},
+		{
+			"x": -38,
+			"z": -4,
+			"kind": "bamboo"
+		},
+		{
+			"x": -38,
+			"z": 1,
+			"kind": "bamboo"
+		},
+		{
+			"x": -38,
+			"z": 6,
+			"kind": "bamboo"
+		},
+		{
+			"x": -34,
+			"z": -19,
+			"kind": "bamboo"
+		},
+		{
+			"x": -34,
+			"z": -14,
+			"kind": "bamboo"
+		},
+		{
+			"x": -34,
+			"z": -9,
+			"kind": "bamboo"
+		},
+		{
+			"x": -34,
+			"z": -4,
+			"kind": "bamboo"
+		},
+		{
+			"x": -34,
+			"z": 1,
+			"kind": "bamboo"
+		},
+		{
+			"x": -34,
+			"z": 6,
+			"kind": "bamboo"
+		},
+		{
+			"x": -14,
+			"z": -42,
+			"kind": "pine"
+		},
+		{
+			"x": 15,
+			"z": -45,
+			"kind": "pine"
+		},
+		{
+			"x": -14,
+			"z": -54,
+			"kind": "pine"
+		},
+		{
+			"x": 14,
+			"z": -56,
+			"kind": "pine"
+		},
+		{
+			"x": -8,
+			"z": -64,
+			"kind": "pine"
+		},
+		{
+			"x": 8,
+			"z": -64,
+			"kind": "pine"
+		}
+	],
+	"walls": [
+		{
+			"x": -5.3,
+			"z": -7,
+			"width": 6.2,
+			"depth": 0.3
+		},
+		{
+			"x": 5.3,
+			"z": -7,
+			"width": 6.2,
+			"depth": 0.3
+		},
+		{
+			"x": -1.75,
+			"z": -6.8,
+			"width": 0.6,
+			"depth": 0.6
+		},
+		{
+			"x": 1.75,
+			"z": -6.8,
+			"width": 0.6,
+			"depth": 0.6
+		}
+	],
+	"regions": [
+		{
+			"name": "Whispering Bamboo Shrine",
+			"style": "bamboo",
+			"x": -44,
+			"z": -9,
+			"width": 22,
+			"depth": 28
+		},
+		{
+			"name": "Cloudrest Monastery",
+			"style": "monastery",
+			"x": 0,
+			"z": -49,
+			"width": 28,
+			"depth": 28
+		},
+		{
+			"name": "Jadebank Market",
+			"style": "market",
+			"x": 30,
+			"z": 40,
+			"width": 24,
+			"depth": 26
+		}
+	],
+	"props": [
+		{
+			"kind": "roadLantern",
+			"x": 12,
+			"z": 2.1,
+			"width": 0.13,
+			"depth": 0.13,
+			"height": 2.3
+		},
+		{
+			"kind": "roadLantern",
+			"x": 12.3,
+			"z": 26.3,
+			"width": 0.13,
+			"depth": 0.13,
+			"height": 2.3
+		},
+		{
+			"kind": "roadLantern",
+			"x": -19.2,
+			"z": 11,
+			"width": 0.13,
+			"depth": 0.13,
+			"height": 2.3
+		},
+		{
+			"kind": "roadLantern",
+			"x": 2.6,
+			"z": -20,
+			"width": 0.13,
+			"depth": 0.13,
+			"height": 2.3
+		},
+		{
+			"kind": "stoneLantern",
+			"x": -49,
+			"z": -12,
+			"width": 0.6,
+			"depth": 0.6,
+			"height": 1.33
+		},
+		{
+			"kind": "stoneLantern",
+			"x": -49,
+			"z": -4,
+			"width": 0.6,
+			"depth": 0.6,
+			"height": 1.33
+		},
+		{
+			"kind": "stoneLantern",
+			"x": -39,
+			"z": -12,
+			"width": 0.6,
+			"depth": 0.6,
+			"height": 1.33
+		},
+		{
+			"kind": "stoneLantern",
+			"x": -39,
+			"z": -4,
+			"width": 0.6,
+			"depth": 0.6,
+			"height": 1.33
+		},
+		{
+			"kind": "stoneLantern",
+			"x": -5,
+			"z": -52,
+			"width": 0.6,
+			"depth": 0.6,
+			"height": 1.33
+		},
+		{
+			"kind": "stoneLantern",
+			"x": -5,
+			"z": -44,
+			"width": 0.6,
+			"depth": 0.6,
+			"height": 1.33
+		},
+		{
+			"kind": "stoneLantern",
+			"x": 5,
+			"z": -52,
+			"width": 0.6,
+			"depth": 0.6,
+			"height": 1.33
+		},
+		{
+			"kind": "stoneLantern",
+			"x": 5,
+			"z": -44,
+			"width": 0.6,
+			"depth": 0.6,
+			"height": 1.33
+		},
+		{
+			"kind": "banner",
+			"x": -5.5,
+			"z": -54,
+			"width": 0.11,
+			"depth": 0.11,
+			"height": 3.2
+		},
+		{
+			"kind": "banner",
+			"x": 5.5,
+			"z": -54,
+			"width": 0.11,
+			"depth": 0.11,
+			"height": 3.2
+		},
+		{
+			"kind": "stoneLantern",
+			"x": -6.2,
+			"z": -5.5,
+			"width": 0.48,
+			"depth": 0.48,
+			"height": 1.23
+		},
+		{
+			"kind": "stoneLantern",
+			"x": 6,
+			"z": -5.5,
+			"width": 0.48,
+			"depth": 0.48,
+			"height": 1.23
+		},
+		{
+			"kind": "stoneLantern",
+			"x": -7.8,
+			"z": 1.8,
+			"width": 0.48,
+			"depth": 0.48,
+			"height": 1.23
+		}
+	]
+}

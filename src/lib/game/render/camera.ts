@@ -24,14 +24,14 @@ export type WuxiaCameraPose = {
 };
 
 const stableOffset = {
-	x: 6.8,
-	y: 6.2,
-	z: 8.6
+	x: 7.8,
+	y: 8.4,
+	z: 9.8
 };
 
 const duelOffset = {
 	x: 7.8,
-	y: 6.4,
+	y: 8.4,
 	z: 9.4
 };
 
@@ -55,9 +55,12 @@ export function computeWuxiaCameraPose(input: WuxiaCameraPoseInput): WuxiaCamera
 
 function getCameraFocus(input: WuxiaCameraPoseInput): Vec2 {
 	if (input.phase === 'duel' && input.rival?.active) {
+		const dx = input.rival.position.x - input.playerPosition.x;
+		const dz = input.rival.position.z - input.playerPosition.z;
+		const focus = Math.min(0.5, 6 / Math.max(Math.hypot(dx, dz), 0.001));
 		return {
-			x: (input.playerPosition.x + input.rival.position.x) / 2,
-			z: (input.playerPosition.z + input.rival.position.z) / 2
+			x: input.playerPosition.x + dx * focus,
+			z: input.playerPosition.z + dz * focus
 		};
 	}
 

@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import type { CombatEffect, GameState, Vec2 } from '$lib/game/simulation/types';
 import { computeWuxiaCameraPose } from './camera';
+import { loadWuxiaAssets } from './wuxiaAssets';
+import { WORLD_BOUNDS } from '$lib/game/simulation/world';
+import layout from '../world-layout.json';
 
 export type WuxiaScene = {
 	render(snapshot: GameState, alpha: number): void;
@@ -25,28 +28,49 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 	});
 	renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 	renderer.outputColorSpace = THREE.SRGBColorSpace;
+	renderer.toneMapping = THREE.ACESFilmicToneMapping;
+	renderer.toneMappingExposure = 1.15;
 	renderer.shadowMap.enabled = true;
+	renderer.shadowMap.type = THREE.PCFShadowMap;
 	renderer.domElement.className = 'wuxia-canvas';
 	host.appendChild(renderer.domElement);
 
 	const scene = new THREE.Scene();
 	scene.background = new THREE.Color(0xcfe0d9);
-	scene.fog = new THREE.Fog(0xcfe0d9, 8, 27);
+	scene.fog = new THREE.Fog(0xcfe0d9, 28, 85);
 
-	const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 80);
+	const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 120);
 	const cameraTarget = new THREE.Vector3();
 
-	addLighting(scene);
+	const sunlight = addLighting(scene);
 	const player = createDisciple(playerColor, resources);
+	const playerMarker = new THREE.Mesh(
+		geometry(new THREE.RingGeometry(0.38, 0.44, 40), resources),
+		material(
+			new THREE.MeshBasicMaterial({
+				color: 0xffde8a,
+				depthTest: false,
+				depthWrite: false,
+				transparent: true,
+				opacity: 0.9,
+				toneMapped: false
+			}),
+			resources
+		)
+	);
+	playerMarker.rotation.x = -Math.PI / 2;
+	playerMarker.renderOrder = 10;
+	scene.add(playerMarker);
 	const rival = createDisciple(rivalColor, resources);
 	const mentor = createDisciple(mentorColor, resources);
 	const effects = new Map<number, THREE.Mesh>();
+	let disposed = false;
 
-	scene.add(createCourtyard(resources));
 	scene.add(createDuelRing(resources));
-	scene.add(createShrine(resources));
+	const village = createVillageFallback(resources);
+	scene.add(village);
 	for (const bamboo of createBamboo(resources)) {
-		scene.add(bamboo);
+		village.add(bamboo);
 	}
 	for (const post of createTrainingPosts(resources)) {
 		scene.add(post);
@@ -54,21 +78,33 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 	scene.add(player);
 	scene.add(rival);
 	scene.add(mentor);
+	renderer.domElement.dataset.assets = 'loading';
+	const disposeAssets = loadWuxiaAssets(
+		{ Player: player, Rival: rival, Mentor: mentor, Village: village },
+		(status) => {
+			renderer.domElement.dataset.assets = status;
+		}
+	);
 
 	function render(snapshot: GameState): void {
+		if (disposed) return;
 		resize();
 
 		applyFighter(
 			player,
 			snapshot.player.position,
 			snapshot.player.heading,
-			snapshot.player.combatAction
+			snapshot.player.combatAction,
+			snapshot.elapsed
 		);
+		// Keep the player's location readable behind roofs and orchard canopies.
+		playerMarker.position.set(snapshot.player.position.x, 0.06, snapshot.player.position.z);
 		applyFighter(
 			rival,
 			snapshot.rival.position,
 			snapshot.rival.heading,
-			snapshot.rival.combatAction
+			snapshot.rival.combatAction,
+			snapshot.elapsed
 		);
 		rival.visible =
 			snapshot.rival.active || snapshot.phase === 'duel' || snapshot.phase === 'victory';
@@ -90,6 +126,8 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 		);
 		cameraTarget.set(cameraPose.target.x, cameraPose.target.y, cameraPose.target.z);
 		camera.lookAt(cameraTarget);
+		sunlight.position.set(cameraTarget.x - 8, 16, cameraTarget.z + 5);
+		sunlight.target.position.set(cameraTarget.x, 0, cameraTarget.z);
 
 		renderer.render(scene, camera);
 	}
@@ -110,6 +148,9 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 	}
 
 	function dispose(): void {
+		if (disposed) return;
+		disposed = true;
+		disposeAssets();
 		for (const mesh of effects.values()) {
 			scene.remove(mesh);
 			disposeObject(mesh, resources);
@@ -135,18 +176,45 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 	return { render, dispose };
 }
 
-function addLighting(scene: THREE.Scene): void {
-	const hemi = new THREE.HemisphereLight(0xe8f4ed, 0x4e594d, 2.4);
+function addLighting(scene: THREE.Scene): THREE.DirectionalLight {
+	const hemi = new THREE.HemisphereLight(0xe8f4ed, 0x4e594d, 1.8);
 	scene.add(hemi);
 
-	const key = new THREE.DirectionalLight(0xfff1d1, 3);
+	const key = new THREE.DirectionalLight(0xfff1d1, 2.5);
 	key.position.set(-5, 9, 4);
 	key.castShadow = true;
+	key.shadow.mapSize.set(1024, 1024);
+	key.shadow.camera.left = -15;
+	key.shadow.camera.right = 15;
+	key.shadow.camera.top = 15;
+	key.shadow.camera.bottom = -15;
+	key.shadow.camera.far = 45;
+	key.shadow.normalBias = 0.04;
 	scene.add(key);
+	scene.add(key.target);
+	return key;
 }
 
 function createCourtyard(resources: SceneResources): THREE.Group {
 	const group = new THREE.Group();
+	const land = new THREE.Mesh(
+		geometry(
+			new THREE.PlaneGeometry(
+				WORLD_BOUNDS.maxX - WORLD_BOUNDS.minX + 40,
+				WORLD_BOUNDS.maxZ - WORLD_BOUNDS.minZ + 40
+			),
+			resources
+		),
+		material(new THREE.MeshStandardMaterial({ color: 0x71885c, roughness: 1 }), resources)
+	);
+	land.rotation.x = -Math.PI / 2;
+	land.position.set(
+		(WORLD_BOUNDS.minX + WORLD_BOUNDS.maxX) / 2,
+		-0.12,
+		(WORLD_BOUNDS.minZ + WORLD_BOUNDS.maxZ) / 2
+	);
+	land.receiveShadow = true;
+	group.add(land);
 	const stone = material(
 		new THREE.MeshStandardMaterial({ color: 0x7f8c80, roughness: 0.9 }),
 		resources
@@ -220,6 +288,75 @@ function createShrine(resources: SceneResources): THREE.Group {
 	top.position.set(-4.2, 1.52, -3.35);
 	group.add(top);
 
+	return group;
+}
+
+function createVillageFallback(resources: SceneResources): THREE.Group {
+	const group = new THREE.Group();
+	group.add(createCourtyard(resources));
+	group.add(createShrine(resources));
+	const plaster = material(new THREE.MeshStandardMaterial({ color: 0xd4c8a6 }), resources);
+	const wood = material(new THREE.MeshStandardMaterial({ color: 0x53462d }), resources);
+	const water = material(new THREE.MeshStandardMaterial({ color: 0x568d81 }), resources);
+	for (const building of layout.buildings) {
+		const house = new THREE.Mesh(
+			geometry(new THREE.BoxGeometry(building.width, 2.7, building.depth), resources),
+			plaster
+		);
+		house.position.set(building.x, 1.35, building.z);
+		house.rotation.y = (building.turn * Math.PI) / 2;
+		group.add(house);
+	}
+	for (const wall of layout.walls) {
+		const height = wall.width < 1 ? 2.8 : 1;
+		const mesh = new THREE.Mesh(
+			geometry(new THREE.BoxGeometry(wall.width, height, wall.depth), resources),
+			wood
+		);
+		mesh.position.set(wall.x, height / 2, wall.z);
+		group.add(mesh);
+	}
+	for (const tree of layout.trees) {
+		const trunk = new THREE.Mesh(
+			geometry(new THREE.CylinderGeometry(0.18, 0.2, 2.5, 8), resources),
+			wood
+		);
+		trunk.position.set(tree.x, 1.25, tree.z);
+		group.add(trunk);
+	}
+	for (const prop of layout.props) {
+		const mesh = new THREE.Mesh(
+			geometry(new THREE.BoxGeometry(prop.width, prop.height, prop.depth), resources),
+			wood
+		);
+		mesh.position.set(prop.x, prop.height / 2, prop.z);
+		group.add(mesh);
+	}
+	const river = new THREE.Mesh(
+		geometry(
+			new THREE.PlaneGeometry(
+				layout.river.maxX - layout.river.minX,
+				layout.river.maxZ - layout.river.minZ
+			),
+			resources
+		),
+		water
+	);
+	river.rotation.x = -Math.PI / 2;
+	river.position.set(
+		(layout.river.minX + layout.river.maxX) / 2,
+		-0.02,
+		(layout.river.minZ + layout.river.maxZ) / 2
+	);
+	group.add(river);
+	for (const bridge of layout.bridges) {
+		const deck = new THREE.Mesh(
+			geometry(new THREE.BoxGeometry(4.5, 0.06, bridge.width), resources),
+			wood
+		);
+		deck.position.set(river.position.x, 0.01, bridge.z);
+		group.add(deck);
+	}
 	return group;
 }
 
@@ -320,9 +457,22 @@ function applyFighter(
 	group: THREE.Group,
 	position: Vec2,
 	heading: number,
-	action: GameState['player']['combatAction']
+	action: GameState['player']['combatAction'],
+	elapsed = 0
 ): void {
 	const pose = getActionPose(action);
+	const moved = Math.hypot(group.position.x - position.x, group.position.z - position.z) > 0.001;
+	const stride = moved ? Math.sin(elapsed * 13) * 0.42 : 0;
+	const swing = action.phase === 'startup' ? 0.9 : action.phase === 'active' ? -1.2 : 0;
+	for (const [joint, angle] of [
+		['Arm_L', -stride],
+		['Arm_R', stride + swing],
+		['Leg_L', stride],
+		['Leg_R', -stride]
+	] as const) {
+		const limb = group.userData[joint] as THREE.Object3D | undefined;
+		if (limb) limb.rotation.x = angle;
+	}
 	group.position.set(position.x, pose.y, position.z);
 	group.rotation.set(pose.pitch, heading + pose.yawOffset, pose.roll);
 	group.scale.set(1 + pose.widthScale, 1 + pose.heightScale, 1 + pose.depthScale);

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createInitialGameState, restartGame, stepGame, toHudSnapshot } from './state';
 import { LIGHT_ATTACK_TIMING, QI_BURST_COST, QI_BURST_TIMING, RIVAL_STRIKE_TIMING } from './combat';
 import type { GameState, InputSnapshot } from './types';
+import { canStandAt } from './world';
 
 const idleInput: InputSnapshot = {
 	moveX: 0,
@@ -39,6 +40,25 @@ function advance(state: GameState, seconds: number): void {
 }
 
 describe('wuxia simulation state', () => {
+	it('explores beyond the courtyard and keeps a dash and rival spawn out of water', () => {
+		const state = createInitialGameState();
+		for (let i = 0; i < 180; i++) stepGame(state, { ...idleInput, moveX: 1 }, frame);
+		expect(state.player.position.x).toBeGreaterThan(10);
+		state.player.position = { x: 17, z: 8 };
+		state.player.heading = Math.PI / 2;
+		state.phase = 'trainDash';
+		stepGame(state, { ...idleInput, dash: true }, frame);
+		expect(state.phase).toBe('duel');
+		expect(state.player.position.x).toBeLessThan(18);
+		expect(canStandAt(state.player.position)).toBe(true);
+		expect(canStandAt(state.rival.position)).toBe(true);
+		expect(
+			Math.hypot(
+				state.player.position.x - state.rival.position.x,
+				state.player.position.z - state.rival.position.z
+			)
+		).toBeGreaterThan(0.75);
+	});
 	it('starts with the mentor objective active', () => {
 		const state = createInitialGameState();
 

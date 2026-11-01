@@ -5,6 +5,7 @@ import { sveltekit } from '@sveltejs/kit/vite';
 
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
+	optimizeDeps: { include: ['three', 'three/addons/loaders/GLTFLoader.js'] },
 	test: {
 		expect: { requireAssertions: true },
 		projects: [

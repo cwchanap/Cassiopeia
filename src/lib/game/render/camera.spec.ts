@@ -2,6 +2,15 @@ import { describe, expect, test } from 'vitest';
 import { computeWuxiaCameraPose } from './camera';
 
 describe('computeWuxiaCameraPose', () => {
+	test('keeps the player in view when the rival falls behind across the larger map', () => {
+		const pose = computeWuxiaCameraPose({
+			phase: 'duel',
+			playerPosition: { x: 35, z: 23 },
+			playerHeading: 0,
+			rival: { active: true, position: { x: -20, z: -25 } }
+		});
+		expect(Math.hypot(pose.target.x - 35, pose.target.z - 23)).toBeCloseTo(6);
+	});
 	test('keeps the same camera offset when the player turns', () => {
 		const playerPosition = { x: 1.5, z: -2 };
 		const northFacing = computeWuxiaCameraPose({

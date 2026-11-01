@@ -1,0 +1,9 @@
+Use case: stylized-concept
+Asset type: actual color texture atlas for a Blender / Three.js wuxia village and character game asset pack.
+Create one square 2048x2048 texture sheet, exact FOUR by FOUR equal square grid of SIXTEEN material swatches. NO margins, NO gaps, NO borders, NO text, NO objects in perspective. Each tile exactly one quarter of the width and height. All swatches are flat orthographic hand-painted surface textures with subtle restrained detail, soft color variation, no directional illumination or cast shadows. Beautiful painterly Chinese martial arts mountain village art.
+Tile order left to right:
+TOP ROW: pale ivory woven robe silk; dark jade-green silk; oxblood burgundy silk; muted antique gold brushed metal.
+SECOND ROW: warm dark walnut wood with vertical grain; weathered blue-green grey overlapping traditional Chinese ceramic roof tiles; warm cream lime plaster with faint aging; grey-green stone masonry with large rectangular blocks.
+THIRD ROW: decorative ivory fabric panel with an elegant subtle jade cloud-scroll border inside its edges and one restrained jade cloud medallion center; decorative jade cloth panel with a muted gold cloud-scroll border and single gold cloud medallion; decorative oxblood cloth panel with antique gold geometric edging and cloud medallion; dark charcoal woven silk.
+BOTTOM ROW: warm vermilion paper lantern surface with fine vertical ribs and gold floral details; weathered teal lattice wooden window centered over a dark recess filling tile; carved walnut double door with warm brass studs filling tile; soft irregular pale grey courtyard paving stones.
+Style: polished hand-painted stylized 3D RPG materials, cohesive jade, ivory, walnut and warm ochre palette. These are UV texture swatches, not illustrations of clothing or houses. Tile boundaries exactly at 25%, 50%, 75%. No labels, no watermark.

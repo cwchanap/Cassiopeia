@@ -1,6 +1,5 @@
 import {
 	canHit,
-	clampToCourtyard,
 	cooldown,
 	DASH_COOLDOWN,
 	DASH_DISTANCE,
@@ -17,6 +16,7 @@ import {
 	RIVAL_STRIKE_TIMING,
 	distance
 } from './combat';
+import { moveThroughWorld } from './world';
 import {
 	assignQuickSlot,
 	cloneItemProgress,
@@ -260,7 +260,7 @@ function movePlayer(state: GameState, input: InputSnapshot, deltaTime: number): 
 	}
 
 	if (hasMove) {
-		state.player.position = clampToCourtyard({
+		state.player.position = moveThroughWorld(state.player.position, {
 			x: state.player.position.x + move.x * PLAYER_SPEED * deltaTime,
 			z: state.player.position.z + move.z * PLAYER_SPEED * deltaTime
 		});
@@ -271,7 +271,7 @@ function movePlayer(state: GameState, input: InputSnapshot, deltaTime: number): 
 		const forward = hasMove
 			? move
 			: { x: Math.sin(state.player.heading), z: Math.cos(state.player.heading) };
-		state.player.position = clampToCourtyard({
+		state.player.position = moveThroughWorld(state.player.position, {
 			x: state.player.position.x + forward.x * DASH_DISTANCE,
 			z: state.player.position.z + forward.z * DASH_DISTANCE
 		});
@@ -297,10 +297,14 @@ function handlePhaseProgression(state: GameState, input: InputSnapshot): void {
 		state.previousPhase = 'duel';
 		state.objective = OBJECTIVES.duel;
 		state.rival.active = true;
-		state.rival.position = {
-			x: state.player.position.x + Math.sin(state.player.heading + 0.35) * 1.1,
-			z: state.player.position.z + Math.cos(state.player.heading + 0.35) * 1.1
-		};
+		for (let i = 0; i < 8; i++) {
+			const angle = state.player.heading + 0.35 + (i * Math.PI) / 4;
+			state.rival.position = moveThroughWorld(state.player.position, {
+				x: state.player.position.x + Math.sin(angle) * 1.1,
+				z: state.player.position.z + Math.cos(angle) * 1.1
+			});
+			if (distance(state.rival.position, state.player.position) >= 0.8) break;
+		}
 	}
 }
 
@@ -538,7 +542,8 @@ function updateRival(state: GameState, deltaTime: number): void {
 	const range = Math.hypot(dx, dz);
 
 	if (range > RIVAL_ATTACK_RANGE && range > 0.01 && state.rival.combatAction.phase === 'idle') {
-		state.rival.position = clampToCourtyard({
+		// ponytail: local wall sliding; add pathfinding if duels need pursuit across the village.
+		state.rival.position = moveThroughWorld(state.rival.position, {
 			x: state.rival.position.x + (dx / range) * RIVAL_SPEED * deltaTime,
 			z: state.rival.position.z + (dz / range) * RIVAL_SPEED * deltaTime
 		});

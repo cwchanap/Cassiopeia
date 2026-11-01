@@ -1,5 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
+// Keep software WebGL affordable while exercising the full gameplay and persistence flow.
+test.use({ viewport: { width: 960, height: 640 } });
+
 const rewardItemsByName: Record<string, { testId: string; countBeforeReward: number }> = {
 	'Lesser Healing Pill': { testId: 'bag-item-lesser_healing_pill', countBeforeReward: 3 },
 	'Lesser Qi Pill': { testId: 'bag-item-lesser_qi_pill', countBeforeReward: 1 },
@@ -16,6 +19,8 @@ async function expectBagItemCount(page: Page, testId: string, count: number): Pr
 }
 
 test('plays through the Wuxia MVP opening, item loop, reward, and restart', async ({ page }) => {
+	// Software WebGL needs more wall time for the same complete gameplay and persistence flow.
+	test.setTimeout(60000);
 	await page.goto('/');
 	await page.evaluate(() => localStorage.clear());
 	await page.reload();
@@ -23,22 +28,37 @@ test('plays through the Wuxia MVP opening, item loop, reward, and restart', asyn
 	await expect(page.getByTestId('game-shell')).toBeVisible();
 	await expect(page.getByTestId('objective-chip')).toContainText('Meet the mentor');
 	await expect(page.locator('canvas')).toBeVisible();
+	await expect(page.locator('canvas')).toHaveAttribute('data-assets', 'ready');
 	await expect(page.getByTestId('status-cluster')).toContainText('110/110');
+	await expect(page.getByRole('meter', { name: 'Health', exact: true })).toHaveAttribute(
+		'value',
+		'110'
+	);
 	await expect(page.getByTestId('quick-slot-1')).toContainText('Heal Pill');
 	await expect(page.getByTestId('quick-slot-2')).toContainText('x2');
 
 	await page.getByTestId('bag-toggle').click();
 	await expect(page.getByTestId('bag-panel')).toBeVisible();
+	await expect(page.getByTestId('bag-close')).toBeFocused();
+	await page.keyboard.press('Shift+Tab');
+	await expect(page.getByTestId('bag-panel').locator(':focus')).toHaveCount(1);
 	await expect(page.getByTestId('bag-item-training_sword')).toContainText('Equipped');
 	await page.getByTestId('bag-assign-lesser_qi_pill-slot-3').click();
 	await expect(page.getByTestId('item-feedback')).toHaveText('Assigned Lesser Qi Pill to slot 3');
+	await expect(page.getByTestId('bag-assign-lesser_qi_pill-slot-3')).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
 	await page.getByTestId('bag-close').click();
 	await expect(page.getByTestId('bag-panel')).toBeHidden();
+	await expect(page.getByTestId('bag-toggle')).toBeFocused();
 	await expect(page.getByTestId('quick-slot-3')).toContainText('Qi Pill');
 
 	await page.keyboard.down('a');
 	await page.keyboard.down('w');
-	await page.waitForTimeout(1300);
+	await expect(page.getByTestId('game-prompt')).toHaveText('Press E to begin mentor training', {
+		timeout: 10000
+	});
 	await page.keyboard.up('w');
 	await page.keyboard.up('a');
 
@@ -57,10 +77,16 @@ test('plays through the Wuxia MVP opening, item loop, reward, and restart', asyn
 	await expect(page.getByTestId('item-feedback')).toHaveText('Used Lesser Qi Pill');
 	await expect(page.getByTestId('quick-slot-3')).toContainText('x1');
 
-	for (let i = 0; i < 24; i += 1) {
-		await page.keyboard.press('j');
-		await page.waitForTimeout(230);
-	}
+	await expect
+		.poll(
+			async () => {
+				if (await page.getByTestId('end-state').isVisible()) return true;
+				await page.keyboard.press('j');
+				return false;
+			},
+			{ timeout: 20000, intervals: [230] }
+		)
+		.toBe(true);
 
 	await expect(page.getByTestId('end-state')).toBeVisible();
 	await expect(page.getByTestId('game-prompt')).toContainText('Won:');
