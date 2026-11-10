@@ -47,7 +47,7 @@ Make the smallest change across the pure camera helper, the existing Three.js sc
 - `src/lib/game/simulation/state.ts`
 - `src/lib/game/simulation/state.spec.ts`
 - `src/lib/game/runtime/createGameRuntime.ts`
-- `src/routes/+page.svelte` (correct obsolete control hint, no HUD redesign)
+- `src/routes/+page.svelte` (remove obsolete control hint and drag cursor styles; no HUD redesign)
 - `src/routes/wuxia-mvp.e2e.ts` (adjust mentor approach in the same input change)
 
 **Work**
@@ -55,7 +55,7 @@ Make the smallest change across the pure camera helper, the existing Three.js sc
 2. Remove `cameraDelta` from `InputSnapshot`, its initialization in `runInventoryCommand`, and its heading mutation in `movePlayer`. Leave `normaliseMove`, `moveThroughWorld`, dash distance, attack rules, and input edge-trigger lifecycle unchanged.
 3. Remove pointer drag-tracking/capture/rotation listeners. Keep pointer-down focus behavior (without initiating a drag gesture). Do not add new drag or click mechanics.
 4. Verify single keys, diagonals, and opposite-key cancellation through the **pure camera mapping tests** in `camera.spec.ts`. There is no input-controller test file today; do not create a DOM-bound test solely for this mapping. Existing pause/inventory gating is already owned by `stepGame`, so keep that behavior instead of testing it in input.
-5. In `src/routes/+page.svelte`, remove the now-false `Drag to look` hint (and show only supported controls). This is part of removing the behavior, not a HUD redesign.
+5. In `src/routes/+page.svelte`, remove the now-false `Drag to look` hint and the now-misleading drag affordance: delete `cursor: grab;` from `.scene-host` and the `.scene-host:active { cursor: grabbing; }` rule (currently lines 518–523). Keep the host focusable and preserve its `outline: none` and canvas sizing. This is a small input-UX cleanup, not a HUD redesign.
 6. In `src/routes/wuxia-mvp.e2e.ts`, remove the existing `a` keydown/keyup from the mentor approach **in the same commit** as the mapping. New `W` maps to the old `A+W` world direction toward the mentor at (-4, -3). Preserve the real `E` interaction and all later duel/reward/persistence assertions.
 
 **Checkpoint:** Run `bun x vitest run`, `bun run check`, and `bun x playwright test src/routes/wuxia-mvp.e2e.ts`. Holding W moves away from the viewer, A left-screen, D right-screen; stationary dash retains heading. Do not leave e2e red until Step 5.
@@ -106,7 +106,7 @@ bun run test
 
 - [ ] The 45°/35° orthographic camera follows without rotating; exploration and duel framing work.
 - [ ] WASD and arrow keys are screen aligned, with collision and dashing intact.
-- [ ] Rotation input and the misleading drag-to-look hint are removed; no compatibility toggle remains.
+- [ ] Rotation input, misleading drag-to-look hint, and grab/grabbing scene cursors are removed; keyboard focus and other input controls remain intact. No compatibility toggle remains.
 - [ ] World → ink → player mesh order avoids self-inking of crossing limbs/gear; the old ring-only marker is deleted.
 - [ ] The ink helper is idempotent, handles GLB-ready and fallback, and is covered by a Node unit test.
 - [ ] Pure world-to-screen helper and renderer share `orthoFrustum`; projection agrees with `THREE.Vector3.project()` after resize.
