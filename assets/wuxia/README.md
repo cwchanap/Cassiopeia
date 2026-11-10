@@ -12,6 +12,10 @@ Created with Blender 5.2 and the built-in image-generation tool, September 2026.
   built-in image-generation prompts are in `ground-prompts.txt`.
 - `hud-concept.png`: generated HUD reference using the rendered village screenshot.
 - `../../static/images/wuxia/hud-atlas.png`: generated portrait, technique, and inventory art.
+- `ink-portraits-original.png`, `ink-icons-original.png`, `rice-paper-original.png`: generated ink HUD source sheets and paper; prompts and runtime preparation are in `ink-hud-prompts.txt`.
+- `../../static/images/wuxia/ink-portraits.png`: 4×2 portrait atlas. Cells 0–5: Initiate, Elder Shen, Senior Brother Lu, Auntie Qin, Old Zhu, Peddler Wei; 6–7 are blank.
+- `../../static/images/wuxia/ink-icons.png`: 4×2 icon atlas. Cells 0–6: Qinggong, Strike, Qi burst, healing pill, qi pill, bag, training robe; 7 is blank. The existing HUD atlas combines Initiate and these seven icons in its original order.
+- `../../static/images/wuxia/rice-paper.png`: seamless 1024×1024 rice-paper tile for scroll and dialogue panels.
   The HUD displays the eight cells with CSS; `hud-prompts.txt` preserves both exact prompts.
 
 The ivory disciple, jade-robed elder, and burgundy rival have separate arm/leg pivots,
