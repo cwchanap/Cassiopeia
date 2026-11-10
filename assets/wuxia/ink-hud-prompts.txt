@@ -1,0 +1,12 @@
+Generated with the built-in image generation tool.
+
+Portraits:
+Use case: stylized-concept. Asset type: game HUD portrait sprite atlas. Paint six distinct Chinese wuxia character busts in Chinese ink wash on aged rice paper, black ink with only cinnabar red #a82c22 and jade green #4fa58f accents, paper #ece2cc. Layout precisely 4 columns by 2 rows of equal square cells, image aspect 2:1, no gutters or lines, each bust centered inside its cell, head and shoulders, readable inside a 112 px circle, clear empty space around each head, no art crossing cell boundaries. Row 1 left to right: young male initiate in ivory robe and black topknot, resembling the existing wuxia swordsman portrait; Elder Shen with white hair and beard and dark jade robe; Senior Brother Lu with black topknot and burgundy robe; Auntie Qin, middle-aged village herbalist. Row 2 first two cells: Old Zhu, elderly shrine keeper; Peddler Wei, middle-aged market vendor. Last two cells plain paper. No text, numerals, frames, circles or borders.
+
+Icons:
+Use case: stylized-concept. Asset type: game HUD icon sprite atlas. Chinese ink wash on aged rice paper #ece2cc, black ink #1b1815 with only cinnabar #a82c22 and jade #4fa58f accents. Exactly 4 columns by 2 rows of equal square cells, aspect 2:1, no borders or gutters. One bold, centered, separate symbol safely within each cell, readable at 48px. Top row: Qinggong leaping martial artist with wind; Strike straight Chinese jian sword; Qi burst swirling energy; healing pill red medicine gourd. Bottom row: qi pill jade medicine gourd; tied cloth satchel; folded ivory training robe with dark sash; last cell empty paper. No letters, numbers, frames or UI.
+
+Paper:
+Use case: stylized-concept. Asset type: seamless repeating background texture for game dialogue and scroll panels. Flat aged Chinese rice paper, pale warm #ece2cc with subtle natural fibers and very gentle tonal variation, quiet and low contrast suitable behind dark text. Seamless tile, all four edges match perfectly. No objects, text, markings, gradients, shadows, borders or vignette.
+
+Runtime preparation: resize both sheets to 2048x1024. The existing hud-atlas.png combines portrait cell 0 with icon cells 0-6 to retain the existing HUD mapping. The paper tile is a 512px square crop mirrored horizontally and vertically into a 1024px tile so opposite edges match.
