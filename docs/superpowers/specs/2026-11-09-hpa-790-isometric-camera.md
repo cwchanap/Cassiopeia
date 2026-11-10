@@ -28,23 +28,23 @@ Use a single `THREE.OrthographicCamera` with a constant 45° azimuth from the **
 
 - Exploration: approximately **14 world metres** of vertical coverage.
 - Duel: approximately **11 world metres** of vertical coverage; retain the existing player/rival focus blend and six-metre displacement cap.
-- The view follows the player/fight focus smoothly but **never changes azimuth or pitch**. Smooth the focus point (and, if necessary, the view height) rather than independently smoothing camera position, which would transiently change the angle.
+- The view follows the player/fight focus smoothly but **never changes azimuth or pitch**. Smooth both the focus point and the `viewHeight` with the same follow factor on every frame (including the 14 → 11 m duel transition); then reconstruct camera position from the fixed direction. Do not independently interpolate position or snap the view height.
 - Build the pose from one constant camera orientation; return `position`, `target`, and `viewHeight` from `computeWuxiaCameraPose`. `playerHeading` is no longer an input to that helper.
-- On resize, use the host's CSS-pixel aspect ratio to set `left/right = ±(viewHeight * aspect / 2)` and `top/bottom = ±(viewHeight / 2)`; update the projection matrix. Choose near/far planes that cover the authored map and keep a stable vertical world span.
+- Define one pure `orthoFrustum(pose, viewport)` in `render/camera.ts` returning `left/right/top/bottom/near/far`: with the host CSS-pixel aspect ratio, `left/right = ±(viewHeight * aspect / 2)` and `top/bottom = ±(viewHeight / 2)`. The renderer applies this frustum and updates the projection matrix **every frame**, not only after a viewport resize, so the duel's changing view height is reflected immediately. Pick near/far planes covering the authored map.
 - Adjust the sky/background, key light direction/exposure, and shadow-camera footprint for the flat view; preserve the existing daylit scene and shadows. No new postprocessing or shading pipeline.
 
 The pure pose math must not import Three.js, DOM, or Svelte.
 
 ### 2. Pure world-to-screen projection contract
 
-Add `projectWorldToScreen(point, activePose, viewport)` beside the pose helper in `render/camera.ts`.
+Add `projectWorldToScreen(point, activePose, viewport)` beside the pose and shared `orthoFrustum` helpers in `render/camera.ts`.
 
 - `point`: world `{ x, y, z }` (the simulation position remains X/Z; callers choose height such as a head or name tag anchor).
 - `activePose`: the actual pose used for the rendered frame, including `viewHeight` after follow smoothing.
 - `viewport`: `{ width, height }` in **CSS pixels**, relative to the game host, not the full browser window.
 - Output: `{ x, y, inView }` with host-local pixel coordinates and an on-screen / camera-depth visibility flag. A zero-sized viewport returns a safe non-visible result.
 
-Projection uses the camera's orthonormal **right**, **up**, and **forward** axes derived from `position` and `target`, with `scale = viewport.height / viewHeight`. Project a point relative to the target: `x = width/2 + dot(delta,right)*scale`, `y = height/2 - dot(delta,up)*scale`. `inView` must check the resulting bounds and camera depth. Unit-test both the orientation and resize behavior. This is groundwork for [HPA-792](https://linear.app/cwchanap/issue/HPA-792/wuxia-ink-and-paper-hud); do **not** implement name tags or modify `HudSnapshot` here.
+Projection uses the camera's orthonormal **right**, **up**, and **forward** axes derived from `position` and `target`, with scale and visibility bounds derived from the **same** `orthoFrustum` that configures the renderer. Project a point relative to the target into host-local pixels; `inView` must also check the camera's near/far depth. A Node test constructs a `THREE.OrthographicCamera` using the pure pose/frustum and compares its `Vector3.project()` result to the helper across several points and viewport aspect ratios. The projection helper has no HUD caller yet, so do **not** retain otherwise-unused camera state or add a getter now; [HPA-792](https://linear.app/cwchanap/issue/HPA-792/wuxia-ink-and-paper-hud) adds the integration point when needed. No name tags or `HudSnapshot` changes here.
 
 ### 3. Screen-aligned controls
 
@@ -55,15 +55,20 @@ The input controller converts keys into world-space movement before emitting the
 - `D` / Right = screen right = world `(+X,-Z)`.
 - `A` / Left = screen left = world `(-X,+Z)`.
 
-For raw screen inputs `right = D-A` and `down = S-W`, emit:
+For raw screen inputs `right = D-A` and `down = S-W`, call `screenDirectionToWorld(right, down)` from the pure camera helper. Derive its basis from the **same azimuth constant** used for the camera pose, not a second hard-coded 45° transform:
 
 ```ts
-const factor = Math.SQRT1_2;
-moveX = (right + down) * factor;
-moveZ = (down - right) * factor;
+const toViewer = { x: Math.sin(CAMERA_AZIMUTH), z: Math.cos(CAMERA_AZIMUTH) };
+const screenRight = { x: Math.cos(CAMERA_AZIMUTH), z: -Math.sin(CAMERA_AZIMUTH) };
+return {
+  x: right * screenRight.x + down * toViewer.x,
+  z: right * screenRight.z + down * toViewer.z
+};
 ```
 
-Keep diagonal normalization in the existing simulation's `normaliseMove`. The player faces the direction actually travelled; stationary dash still follows the last heading. Remove `InputSnapshot.cameraDelta`, pointer-drag rotation, and the corresponding heading mutation in `stepGame`. Retain click-to-focus on the canvas and all other controls (E, Space, J/K, Escape, inventory, and quick slots). There is no legacy input flag or compatibility branch.
+For 45°, these reduce to the listed screen directions. Unit-test that down maps to the camera's horizontal direction toward the viewer, and that right is perpendicular to it (and points screen-right), rather than only testing hard-coded coordinate signs.
+
+Keep diagonal normalization in the existing simulation's `normaliseMove`. The player faces the direction actually travelled; stationary dash still follows the last heading. Remove `InputSnapshot.cameraDelta`, pointer-drag rotation, and the corresponding heading mutation in `stepGame`. Retain click-to-focus on the canvas and all other controls (E, Space, J/K, Escape, inventory, and quick slots). Update the obsolete `Drag to look` hint in `src/routes/+page.svelte` alongside the input change; this is copy correctness, not a HUD redesign. There is no legacy input flag or compatibility branch.
 
 ### 4. Player occlusion
 
@@ -71,11 +76,11 @@ Replace the ring-only player marker with a **flat dark-ink silhouette where the 
 
 Preferred minimal renderer solution:
 
-- Render the normal player as today.
-- Reuse the player's existing mesh geometry for a second ink-only pass. Attach lightweight mesh clones as siblings of the real meshes under their animated parent transforms so the silhouette follows the existing animations without a separate animation system.
-- Use a shared unlit ink material with depth testing configured to draw fragments **behind already-drawn depth** (`THREE.GreaterDepth`), `depthWrite: false`, and a late render order. Visible player fragments retain their original rendering; hidden fragments appear as a monochrome silhouette over the blocker.
-- Rebuild the ink mesh set when the asynchronous GLB load replaces procedural fallbacks; remove clones and release silhouette-only materials on dispose. Share existing geometry rather than owning duplicate vertex buffers.
-- Verify the depth behavior in the browser with rooftops, walls, trees, and the procedural fallback; if a GLB material's transparency makes depth-only occlusion unreliable, limit the adjustment to that scene's existing mesh/material setup. Avoid raycast services, outline postprocessing, or adding new art.
+- Render opaque **world geometry → ink silhouettes → normal player**, in that order. Explicitly set per-**mesh** `renderOrder` for ink and original player meshes; assigning it only to an outer GLTF group is not sufficient because nested groups affect Three.js sort order. The silhouette must run before the real player so the player's own overlapping limbs, clothing and gear cannot count as occluders.
+- Attach an ink clone as a **child of each source player mesh** with identity local transform and shared geometry. This naturally follows all joints/animation and inherits source visibility: procedural meshes disappear with their ink children when the GLB loads.
+- Use one registered, unlit dark-ink material with `depthFunc: THREE.GreaterDepth`, `depthWrite: false`; ink clones have `castShadow = false`. Because only world depth has been rendered when ink is drawn, unobstructed player fragments do not ink themselves.
+- Add ink children once to the procedural player at construction, then to newly attached GLB meshes on `ready`. The helper skips already-inked meshes; `fallback` changes nothing and requires no rebuild. The registered shared material uses existing scene cleanup; reused source geometry remains owned by its original mesh/asset loader, with no dedicated ink disposal machinery.
+- Unit-test the ink graph helper in Node (one child per source, idempotence, inherited visibility, render order, depth settings and disabled shadows), then verify depth behavior in the browser with rooftops, walls, trees, and the procedural fallback. Check arms or swords crossing the torso do **not** produce ink speckles. If transparency makes world occlusion unreliable, apply only a focused scene material/order adjustment; avoid raycast services, outline postprocessing, or adding new art.
 
 The silhouette is a player-locator aid, not a change to collision or enemy visibility.
 
@@ -90,16 +95,16 @@ The silhouette is a player-locator aid, not a change to collision or enemy visib
 
 1. The player, rival, and village render with a fixed 45°/35° orthographic view. The camera follows without rotating when the player turns; the duel framing is tighter.
 2. WASD and arrow keys move according to **screen directions**, including diagonals. Dashing and collision still work at buildings, the riverbank, and bridge openings.
-3. When architecture obscures the player, the ink silhouette is visible; a fully visible player is not ink-tinted. The old ring-only marker is gone.
-4. World-to-screen calculations use CSS-pixel viewport coordinates and agree with the rendered camera's active pose, including after resize and when following movement.
+3. When architecture obscures the player, the ink silhouette is visible; a fully visible player (including arms, hair and sword crossing the torso) is not ink-tinted. The old ring-only marker is gone.
+4. World-to-screen calculations use CSS-pixel viewport coordinates and the shared frustum; a Node test checks agreement with `THREE.Vector3.project()` for the rendered pose, including after aspect changes.
 5. The existing mentor → dash → duel → reward/restart and inventory persistence journey still works. No HUD or item-data regression.
 6. `bun run check`, `bun run lint`, and `bun run test` pass; browser smoke checks cover both the GLB-ready and fallback path.
 
 ## Risks and mitigation
 
-- **Depth-buffer ordering:** ink clones must render after opaque blockers and not write depth. Verify with a live GLB scene before changing anything more complex; keep material/rebuild lifecycle isolated to `createWuxiaScene.ts`.
-- **HUD projection drift:** project against the **active, smoothed** focus and `viewHeight`, not the unsmoothed desired target; keep pose/projection functions pure.
-- **Navigation test drift:** the old e2e `A+W` route was written for world-aligned movement and must be updated based on screen direction, not weakened by skipping the mentor interaction.
+- **Self-occlusion:** world must render before ink, and ink **before** real player meshes. Set render order per mesh and verify crossing limbs/sword do not ink themselves, even with a loaded GLB.
+- **HUD projection drift:** derive renderer and projection frustum from the same pure helper; test agreement against a Three.js camera. HPA-792 will pass the **active, smoothed** pose when it adds a caller.
+- **Navigation test drift:** switch the e2e mentor approach from `A+W` to `W` in the same change as input remapping. The new `W` matches the old diagonal world direction, preserving the real mentor interaction rather than skipping it.
 - **Scope growth:** defer any HUD anchors and quest state to their already tracked tickets HPA-792 and HPA-791.
 
 ## Follow-on work
