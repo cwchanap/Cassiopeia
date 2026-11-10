@@ -68,7 +68,7 @@ return {
 
 For 45°, these reduce to the listed screen directions. Unit-test that down maps to the camera's horizontal direction toward the viewer, and that right is perpendicular to it (and points screen-right), rather than only testing hard-coded coordinate signs.
 
-Keep diagonal normalization in the existing simulation's `normaliseMove`. The player faces the direction actually travelled; stationary dash still follows the last heading. Remove `InputSnapshot.cameraDelta`, pointer-drag rotation, and the corresponding heading mutation in `stepGame`. Retain click-to-focus on the canvas and all other controls (E, Space, J/K, Escape, inventory, and quick slots). Update the obsolete `Drag to look` hint in `src/routes/+page.svelte` alongside the input change; this is copy correctness, not a HUD redesign. There is no legacy input flag or compatibility branch.
+Keep diagonal normalization in the existing simulation's `normaliseMove`. The player faces the direction actually travelled; stationary dash still follows the last heading. Remove `InputSnapshot.cameraDelta`, pointer-drag rotation, and the corresponding heading mutation in `stepGame`. Retain click-to-focus on the canvas and all other controls (E, Space, J/K, Escape, inventory, and quick slots). Update the obsolete `Drag to look` hint in `src/routes/+page.svelte` **and remove `.scene-host`'s `cursor: grab` plus `.scene-host:active`'s `cursor: grabbing`** alongside the input change. Keep canvas focus behavior and the other controls intact; this is input-UX correctness, not a HUD redesign. There is no legacy input flag or compatibility branch.
 
 ### 4. Player occlusion
 
