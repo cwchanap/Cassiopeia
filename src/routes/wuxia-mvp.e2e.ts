@@ -54,13 +54,11 @@ test('plays through the Wuxia MVP opening, item loop, reward, and restart', asyn
 	await expect(page.getByTestId('bag-toggle')).toBeFocused();
 	await expect(page.getByTestId('quick-slot-3')).toContainText('Qi Pill');
 
-	await page.keyboard.down('a');
 	await page.keyboard.down('w');
 	await expect(page.getByTestId('game-prompt')).toHaveText('Press E to begin mentor training', {
 		timeout: 10000
 	});
 	await page.keyboard.up('w');
-	await page.keyboard.up('a');
 
 	await page.keyboard.press('e');
 	await expect(page.getByTestId('objective-chip')).toContainText('Practice qinggong dash');

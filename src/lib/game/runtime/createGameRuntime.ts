@@ -102,7 +102,6 @@ export function createGameRuntime(options: RuntimeOptions): GameRuntime {
 			{
 				moveX: 0,
 				moveZ: 0,
-				cameraDelta: 0,
 				dash: false,
 				lightAttack: false,
 				qiBurst: false,

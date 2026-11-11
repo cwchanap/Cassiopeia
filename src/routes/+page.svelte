@@ -229,7 +229,7 @@
 	cooldown: number,
 	available: boolean
 )}
-	<div class="technique" class:unavailable={!available} class:cooling={cooldown > 0}>
+	<div class={['technique', { unavailable: !available, cooling: cooldown > 0 }]}>
 		<div class="technique-art">{@render art(index)}<kbd>{key}</kbd></div>
 		<strong>{label}</strong>
 		<small
@@ -252,7 +252,7 @@
 		aria-label="Mountain sect courtyard"
 	></div>
 
-	<div class="hud-layer" class:inventory-open={hud.inventory.isOpen}>
+	<div class={['hud-layer', { 'inventory-open': hud.inventory.isOpen }]}>
 		<section class="objective-chip" data-testid="objective-chip" aria-label="Current objective">
 			<span class="objective-mark" aria-hidden="true">!</span>
 			<div aria-live="polite">
@@ -276,7 +276,7 @@
 					<meter aria-label="Qi" min="0" max={hud.playerMaxQi} value={hud.playerQi}></meter>
 					<strong>{hud.playerQi}/{hud.playerMaxQi}</strong>
 				</div>
-				<div class="action-status" class:busy={hud.playerActionStatus !== 'Ready'}>
+				<div class={['action-status', { busy: hud.playerActionStatus !== 'Ready' }]}>
 					<span>Action</span>
 					{hud.playerActionStatus}
 				</div>
@@ -310,7 +310,7 @@
 					{#each hud.inventory.quickSlots as slot (slot.slot)}
 						<button
 							type="button"
-							class:empty={!slot.itemId}
+							class={{ empty: !slot.itemId }}
 							disabled={!slot.usable}
 							aria-label={`${slot.label}${slot.itemId ? `, ${slot.count} remaining` : ''}, slot ${slot.slot}`}
 							title={`${slot.label} · ${slot.slot}`}
@@ -342,7 +342,7 @@
 				</section>
 			</div>
 		</div>
-		<div class="control-hint"><span><kbd>W A S D</kbd> Move</span><span>Drag to look</span></div>
+		<div class="control-hint"><span><kbd>W A S D</kbd> Move</span></div>
 		<div class="pause-hint"><kbd>Esc</kbd> Pause</div>
 
 		{#if hud.inventory.feedback}
@@ -515,11 +515,7 @@
 	.scene-host {
 		position: absolute;
 		inset: 0;
-		cursor: grab;
 		outline: none;
-	}
-	.scene-host:active {
-		cursor: grabbing;
 	}
 	.scene-host :global(canvas.wuxia-canvas) {
 		display: block;
