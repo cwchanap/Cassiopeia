@@ -345,6 +345,31 @@ describe('projectWorldToScreen agreement with THREE.OrthographicCamera', () => {
 		}
 	});
 
+	test('keeps authored Cloudrest Hall roof detail past the near plane at the map edge', () => {
+		// Real Village GLB vertices on the monastery roof ridge; these focus points are reachable.
+		const viewport: WuxiaViewport = { width: 1440, height: 900 };
+		const cases = [
+			{ focus: { x: -19, z: -66 }, point: { x: -0.21111, y: 6.49417, z: -59.01901 } },
+			{ focus: { x: -20, z: -68 }, point: { x: -2.051, y: 6.7727, z: -59 } },
+			{ focus: { x: -16, z: -68 }, point: { x: 2.051, y: 6.7727, z: -59 } }
+		];
+
+		for (const { focus, point } of cases) {
+			const pose = explorationPose(focus.x, focus.z);
+			const camera = threeOrthographicCamera(pose, viewport);
+			const ndc = new THREE.Vector3(point.x, point.y, point.z).project(camera);
+			const actual = projectWorldToScreen(point, pose, viewport);
+
+			expect(ndc.z).toBeGreaterThan(-1);
+			expect(ndc.z).toBeLessThan(1);
+			expect(actual.x).toBeGreaterThan(0);
+			expect(actual.x).toBeLessThan(viewport.width);
+			expect(actual.y).toBeGreaterThan(0);
+			expect(actual.y).toBeLessThan(viewport.height);
+			expect(actual.inView).toBe(true);
+		}
+	});
+
 	test('matches Vector3.project depth clipping at positive depths near and far', () => {
 		const pose = explorationPose(1, -2);
 		const viewport: WuxiaViewport = { width: 1280, height: 720 };

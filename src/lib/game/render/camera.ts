@@ -44,8 +44,9 @@ export type WuxiaScreenPoint = {
 export const CAMERA_AZIMUTH = Math.PI / 4;
 
 const CAMERA_PITCH = (35 * Math.PI) / 180;
-// Orthographic framing comes from viewHeight; distance only fixes the eye for depth sorting/planes.
-const CAMERA_DISTANCE = 18;
+// Orthographic framing comes from viewHeight; the eye must sit far enough back for authored
+// foreground roof detail (Cloudrest Hall ridge) to clear the near plane at reachable map edges.
+const CAMERA_DISTANCE = 22;
 const CAMERA_TARGET_HEIGHT = 1.2;
 const EXPLORATION_VIEW_HEIGHT = 14;
 const DUEL_VIEW_HEIGHT = 11;
