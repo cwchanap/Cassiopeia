@@ -39,7 +39,6 @@ export type FighterState = {
 export type InputSnapshot = {
 	moveX: number;
 	moveZ: number;
-	cameraDelta: number;
 	dash: boolean;
 	lightAttack: boolean;
 	qiBurst: boolean;

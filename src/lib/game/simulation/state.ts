@@ -255,10 +255,6 @@ function movePlayer(state: GameState, input: InputSnapshot, deltaTime: number): 
 	const move = normaliseMove(input.moveX, input.moveZ);
 	const hasMove = Math.abs(move.x) > 0.01 || Math.abs(move.z) > 0.01;
 
-	if (input.cameraDelta !== 0) {
-		state.player.heading += input.cameraDelta * 0.025;
-	}
-
 	if (hasMove) {
 		state.player.position = moveThroughWorld(state.player.position, {
 			x: state.player.position.x + move.x * PLAYER_SPEED * deltaTime,

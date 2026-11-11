@@ -100,18 +100,41 @@ describe('screenDirectionToWorld', () => {
 	});
 
 	test('matches the screen-relative key directions at the fixed azimuth', () => {
+		const up = screenDirectionToWorld(0, -1);
 		const down = screenDirectionToWorld(0, 1);
+		const left = screenDirectionToWorld(-1, 0);
 		const right = screenDirectionToWorld(1, 0);
 
+		expect(up.x).toBeCloseTo(-Math.SQRT1_2);
+		expect(up.z).toBeCloseTo(-Math.SQRT1_2);
 		expect(down.x).toBeCloseTo(Math.SQRT1_2);
 		expect(down.z).toBeCloseTo(Math.SQRT1_2);
+		expect(left.x).toBeCloseTo(-Math.SQRT1_2);
+		expect(left.z).toBeCloseTo(Math.SQRT1_2);
 		expect(right.x).toBeCloseTo(Math.SQRT1_2);
 		expect(right.z).toBeCloseTo(-Math.SQRT1_2);
+	});
+
+	test.each([
+		[-1, -1, -Math.SQRT2, 0],
+		[1, -1, 0, -Math.SQRT2],
+		[-1, 1, 0, Math.SQRT2],
+		[1, 1, Math.SQRT2, 0]
+	])('maps diagonal screen input (%i, %i) to world direction', (right, down, x, z) => {
+		const move = screenDirectionToWorld(right, down);
+		expect(move.x).toBeCloseTo(x);
+		expect(move.z).toBeCloseTo(z);
 	});
 
 	test('cancels opposite and empty screen inputs', () => {
 		expect(screenDirectionToWorld(0, 0)).toEqual({ x: 0, z: 0 });
 		expect(screenDirectionToWorld(1 - 1, 1 - 1)).toEqual({ x: 0, z: 0 });
+		const up = screenDirectionToWorld(1 - 1, -1);
+		const right = screenDirectionToWorld(1, 1 - 1);
+		expect(up.x).toBeCloseTo(-Math.SQRT1_2);
+		expect(up.z).toBeCloseTo(-Math.SQRT1_2);
+		expect(right.x).toBeCloseTo(Math.SQRT1_2);
+		expect(right.z).toBeCloseTo(-Math.SQRT1_2);
 	});
 });
 

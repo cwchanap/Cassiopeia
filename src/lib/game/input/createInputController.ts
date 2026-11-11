@@ -1,3 +1,4 @@
+import { screenDirectionToWorld } from '$lib/game/render/camera';
 import type { InputSnapshot } from '$lib/game/simulation/types';
 
 export type InputController = {
@@ -25,9 +26,6 @@ export function createInputController(target: HTMLElement): InputController {
 	let pause = false;
 	let quickSlot: InputSnapshot['quickSlot'] = null;
 	let toggleInventory = false;
-	let pointerDragging = false;
-	let previousPointerX = 0;
-	let pointerDelta = 0;
 
 	target.tabIndex = 0;
 
@@ -67,37 +65,20 @@ export function createInputController(target: HTMLElement): InputController {
 		heldKeys.delete(event.key.toLowerCase());
 	}
 
-	function onPointerdown(event: PointerEvent): void {
-		pointerDragging = true;
-		previousPointerX = event.clientX;
-		target.setPointerCapture(event.pointerId);
+	function onPointerdown(): void {
 		target.focus();
 	}
 
-	function onPointermove(event: PointerEvent): void {
-		if (!pointerDragging) {
-			return;
-		}
-
-		pointerDelta += event.clientX - previousPointerX;
-		previousPointerX = event.clientX;
-	}
-
-	function onPointerup(event: PointerEvent): void {
-		pointerDragging = false;
-		if (target.hasPointerCapture(event.pointerId)) {
-			target.releasePointerCapture(event.pointerId);
-		}
-	}
-
 	function getSnapshot(): InputSnapshot {
+		const move = screenDirectionToWorld(
+			Number(heldKeys.has('d') || heldKeys.has('arrowright')) -
+				Number(heldKeys.has('a') || heldKeys.has('arrowleft')),
+			Number(heldKeys.has('s') || heldKeys.has('arrowdown')) -
+				Number(heldKeys.has('w') || heldKeys.has('arrowup'))
+		);
 		const snapshot: InputSnapshot = {
-			moveX: Number(heldKeys.has('d')) - Number(heldKeys.has('a')),
-			moveZ:
-				Number(heldKeys.has('s') || heldKeys.has('arrowdown')) -
-				Number(heldKeys.has('w') || heldKeys.has('arrowup')),
-			cameraDelta:
-				Number(heldKeys.has('arrowright')) - Number(heldKeys.has('arrowleft')) + pointerDelta,
+			moveX: move.x,
+			moveZ: move.z,
 			dash,
 			lightAttack,
 			qiBurst,
@@ -114,7 +95,6 @@ export function createInputController(target: HTMLElement): InputController {
 		pause = false;
 		quickSlot = null;
 		toggleInventory = false;
-		pointerDelta = 0;
 
 		return snapshot;
 	}
@@ -122,9 +102,6 @@ export function createInputController(target: HTMLElement): InputController {
 	window.addEventListener('keydown', onKeydown);
 	window.addEventListener('keyup', onKeyup);
 	target.addEventListener('pointerdown', onPointerdown);
-	target.addEventListener('pointermove', onPointermove);
-	target.addEventListener('pointerup', onPointerup);
-	target.addEventListener('pointercancel', onPointerup);
 
 	return {
 		getSnapshot,
@@ -132,9 +109,6 @@ export function createInputController(target: HTMLElement): InputController {
 			window.removeEventListener('keydown', onKeydown);
 			window.removeEventListener('keyup', onKeyup);
 			target.removeEventListener('pointerdown', onPointerdown);
-			target.removeEventListener('pointermove', onPointermove);
-			target.removeEventListener('pointerup', onPointerup);
-			target.removeEventListener('pointercancel', onPointerup);
 		}
 	};
 }

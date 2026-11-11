@@ -1,13 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialGameState, restartGame, stepGame, toHudSnapshot } from './state';
-import { LIGHT_ATTACK_TIMING, QI_BURST_COST, QI_BURST_TIMING, RIVAL_STRIKE_TIMING } from './combat';
+import {
+	DASH_DISTANCE,
+	LIGHT_ATTACK_TIMING,
+	QI_BURST_COST,
+	QI_BURST_TIMING,
+	RIVAL_STRIKE_TIMING
+} from './combat';
 import type { GameState, InputSnapshot } from './types';
 import { canStandAt } from './world';
 
 const idleInput: InputSnapshot = {
 	moveX: 0,
 	moveZ: 0,
-	cameraDelta: 0,
 	dash: false,
 	lightAttack: false,
 	qiBurst: false,
@@ -40,6 +45,18 @@ function advance(state: GameState, seconds: number): void {
 }
 
 describe('wuxia simulation state', () => {
+	it('dashes along the last movement heading when stationary', () => {
+		const state = createInitialGameState();
+		stepGame(state, { ...idleInput, moveX: 1 }, frame);
+		const beforeDash = { ...state.player.position };
+
+		stepGame(state, { ...idleInput, dash: true }, frame);
+
+		expect(state.player.heading).toBeCloseTo(Math.PI / 2);
+		expect(state.player.position.x - beforeDash.x).toBeCloseTo(DASH_DISTANCE);
+		expect(state.player.position.z).toBeCloseTo(beforeDash.z);
+	});
+
 	it('explores beyond the courtyard and keeps a dash and rival spawn out of water', () => {
 		const state = createInitialGameState();
 		for (let i = 0; i < 180; i++) stepGame(state, { ...idleInput, moveX: 1 }, frame);
