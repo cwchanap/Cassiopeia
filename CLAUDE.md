@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Cassiopeia is a SvelteKit + Three.js prototype of a 3D Wuxia RPG ("Mountain Sect Initiate"). A single route (`src/routes/+page.svelte`) hosts a third-person courtyard scene where the player meets a mentor, trains a qinggong dash, and duels a rival disciple.
+Cassiopeia is a SvelteKit + Three.js prototype of a 3D Wuxia RPG ("Mountain Sect Initiate"). A single route (`src/routes/+page.svelte`) hosts a fixed 2.5D isometric courtyard scene where the player meets a mentor, trains a qinggong dash, and duels a rival disciple.
 
 - **Language**: TypeScript (strict), Svelte 5 (runes mode forced for all non-`node_modules` files in `svelte.config.js`)
 - **Package manager**: bun
@@ -55,8 +55,10 @@ src/routes/+page.svelte
 
 - **`src/lib/game/runtime/createGameRuntime.ts`** owns the `requestAnimationFrame` loop, ties everything together, and is the only place that touches lifecycle (`start` / `restart` / `dispose`). It catches Three.js init errors and surfaces them through `onError` so the route can render the fallback panel. `dispose` is idempotent and must remain so — the page's `Attachment` returns it as the cleanup callback.
 - **`src/lib/game/simulation/`** (`state.ts`, `combat.ts`, `types.ts`) is pure TypeScript. It must not import Three.js, DOM, or Svelte. `stepGame` is the only mutator; `toHudSnapshot` is the only read path for UI. Constants and helpers (ranges, speeds, cooldowns, distance) live in `combat.ts`.
-- **`src/lib/game/render/`** owns Three.js. `createWuxiaScene` allocates geometries/materials into a `SceneResources` registry so `dispose()` can tear them down deterministically. `camera.ts` is a pure function (`computeWuxiaCameraPose`) so camera framing is unit-testable without a renderer.
-- **`src/lib/game/input/createInputController.ts`** translates DOM events into a single `InputSnapshot` per frame. Edge-triggered actions (`dash`, `lightAttack`, `qiBurst`, `interact`, `pause`) are consumed inside `getSnapshot()` — call it exactly once per frame.
+- **`src/lib/game/render/`** owns Three.js. `createWuxiaScene` allocates geometries/materials into a `SceneResources` registry so `dispose()` can tear them down deterministically. `camera.ts` is pure TypeScript: `computeWuxiaCameraPose` builds the fixed 45° azimuth / 35° pitch pose, `orthoFrustum` is the single source of the projection frustum, `projectWorldToScreen` projects world points into host CSS pixels against that same frustum, and `screenDirectionToWorld` maps screen input into world movement. The renderer follows the focus and `viewHeight` only, smooths both by the same factor, reconstructs position from the fixed direction, and reapplies the frustum every frame; camera azimuth, pitch, zoom, and pointer-drag rotation are intentionally absent. Opaque world geometry renders before ink silhouettes and then the player so crossing limbs and gear do not self-ink.
+- **`src/lib/game/input/createInputController.ts`** translates DOM events into a single `InputSnapshot` per frame. WASD and arrow keys are screen-aligned through `screenDirectionToWorld`; pointer drag only focuses the canvas. Edge-triggered actions (`dash`, `lightAttack`, `qiBurst`, `interact`, `pause`) are consumed inside `getSnapshot()` — call it exactly once per frame.
+
+There is exactly one fixed isometric view. Keep `camera.ts` free of Three.js, DOM, and Svelte imports, and derive the renderer and world-to-screen projection from the same `orthoFrustum`. Do not reintroduce camera rotation, zoom, drag-to-look, or a compatibility toggle.
 
 When extending gameplay: add fields to `GameState`/`InputSnapshot`/`HudSnapshot` in `simulation/types.ts`, update `stepGame` and `toHudSnapshot`, then let the renderer and HUD pick up the new snapshot. Don't add gameplay rules into the Three.js layer.
 

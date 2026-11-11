@@ -40,12 +40,24 @@ describe('followCameraPose', () => {
 	});
 
 	test('derives position from the smoothed focus and keeps the fixed camera offset', () => {
-		const current = explorationPose(0, 0);
 		const desired = explorationPose(8, -6);
-		const smoothed = followCameraPose(current, desired, 0.12);
+		const current = explorationPose(0, 0);
+		// Deliberately wrong initial offset: reconstruction must discard it rather than interpolate it.
+		current.position = {
+			x: current.position.x - 50,
+			y: current.position.y + 20,
+			z: current.position.z + 30
+		};
+		const factor = 0.12;
+		const smoothed = followCameraPose(current, desired, factor);
+		const independentlyInterpolated = {
+			x: current.position.x + (desired.position.x - current.position.x) * factor,
+			y: current.position.y + (desired.position.y - current.position.y) * factor,
+			z: current.position.z + (desired.position.z - current.position.z) * factor
+		};
 
-		expect(smoothed.target.x).toBeCloseTo(desired.target.x * 0.12);
-		expect(smoothed.target.z).toBeCloseTo(desired.target.z * 0.12);
+		expect(smoothed.target.x).toBeCloseTo(desired.target.x * factor);
+		expect(smoothed.target.z).toBeCloseTo(desired.target.z * factor);
 		expect(smoothed.position.x - smoothed.target.x).toBeCloseTo(
 			desired.position.x - desired.target.x,
 			10
@@ -58,5 +70,8 @@ describe('followCameraPose', () => {
 			desired.position.z - desired.target.z,
 			10
 		);
+		expect(Math.abs(smoothed.position.x - independentlyInterpolated.x)).toBeGreaterThan(1);
+		expect(Math.abs(smoothed.position.y - independentlyInterpolated.y)).toBeGreaterThan(1);
+		expect(Math.abs(smoothed.position.z - independentlyInterpolated.z)).toBeGreaterThan(1);
 	});
 });
