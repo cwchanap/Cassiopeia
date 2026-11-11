@@ -12,11 +12,13 @@ Make the smallest change across the pure camera helper, the existing Three.js sc
 ## Step 1 — Define camera orientation and projection math
 
 **Files**
+
 - `src/lib/game/render/camera.ts`
 - `src/lib/game/render/camera.spec.ts`
 - `src/lib/game/render/createWuxiaScene.ts` (only remove the obsolete camera pose input at this step)
 
 **Work**
+
 1. Replace perspective-oriented offsets with named, fixed camera constants: 45° azimuth, ~35° downward pitch, 14m exploration view height and ~11m duel view height. Keep the existing six-metre cap on fighter midpoint displacement.
 2. Remove the unused `playerHeading` input from `WuxiaCameraPoseInput`. Return `viewHeight` along with `position` and `target`. Keep all calculations pure and without `THREE`.
 3. Export a small pure `screenDirectionToWorld(right, down)` helper derived from the **same azimuth constant** as the pose, so the input controller imports no Three.js and has no duplicated 45° numbers. Check its down direction against the **normalised horizontal target-to-camera vector** (`pose.position − pose.target`), and check the right direction is perpendicular and screen-right.
@@ -31,6 +33,7 @@ Make the smallest change across the pure camera helper, the existing Three.js sc
 **File:** `src/lib/game/render/createWuxiaScene.ts`
 
 **Work**
+
 1. Replace `THREE.PerspectiveCamera` with `THREE.OrthographicCamera` (near/far enough for the authored village). Delete the perspective FOV and remove `scene.fog`.
 2. On each render, compute the desired focus and view height, then **lerp both the focus and `viewHeight` by the same existing follow factor** (including the 14 → 11 m duel transition). Reconstruct `camera.position` and `lookAt` from the smoothed focus with the fixed angle. Do not lerp camera position independently, snap the zoom, or retain otherwise-unused active-pose state/getters.
 3. **Every render frame**, apply `orthoFrustum` using the smoothed view height and the host's current CSS-pixel aspect ratio, and call `updateProjectionMatrix()`. Keep `renderer.setSize` on viewport resize and the existing capped pixel ratio. Updating projection only inside `resize()` would miss the duel transition.
@@ -42,6 +45,7 @@ Make the smallest change across the pure camera helper, the existing Three.js sc
 ## Step 3 — Translate screen direction at the input boundary
 
 **Files**
+
 - `src/lib/game/input/createInputController.ts`
 - `src/lib/game/simulation/types.ts`
 - `src/lib/game/simulation/state.ts`
@@ -51,6 +55,7 @@ Make the smallest change across the pure camera helper, the existing Three.js sc
 - `src/routes/wuxia-mvp.e2e.ts` (adjust mentor approach in the same input change)
 
 **Work**
+
 1. Read screen-direction axes from WASD **and** arrows, with left/right arrows becoming movement rather than camera rotation. Convert to world X/Z via the pure helper before returning each `InputSnapshot`.
 2. Remove `cameraDelta` from `InputSnapshot`, its initialization in `runInventoryCommand`, and its heading mutation in `movePlayer`. Leave `normaliseMove`, `moveThroughWorld`, dash distance, attack rules, and input edge-trigger lifecycle unchanged.
 3. Remove pointer drag-tracking/capture/rotation listeners. Keep pointer-down focus behavior (without initiating a drag gesture). Do not add new drag or click mechanics.
@@ -63,11 +68,13 @@ Make the smallest change across the pure camera helper, the existing Three.js sc
 ## Step 4 — Replace the player ring with ink silhouette occlusion
 
 **Files**
+
 - `src/lib/game/render/createWuxiaScene.ts`
 - `src/lib/game/render/inkSilhouette.ts` (one small Three.js scene-graph helper, no renderer required)
 - `src/lib/game/render/inkSilhouette.spec.ts` (new Node unit test)
 
 **Work**
+
 1. Remove the `playerMarker` ring mesh and its per-frame position update.
 2. Add one small `addInkSilhouette(root, inkMaterial)` helper. For each original source player `Mesh`, attach one ink child `Mesh` with **identity local transform** and **shared geometry**. Mark ink children and skip them on future traversals, making repeat calls a no-op. A child naturally inherits animation and visibility (including hidden procedural bodies when the GLB is ready).
 3. Draw opaque **world → ink → real player**, explicitly setting `renderOrder` on **every ink and original player mesh**, not just on the outer player group (GLTF may contain nested groups). Use one shared `MeshBasicMaterial` registered with the existing scene resources: dark ink, `depthFunc = THREE.GreaterDepth`, `depthWrite = false`; ink clones have `castShadow = false`. Rendering the ink **before** the real player avoids self-occlusion from the player's own limbs, sword, or robe. Keep world objects' existing ordering unless a browser-observed case requires a focused change.
@@ -80,18 +87,21 @@ Make the smallest change across the pure camera helper, the existing Three.js sc
 ## Step 5 — Update documentation and end-to-end verification
 
 **Files**
+
 - `src/routes/wuxia-mvp.e2e.ts` (full final regression run; mentor navigation was already corrected in Step 3)
 - `src/lib/game/render/camera.spec.ts` and `inkSilhouette.spec.ts` (final regression run)
 - `CLAUDE.md`
 - `assets/wuxia/README.md`
 
 **Work**
+
 1. Keep the full Playwright mentor → dash → duel → reward/restart → item persistence path green after Steps 3 and 4, rather than postponing its navigation fix until this step.
 2. Manually play through the tutorial on a normal desktop viewport and at 960×640. Walk against building walls, along the river, and over bridge openings; confirm screen direction, dash collision, and camera framing.
 3. Confirm both GLB-ready and procedural fallback can silhouette an obscured player, while a visible arm/sword over the torso remains un-inked. Verify restart/dispose do not leave extra canvas/meshes or duplicate listeners.
 4. Update the repository guides to explain the fixed 2.5D view, screen-space controls, pure frustum/projection helper contract, and removal of camera rotation. Do not redesign the HUD documentation in this PR.
 
 **Validation commands** (unit tests and targeted e2e also run at earlier checkpoints)
+
 ```bash
 bun x vitest run
 bun x playwright test src/routes/wuxia-mvp.e2e.ts
