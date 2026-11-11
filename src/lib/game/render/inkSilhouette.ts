@@ -1,11 +1,20 @@
 import * as THREE from 'three';
 
-/** Opaque world geometry uses the default order; ink sits between it and the real player. */
+/** Opaque world geometry uses the default order; ink sits between it and the actors. */
 export const INK_RENDER_ORDER = 1;
 export const PLAYER_RENDER_ORDER = 2;
 
 /** Marks ink children so repeat traversals and teardown leave them alone. */
 export const IS_INK = 'inkSilhouette';
+
+/** Applies one order to every mesh, since Three.js does not inherit it from parent groups. */
+export function setMeshRenderOrder(root: THREE.Object3D, renderOrder: number): void {
+	root.traverse((object) => {
+		if (object instanceof THREE.Mesh && !object.userData[IS_INK]) {
+			object.renderOrder = renderOrder;
+		}
+	});
+}
 
 export function createInkMaterial(): THREE.MeshBasicMaterial {
 	return new THREE.MeshBasicMaterial({

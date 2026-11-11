@@ -5,7 +5,8 @@ import {
 	IS_INK,
 	PLAYER_RENDER_ORDER,
 	addInkSilhouette,
-	createInkMaterial
+	createInkMaterial,
+	setMeshRenderOrder
 } from './inkSilhouette';
 
 /** A player-shaped graph with nested joint groups, like the loaded GLB. */
@@ -89,6 +90,26 @@ describe('addInkSilhouette', () => {
 			expect(ink.renderOrder).toBe(INK_RENDER_ORDER);
 			expect(ink.castShadow).toBe(false);
 		}
+	});
+});
+
+describe('setMeshRenderOrder', () => {
+	test('applies the order to every mesh, including nested GLB meshes', () => {
+		const { root, sources } = nestedPlayer();
+
+		setMeshRenderOrder(root, PLAYER_RENDER_ORDER);
+
+		expect(root.renderOrder).toBe(0);
+		for (const source of sources) expect(source.renderOrder).toBe(PLAYER_RENDER_ORDER);
+	});
+
+	test('leaves ink children at their own order', () => {
+		const { root, sources } = nestedPlayer();
+		addInkSilhouette(root, createInkMaterial());
+
+		setMeshRenderOrder(root, PLAYER_RENDER_ORDER);
+
+		for (const source of sources) expect(inkChildren(source)[0].renderOrder).toBe(INK_RENDER_ORDER);
 	});
 });
 
