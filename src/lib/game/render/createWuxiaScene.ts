@@ -114,7 +114,6 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 		const cameraPose = computeWuxiaCameraPose({
 			phase: snapshot.phase,
 			playerPosition: snapshot.player.position,
-			playerHeading: snapshot.player.heading,
 			rival: {
 				active: snapshot.rival.active,
 				position: snapshot.rival.position
