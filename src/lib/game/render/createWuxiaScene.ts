@@ -6,6 +6,7 @@ import {
 	type WuxiaCameraPose,
 	type WuxiaViewport
 } from './camera';
+import { IS_INK, addInkSilhouette, createInkMaterial } from './inkSilhouette';
 import { loadWuxiaAssets } from './wuxiaAssets';
 import { WORLD_BOUNDS } from '$lib/game/simulation/world';
 import layout from '../world-layout.json';
@@ -75,23 +76,8 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 
 	const sunlight = addLighting(scene);
 	const player = createDisciple(playerColor, resources);
-	const playerMarker = new THREE.Mesh(
-		geometry(new THREE.RingGeometry(0.38, 0.44, 40), resources),
-		material(
-			new THREE.MeshBasicMaterial({
-				color: 0xffde8a,
-				depthTest: false,
-				depthWrite: false,
-				transparent: true,
-				opacity: 0.9,
-				toneMapped: false
-			}),
-			resources
-		)
-	);
-	playerMarker.rotation.x = -Math.PI / 2;
-	playerMarker.renderOrder = 10;
-	scene.add(playerMarker);
+	const inkMaterial = material(createInkMaterial(), resources);
+	addInkSilhouette(player, inkMaterial);
 	const rival = createDisciple(rivalColor, resources);
 	const mentor = createDisciple(mentorColor, resources);
 	const effects = new Map<number, THREE.Mesh>();
@@ -114,6 +100,8 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 		{ Player: player, Rival: rival, Mentor: mentor, Village: village },
 		(status) => {
 			renderer.domElement.dataset.assets = status;
+			// Newly attached GLB meshes need their own ink; already-inked procedural meshes are skipped.
+			if (status === 'ready') addInkSilhouette(player, inkMaterial);
 		}
 	);
 
@@ -128,8 +116,6 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 			snapshot.player.combatAction,
 			snapshot.elapsed
 		);
-		// Keep the player's location readable behind roofs and orchard canopies.
-		playerMarker.position.set(snapshot.player.position.x, 0.06, snapshot.player.position.z);
 		applyFighter(
 			rival,
 			snapshot.rival.position,
@@ -706,6 +692,8 @@ function material<T extends THREE.Material>(value: T, resources: SceneResources)
 }
 
 function disposeObject(mesh: THREE.Mesh, resources: SceneResources): void {
+	if (mesh.userData[IS_INK]) return; // Ink shares its source geometry and the registered material.
+
 	if (!resources.geometries.includes(mesh.geometry)) {
 		mesh.geometry.dispose();
 	}
