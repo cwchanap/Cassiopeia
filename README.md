@@ -40,3 +40,28 @@ npm run build
 You can preview the production build with `npm run preview`.
 
 > To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+
+## Continuous integration
+
+Three GitHub Actions workflows run on pull requests and pushes to `main`, and can also be run manually:
+
+- **Build and lint** runs type checking, Prettier, ESLint, and the production build.
+- **Unit tests** runs both Vitest projects (Node and Chromium) with V8 coverage and uploads
+  `coverage/lcov.info` to Codecov.
+- **Playwright E2E** runs the browser tests against a production build and retains the HTML report,
+  failure screenshots, and traces as a workflow artifact for 14 days.
+
+All workflows use Node 22 and the Bun version pinned in `package.json`, with frozen lockfile installs.
+
+Enable `cwchanap/Cassiopeia` in [Codecov](https://app.codecov.io/gh/cwchanap/Cassiopeia).
+The coverage upload uses [GitHub OIDC](https://github.com/codecov/codecov-action#using-oidc), so no
+`CODECOV_TOKEN` secret is needed. Upload failures fail the unit-test job. Fork pull requests still run
+the tests and generate coverage, but skip the authenticated upload.
+
+To run the coverage suite locally:
+
+```sh
+bun install --frozen-lockfile
+bun x playwright install chromium
+bun run test:unit:coverage
+```
