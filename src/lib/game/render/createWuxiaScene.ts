@@ -1,6 +1,11 @@
 import * as THREE from 'three';
 import type { CombatEffect, GameState, Vec2 } from '$lib/game/simulation/types';
-import { computeWuxiaCameraPose } from './camera';
+import {
+	computeWuxiaCameraPose,
+	orthoFrustum,
+	type WuxiaCameraPose,
+	type WuxiaViewport
+} from './camera';
 import { loadWuxiaAssets } from './wuxiaAssets';
 import { WORLD_BOUNDS } from '$lib/game/simulation/world';
 import layout from '../world-layout.json';
@@ -18,6 +23,31 @@ type SceneResources = {
 const playerColor = 0xf4eee4;
 const rivalColor = 0x33413b;
 const mentorColor = 0x6a796c;
+const CAMERA_FOLLOW = 0.12;
+
+export function followCameraPose(
+	current: WuxiaCameraPose | null,
+	desired: WuxiaCameraPose,
+	factor: number
+): WuxiaCameraPose {
+	if (!current) return desired;
+
+	const target = {
+		x: current.target.x + (desired.target.x - current.target.x) * factor,
+		y: current.target.y + (desired.target.y - current.target.y) * factor,
+		z: current.target.z + (desired.target.z - current.target.z) * factor
+	};
+
+	return {
+		position: {
+			x: target.x + desired.position.x - desired.target.x,
+			y: target.y + desired.position.y - desired.target.y,
+			z: target.z + desired.position.z - desired.target.z
+		},
+		target,
+		viewHeight: current.viewHeight + (desired.viewHeight - current.viewHeight) * factor
+	};
+}
 
 export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 	const resources: SceneResources = { geometries: [], materials: [] };
@@ -36,11 +66,12 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 	host.appendChild(renderer.domElement);
 
 	const scene = new THREE.Scene();
-	scene.background = new THREE.Color(0xcfe0d9);
-	scene.fog = new THREE.Fog(0xcfe0d9, 28, 85);
+	scene.background = new THREE.Color(0xd7e5de);
 
-	const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 120);
+	// The frustum is reapplied every frame so duel view-height changes and resizes stay in sync.
+	const camera = new THREE.OrthographicCamera();
 	const cameraTarget = new THREE.Vector3();
+	let cameraPose: WuxiaCameraPose | null = null;
 
 	const sunlight = addLighting(scene);
 	const player = createDisciple(playerColor, resources);
@@ -88,7 +119,7 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 
 	function render(snapshot: GameState): void {
 		if (disposed) return;
-		resize();
+		const viewport = resize();
 
 		applyFighter(
 			player,
@@ -111,7 +142,7 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 		applyFighter(mentor, snapshot.mentor.position, Math.PI * 0.25, createIdleRenderAction());
 		syncEffects(snapshot.effects, effects, resources, scene);
 
-		const cameraPose = computeWuxiaCameraPose({
+		const desiredPose = computeWuxiaCameraPose({
 			phase: snapshot.phase,
 			playerPosition: snapshot.player.position,
 			rival: {
@@ -119,19 +150,27 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 				position: snapshot.rival.position
 			}
 		});
-		camera.position.lerp(
-			new THREE.Vector3(cameraPose.position.x, cameraPose.position.y, cameraPose.position.z),
-			0.12
-		);
+		cameraPose = followCameraPose(cameraPose, desiredPose, CAMERA_FOLLOW);
+		camera.position.set(cameraPose.position.x, cameraPose.position.y, cameraPose.position.z);
 		cameraTarget.set(cameraPose.target.x, cameraPose.target.y, cameraPose.target.z);
 		camera.lookAt(cameraTarget);
-		sunlight.position.set(cameraTarget.x - 8, 16, cameraTarget.z + 5);
-		sunlight.target.position.set(cameraTarget.x, 0, cameraTarget.z);
+
+		const frustum = orthoFrustum(cameraPose, viewport);
+		camera.left = frustum.left;
+		camera.right = frustum.right;
+		camera.top = frustum.top;
+		camera.bottom = frustum.bottom;
+		camera.near = frustum.near;
+		camera.far = frustum.far;
+		camera.updateProjectionMatrix();
+
+		sunlight.position.set(cameraPose.target.x - 9, 18, cameraPose.target.z + 6);
+		sunlight.target.position.set(cameraPose.target.x, 0, cameraPose.target.z);
 
 		renderer.render(scene, camera);
 	}
 
-	function resize(): void {
+	function resize(): WuxiaViewport {
 		const width = Math.max(host.clientWidth, 1);
 		const height = Math.max(host.clientHeight, 1);
 		const canvas = renderer.domElement;
@@ -141,9 +180,9 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 			canvas.height !== Math.floor(height * renderer.getPixelRatio())
 		) {
 			renderer.setSize(width, height, false);
-			camera.aspect = width / height;
-			camera.updateProjectionMatrix();
 		}
+
+		return { width, height };
 	}
 
 	function dispose(): void {
@@ -176,18 +215,18 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 }
 
 function addLighting(scene: THREE.Scene): THREE.DirectionalLight {
-	const hemi = new THREE.HemisphereLight(0xe8f4ed, 0x4e594d, 1.8);
+	const hemi = new THREE.HemisphereLight(0xe8f4ed, 0x4e594d, 2);
 	scene.add(hemi);
 
-	const key = new THREE.DirectionalLight(0xfff1d1, 2.5);
-	key.position.set(-5, 9, 4);
+	const key = new THREE.DirectionalLight(0xfff1d1, 2.4);
+	key.position.set(-9, 18, 6);
 	key.castShadow = true;
 	key.shadow.mapSize.set(1024, 1024);
-	key.shadow.camera.left = -15;
-	key.shadow.camera.right = 15;
-	key.shadow.camera.top = 15;
-	key.shadow.camera.bottom = -15;
-	key.shadow.camera.far = 45;
+	key.shadow.camera.left = -20;
+	key.shadow.camera.right = 20;
+	key.shadow.camera.top = 20;
+	key.shadow.camera.bottom = -20;
+	key.shadow.camera.far = 60;
 	key.shadow.normalBias = 0.04;
 	scene.add(key);
 	scene.add(key.target);
