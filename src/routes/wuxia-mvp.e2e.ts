@@ -21,7 +21,7 @@ async function expectBagItemCount(page: Page, testId: string, count: number): Pr
 test('plays through the Wuxia MVP opening, item loop, reward, and restart', async ({ page }) => {
 	// Software WebGL can drop below 5 fps; the capped simulation step then advances only a
 	// fraction of a game second per wall second, so keep wall-clock limits generous.
-	test.setTimeout(120000);
+	test.setTimeout(180000);
 	await page.goto('/');
 	await page.evaluate(() => localStorage.clear());
 	await page.reload();
@@ -29,6 +29,11 @@ test('plays through the Wuxia MVP opening, item loop, reward, and restart', asyn
 	await expect(page.getByTestId('game-shell')).toBeVisible();
 	await expect(page.getByTestId('objective-chip')).toContainText('Meet the mentor');
 	await expect(page.locator('canvas')).toBeVisible();
+	// A slow GLB load on a loaded host can exceed the 5 s assertion default; wait out
+	// 'loading' with a real budget, then require 'ready' so 'fallback' still fails.
+	await expect(page.locator('canvas')).not.toHaveAttribute('data-assets', 'loading', {
+		timeout: 30000
+	});
 	await expect(page.locator('canvas')).toHaveAttribute('data-assets', 'ready');
 	await expect(page.getByTestId('status-cluster')).toContainText('110/110');
 	await expect(page.getByRole('meter', { name: 'Health', exact: true })).toHaveAttribute(
@@ -76,16 +81,37 @@ test('plays through the Wuxia MVP opening, item loop, reward, and restart', asyn
 	await expect(page.getByTestId('item-feedback')).toHaveText('Used Lesser Qi Pill');
 	await expect(page.getByTestId('quick-slot-3')).toContainText('x1');
 
-	await expect
-		.poll(
-			async () => {
-				if (await page.getByTestId('end-state').isVisible()) return true;
-				await page.keyboard.press('j');
-				return false;
-			},
-			{ timeout: 60000, intervals: [230] }
-		)
-		.toBe(true);
+	// Each rendered frame advances at most 50 ms of game time, so under software WebGL
+	// the duel can lag wall time several-fold. Keep attacking while the rival's health
+	// keeps dropping; only a sustained stall or the overall deadline fails the journey.
+	const rivalMeter = page.getByRole('meter', { name: 'Rival health' });
+	// The meter only exists during the duel; once it is gone the end state is showing.
+	const readRivalHealth = () =>
+		rivalMeter
+			.getAttribute('value', { timeout: 2000 })
+			.then((value) => Number(value))
+			.catch(() => null);
+	const duelDeadline = Date.now() + 100000;
+	let rivalHealth = 100;
+	let lastProgress = Date.now();
+	let presses = 0;
+
+	while (!(await page.getByTestId('end-state').isVisible())) {
+		if (Date.now() > duelDeadline) {
+			throw new Error(`Duel timed out with the rival at ${rivalHealth}/100 health`);
+		}
+		// Every fourth press spends regenerated qi on a burst instead of a light strike.
+		await page.keyboard.press(presses % 4 === 3 ? 'k' : 'j');
+		presses += 1;
+		const health = await readRivalHealth();
+		if (health !== null && health < rivalHealth) {
+			rivalHealth = health;
+			lastProgress = Date.now();
+		} else if (Date.now() - lastProgress > 30000) {
+			throw new Error(`Duel stalled with the rival at ${rivalHealth}/100 health`);
+		}
+		await page.waitForTimeout(230);
+	}
 
 	await expect(page.getByTestId('end-state')).toBeVisible();
 	await expect(page.getByTestId('game-prompt')).toContainText('Won:');
