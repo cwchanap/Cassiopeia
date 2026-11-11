@@ -19,8 +19,9 @@ async function expectBagItemCount(page: Page, testId: string, count: number): Pr
 }
 
 test('plays through the Wuxia MVP opening, item loop, reward, and restart', async ({ page }) => {
-	// Software WebGL needs more wall time for the same complete gameplay and persistence flow.
-	test.setTimeout(60000);
+	// Software WebGL can drop below 5 fps; the capped simulation step then advances only a
+	// fraction of a game second per wall second, so keep wall-clock limits generous.
+	test.setTimeout(120000);
 	await page.goto('/');
 	await page.evaluate(() => localStorage.clear());
 	await page.reload();
@@ -56,7 +57,7 @@ test('plays through the Wuxia MVP opening, item loop, reward, and restart', asyn
 
 	await page.keyboard.down('w');
 	await expect(page.getByTestId('game-prompt')).toHaveText('Press E to begin mentor training', {
-		timeout: 10000
+		timeout: 20000
 	});
 	await page.keyboard.up('w');
 
@@ -82,7 +83,7 @@ test('plays through the Wuxia MVP opening, item loop, reward, and restart', asyn
 				await page.keyboard.press('j');
 				return false;
 			},
-			{ timeout: 20000, intervals: [230] }
+			{ timeout: 60000, intervals: [230] }
 		)
 		.toBe(true);
 

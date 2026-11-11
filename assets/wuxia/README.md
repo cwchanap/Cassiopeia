@@ -64,9 +64,22 @@ water, and map bounds constrain walking and dashes. Four bridge openings allow c
 courtyard, mentor, and duel loop remain intact. The camera and sunlight follow exploration.
 The exported Village root embeds its layout for the asset test to detect stale exports.
 
-Explore with WASD: north through the gate for the village street, east across the bridge for
-rice fields, or south/west along the lanes for tea gardens and the orchard. Interiors and
-new quests are outside this map expansion. The enlarged self-contained pack has a 20 MiB budget.
+The scene uses one fixed 2.5D isometric view: a single orthographic camera at 45° azimuth and
+35° pitch, with roughly 14 m of vertical coverage in exploration and 11 m in the duel. The camera
+follows the focus and view height without rotating; there is no zoom, drag-to-look, or camera
+rotation control. `src/lib/game/render/camera.ts` is the pure contract: `computeWuxiaCameraPose`
+builds the pose, `orthoFrustum` supplies the shared projection frustum, `projectWorldToScreen`
+converts world points to host CSS pixels against that frustum, and `screenDirectionToWorld` maps
+screen input to world movement. The renderer reapplies the frustum every frame. WASD and arrow
+keys are screen-aligned. Opaque world geometry renders before ink silhouettes and then the player,
+so an obscured player shows a flat ink silhouette while visible limbs and a sword crossing the
+torso remain un-inked. The GLB-ready and procedural fallback paths both attach ink after loading
+or keep the procedural ink when loading fails.
+
+Explore with WASD or the arrow keys (both screen-aligned): north through the gate for the
+village street, east across the bridge for rice fields, or south/west along the lanes for tea
+gardens and the orchard. Interiors and new quests are outside this map expansion. The enlarged
+self-contained pack has a 20 MiB budget.
 For the new regions, follow the western lane past the hamlet to the bamboo shrine, take the
 eastern bypass around the ancestral hall to the monastery, or follow the west riverbank south
 and cross the final bridge to the market. The far northern bridge loops back to the rice farms.

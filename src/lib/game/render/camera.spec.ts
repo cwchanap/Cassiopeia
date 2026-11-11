@@ -6,6 +6,7 @@ import {
 	orthoFrustum,
 	projectWorldToScreen,
 	screenDirectionToWorld,
+	type WuxiaCameraPoint,
 	type WuxiaCameraPose,
 	type WuxiaViewport
 } from './camera';
@@ -35,6 +36,41 @@ function duelPose(
 
 function horizontalDistance(pose: WuxiaCameraPose): number {
 	return Math.hypot(pose.position.x - pose.target.x, pose.position.z - pose.target.z);
+}
+
+function pointAlongView(pose: WuxiaCameraPose, distance: number): WuxiaCameraPoint {
+	const direction = {
+		x: pose.target.x - pose.position.x,
+		y: pose.target.y - pose.position.y,
+		z: pose.target.z - pose.position.z
+	};
+	const length = Math.hypot(direction.x, direction.y, direction.z);
+
+	return {
+		x: pose.position.x + (direction.x / length) * distance,
+		y: pose.position.y + (direction.y / length) * distance,
+		z: pose.position.z + (direction.z / length) * distance
+	};
+}
+
+function threeOrthographicCamera(
+	pose: WuxiaCameraPose,
+	viewport: WuxiaViewport
+): THREE.OrthographicCamera {
+	const frustum = orthoFrustum(pose, viewport);
+	const camera = new THREE.OrthographicCamera(
+		frustum.left,
+		frustum.right,
+		frustum.top,
+		frustum.bottom,
+		frustum.near,
+		frustum.far
+	);
+	camera.position.set(pose.position.x, pose.position.y, pose.position.z);
+	camera.lookAt(pose.target.x, pose.target.y, pose.target.z);
+	camera.updateMatrixWorld();
+
+	return camera;
 }
 
 describe('computeWuxiaCameraPose', () => {
@@ -232,6 +268,28 @@ describe('projectWorldToScreen', () => {
 		expect(Number.isFinite(behindCamera.y)).toBe(true);
 	});
 
+	test('rejects positive depths closer than the near plane and beyond the far plane', () => {
+		const pose = explorationPose(1, -2);
+		const frustum = orthoFrustum(pose, viewport);
+		const beforeNear = projectWorldToScreen(pointAlongView(pose, frustum.near / 2), pose, viewport);
+		const insideNear = projectWorldToScreen(pointAlongView(pose, frustum.near * 2), pose, viewport);
+		const insideFar = projectWorldToScreen(pointAlongView(pose, frustum.far - 1), pose, viewport);
+		const beyondFar = projectWorldToScreen(pointAlongView(pose, frustum.far + 1), pose, viewport);
+
+		expect(beforeNear.inView).toBe(false);
+		expect(beyondFar.inView).toBe(false);
+		expect(insideNear.inView).toBe(true);
+		expect(insideFar.inView).toBe(true);
+
+		// Both rejects come from depth clipping, not the horizontal/vertical bounds.
+		for (const point of [beforeNear, beyondFar]) {
+			expect(point.x).toBeGreaterThanOrEqual(0);
+			expect(point.x).toBeLessThanOrEqual(viewport.width);
+			expect(point.y).toBeGreaterThanOrEqual(0);
+			expect(point.y).toBeLessThanOrEqual(viewport.height);
+		}
+	});
+
 	test('returns a safe hidden result for zero-size viewports', () => {
 		const pose = explorationPose();
 
@@ -262,18 +320,7 @@ describe('projectWorldToScreen agreement with THREE.OrthographicCamera', () => {
 
 		for (const pose of poses) {
 			for (const viewport of viewports) {
-				const frustum = orthoFrustum(pose, viewport);
-				const camera = new THREE.OrthographicCamera(
-					frustum.left,
-					frustum.right,
-					frustum.top,
-					frustum.bottom,
-					frustum.near,
-					frustum.far
-				);
-				camera.position.set(pose.position.x, pose.position.y, pose.position.z);
-				camera.lookAt(pose.target.x, pose.target.y, pose.target.z);
-				camera.updateMatrixWorld();
+				const camera = threeOrthographicCamera(pose, viewport);
 
 				for (const point of points) {
 					const projected = new THREE.Vector3(point.x, point.y, point.z).project(camera);
@@ -295,6 +342,28 @@ describe('projectWorldToScreen agreement with THREE.OrthographicCamera', () => {
 					expect(actual.inView).toBe(expected.inView);
 				}
 			}
+		}
+	});
+
+	test('matches Vector3.project depth clipping at positive depths near and far', () => {
+		const pose = explorationPose(1, -2);
+		const viewport: WuxiaViewport = { width: 1280, height: 720 };
+		const camera = threeOrthographicCamera(pose, viewport);
+		const frustum = orthoFrustum(pose, viewport);
+		const depths = [frustum.near / 2, frustum.near * 2, frustum.far - 1, frustum.far + 1];
+
+		for (const depth of depths) {
+			const point = pointAlongView(pose, depth);
+			const projected = new THREE.Vector3(point.x, point.y, point.z).project(camera);
+			const expectedInView =
+				projected.x >= -1 &&
+				projected.x <= 1 &&
+				projected.y >= -1 &&
+				projected.y <= 1 &&
+				projected.z >= -1 &&
+				projected.z <= 1;
+
+			expect(projectWorldToScreen(point, pose, viewport).inView).toBe(expectedInView);
 		}
 	});
 });
