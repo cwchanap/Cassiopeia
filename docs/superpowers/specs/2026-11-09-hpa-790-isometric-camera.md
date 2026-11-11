@@ -61,8 +61,8 @@ For raw screen inputs `right = D-A` and `down = S-W`, call `screenDirectionToWor
 const toViewer = { x: Math.sin(CAMERA_AZIMUTH), z: Math.cos(CAMERA_AZIMUTH) };
 const screenRight = { x: Math.cos(CAMERA_AZIMUTH), z: -Math.sin(CAMERA_AZIMUTH) };
 return {
-  x: right * screenRight.x + down * toViewer.x,
-  z: right * screenRight.z + down * toViewer.z
+	x: right * screenRight.x + down * toViewer.x,
+	z: right * screenRight.z + down * toViewer.z
 };
 ```
 
