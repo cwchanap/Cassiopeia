@@ -73,10 +73,14 @@ test('plays through the Wuxia MVP opening, item loop, reward, and restart', asyn
 	await expect(page.getByTestId('objective-chip')).toContainText('Defeat the rival disciple');
 	await expect(page.getByTestId('status-cluster')).toContainText('Action');
 
-	await page.keyboard.press('k');
-	await expect(page.getByTestId('status-cluster')).toContainText(
-		/(?:6[5-9]|[78][0-9]|9[0-9])\/100/
-	);
+	// The rival can stagger the player before the first burst, consuming that key press.
+	await expect(async () => {
+		await page.keyboard.press('k');
+		await expect(page.getByRole('meter', { name: 'Qi', exact: true })).toHaveAttribute(
+			'value',
+			/^(?:6[5-9]|[78][0-9]|9[0-9])$/
+		);
+	}).toPass({ timeout: 15000 });
 	await page.keyboard.press('3');
 	await expect(page.getByTestId('item-feedback')).toHaveText('Used Lesser Qi Pill');
 	await expect(page.getByTestId('quick-slot-3')).toContainText('x1');

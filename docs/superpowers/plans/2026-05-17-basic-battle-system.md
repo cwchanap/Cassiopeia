@@ -34,12 +34,7 @@ Replace `src/lib/game/simulation/state.spec.ts` with this test file. It keeps th
 
 ```ts
 import { describe, expect, it } from 'vitest';
-import {
-	createInitialGameState,
-	restartGame,
-	stepGame,
-	toHudSnapshot
-} from './state';
+import { createInitialGameState, restartGame, stepGame, toHudSnapshot } from './state';
 import type { GameState, InputSnapshot } from './types';
 
 const idleInput: InputSnapshot = {
@@ -1055,7 +1050,12 @@ function getActionPose(action: GameState['player']['combatAction']): {
 Update the three calls in `render(snapshot: GameState)`:
 
 ```ts
-applyFighter(player, snapshot.player.position, snapshot.player.heading, snapshot.player.combatAction);
+applyFighter(
+	player,
+	snapshot.player.position,
+	snapshot.player.heading,
+	snapshot.player.combatAction
+);
 applyFighter(rival, snapshot.rival.position, snapshot.rival.heading, snapshot.rival.combatAction);
 applyFighter(mentor, snapshot.mentor.position, Math.PI * 0.25, createIdleRenderAction());
 ```

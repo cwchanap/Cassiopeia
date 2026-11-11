@@ -8,6 +8,12 @@ export default defineConfig({
 	optimizeDeps: { include: ['three', 'three/addons/loaders/GLTFLoader.js'] },
 	test: {
 		expect: { requireAssertions: true },
+		coverage: {
+			provider: 'v8',
+			reporter: ['text', 'lcov'],
+			include: ['src/**/*.{ts,svelte}'],
+			exclude: ['src/**/*.d.ts', 'src/**/*.e2e.{ts,js}']
+		},
 		projects: [
 			{
 				extends: './vite.config.ts',
