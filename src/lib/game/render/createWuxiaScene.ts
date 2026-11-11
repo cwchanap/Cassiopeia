@@ -191,7 +191,9 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 		for (const material of resources.materials) {
 			material.dispose();
 		}
+		sunlight.shadow.map?.dispose();
 		renderer.dispose();
+		renderer.forceContextLoss();
 		renderer.domElement.remove();
 	}
 
@@ -563,7 +565,7 @@ function getActionPose(action: GameState['player']['combatAction']) {
 	};
 }
 
-function syncEffects(
+export function syncEffects(
 	effects: CombatEffect[],
 	meshes: Map<number, THREE.Mesh>,
 	resources: SceneResources,
@@ -581,7 +583,7 @@ function syncEffects(
 	for (const effect of effects) {
 		let mesh = meshes.get(effect.id);
 		if (!mesh) {
-			mesh = createEffectMesh(effect, resources);
+			mesh = createEffectMesh(effect);
 			meshes.set(effect.id, mesh);
 			scene.add(mesh);
 		}
@@ -595,16 +597,19 @@ function syncEffects(
 	}
 }
 
-function createEffectMesh(effect: CombatEffect, resources: SceneResources): THREE.Mesh {
+function createEffectMesh(effect: CombatEffect): THREE.Mesh {
 	const color = effect.kind === 'qi' ? 0x8fe6ff : effect.kind === 'dash' ? 0xdff7d9 : 0xf2d18d;
-	const effectMaterial = material(
-		new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, depthWrite: false }),
-		resources
-	);
+	// Per-effect resources stay out of the scene registry so expiry can dispose them immediately.
+	const effectMaterial = new THREE.MeshBasicMaterial({
+		color,
+		transparent: true,
+		opacity: 0.85,
+		depthWrite: false
+	});
 	const effectGeometry =
 		effect.kind === 'qi'
-			? geometry(new THREE.TorusGeometry(0.4, 0.035, 8, 48), resources)
-			: geometry(new THREE.SphereGeometry(0.18, 16, 8), resources);
+			? new THREE.TorusGeometry(0.4, 0.035, 8, 48)
+			: new THREE.SphereGeometry(0.18, 16, 8);
 	const mesh = new THREE.Mesh(effectGeometry, effectMaterial);
 	if (effect.kind === 'qi') {
 		mesh.rotation.x = Math.PI / 2;
