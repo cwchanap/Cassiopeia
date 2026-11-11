@@ -52,6 +52,7 @@ Three GitHub Actions workflows run on pull requests and pushes to `main`, and ca
   failure screenshots, and traces as a workflow artifact for 14 days.
 
 All workflows use Node 22 and the Bun version pinned in `package.json`, with frozen lockfile installs.
+Browser jobs use Ubuntu 24.04 for compatibility with the locked Playwright version.
 
 Enable `cwchanap/Cassiopeia` in [Codecov](https://app.codecov.io/gh/cwchanap/Cassiopeia).
 The coverage upload uses [GitHub OIDC](https://github.com/codecov/codecov-action#using-oidc), so no
