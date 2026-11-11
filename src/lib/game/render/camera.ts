@@ -1,7 +1,7 @@
-import type { GamePhase, Vec2 } from '$lib/game/simulation/types';
+import type { ActiveGamePhase, Vec2 } from '$lib/game/simulation/types';
 
 export type WuxiaCameraPoseInput = {
-	phase: GamePhase;
+	phase: ActiveGamePhase;
 	playerPosition: Vec2;
 	rival: {
 		active: boolean;
@@ -52,6 +52,7 @@ const EXPLORATION_VIEW_HEIGHT = 14;
 const DUEL_VIEW_HEIGHT = 11;
 const CAMERA_NEAR = 0.1;
 const CAMERA_FAR = 160;
+const CAMERA_FOLLOW_PER_FRAME = 0.12;
 const WORLD_UP = { x: 0, y: 1, z: 0 };
 const SIN_AZIMUTH = Math.sin(CAMERA_AZIMUTH);
 const COS_AZIMUTH = Math.cos(CAMERA_AZIMUTH);
@@ -60,6 +61,10 @@ const CAMERA_OFFSET = {
 	y: Math.sin(CAMERA_PITCH) * CAMERA_DISTANCE,
 	z: Math.cos(CAMERA_PITCH) * COS_AZIMUTH * CAMERA_DISTANCE
 };
+// The view never rotates, so the camera basis is fixed for every pose.
+const CAMERA_BACKWARD = normalise(CAMERA_OFFSET);
+const CAMERA_RIGHT = normalise(cross(WORLD_UP, CAMERA_BACKWARD));
+const CAMERA_UP = cross(CAMERA_BACKWARD, CAMERA_RIGHT);
 
 export function computeWuxiaCameraPose(input: WuxiaCameraPoseInput): WuxiaCameraPose {
 	const focus = getCameraFocus(input);
@@ -76,6 +81,35 @@ export function computeWuxiaCameraPose(input: WuxiaCameraPoseInput): WuxiaCamera
 			z: focus.z
 		},
 		viewHeight: input.phase === 'duel' ? DUEL_VIEW_HEIGHT : EXPLORATION_VIEW_HEIGHT
+	};
+}
+
+/** Frame-rate independent equivalent of the original per-frame follow factor. */
+export function cameraFollowFactor(deltaTime: number): number {
+	return 1 - Math.pow(1 - CAMERA_FOLLOW_PER_FRAME, deltaTime * 60);
+}
+
+export function followCameraPose(
+	current: WuxiaCameraPose | null,
+	desired: WuxiaCameraPose,
+	factor: number
+): WuxiaCameraPose {
+	if (!current) return desired;
+
+	const target = {
+		x: current.target.x + (desired.target.x - current.target.x) * factor,
+		y: current.target.y + (desired.target.y - current.target.y) * factor,
+		z: current.target.z + (desired.target.z - current.target.z) * factor
+	};
+
+	return {
+		position: {
+			x: target.x + desired.position.x - desired.target.x,
+			y: target.y + desired.position.y - desired.target.y,
+			z: target.z + desired.position.z - desired.target.z
+		},
+		target,
+		viewHeight: current.viewHeight + (desired.viewHeight - current.viewHeight) * factor
 	};
 }
 
@@ -111,13 +145,10 @@ export function projectWorldToScreen(
 	}
 
 	const frustum = orthoFrustum(pose, viewport);
-	const backward = normalise(subtract(pose.position, pose.target));
-	const right = normalise(cross(WORLD_UP, backward));
-	const up = cross(backward, right);
 	const relative = subtract(point, pose.position);
-	const viewX = dot(relative, right);
-	const viewY = dot(relative, up);
-	const depth = -dot(relative, backward);
+	const viewX = dot(relative, CAMERA_RIGHT);
+	const viewY = dot(relative, CAMERA_UP);
+	const depth = -dot(relative, CAMERA_BACKWARD);
 	const inView =
 		viewX >= frustum.left &&
 		viewX <= frustum.right &&

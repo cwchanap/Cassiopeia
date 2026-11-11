@@ -1,18 +1,26 @@
 import * as THREE from 'three';
 import type { CombatEffect, GameState, Vec2 } from '$lib/game/simulation/types';
 import {
+	cameraFollowFactor,
 	computeWuxiaCameraPose,
+	followCameraPose,
 	orthoFrustum,
 	type WuxiaCameraPose,
 	type WuxiaViewport
 } from './camera';
-import { IS_INK, addInkSilhouette, createInkMaterial } from './inkSilhouette';
+import {
+	IS_INK,
+	PLAYER_RENDER_ORDER,
+	addInkSilhouette,
+	createInkMaterial,
+	setMeshRenderOrder
+} from './inkSilhouette';
 import { loadWuxiaAssets } from './wuxiaAssets';
 import { WORLD_BOUNDS } from '$lib/game/simulation/world';
 import layout from '../world-layout.json';
 
 export type WuxiaScene = {
-	render(snapshot: GameState, alpha: number): void;
+	render(snapshot: GameState, deltaTime: number): void;
 	dispose(): void;
 };
 
@@ -24,31 +32,7 @@ type SceneResources = {
 const playerColor = 0xf4eee4;
 const rivalColor = 0x33413b;
 const mentorColor = 0x6a796c;
-const CAMERA_FOLLOW = 0.12;
-
-export function followCameraPose(
-	current: WuxiaCameraPose | null,
-	desired: WuxiaCameraPose,
-	factor: number
-): WuxiaCameraPose {
-	if (!current) return desired;
-
-	const target = {
-		x: current.target.x + (desired.target.x - current.target.x) * factor,
-		y: current.target.y + (desired.target.y - current.target.y) * factor,
-		z: current.target.z + (desired.target.z - current.target.z) * factor
-	};
-
-	return {
-		position: {
-			x: target.x + desired.position.x - desired.target.x,
-			y: target.y + desired.position.y - desired.target.y,
-			z: target.z + desired.position.z - desired.target.z
-		},
-		target,
-		viewHeight: current.viewHeight + (desired.viewHeight - current.viewHeight) * factor
-	};
-}
+const SUN_OFFSET = { x: -9, y: 18, z: 6 };
 
 export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 	const resources: SceneResources = { geometries: [], materials: [] };
@@ -80,6 +64,9 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 	addInkSilhouette(player, inkMaterial);
 	const rival = createDisciple(rivalColor, resources);
 	const mentor = createDisciple(mentorColor, resources);
+	// Actors draw after ink so an occluded player's silhouette never paints over them.
+	setMeshRenderOrder(rival, PLAYER_RENDER_ORDER);
+	setMeshRenderOrder(mentor, PLAYER_RENDER_ORDER);
 	const effects = new Map<number, THREE.Mesh>();
 	let disposed = false;
 
@@ -101,11 +88,15 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 		(status) => {
 			renderer.domElement.dataset.assets = status;
 			// Newly attached GLB meshes need their own ink; already-inked procedural meshes are skipped.
-			if (status === 'ready') addInkSilhouette(player, inkMaterial);
+			if (status === 'ready') {
+				addInkSilhouette(player, inkMaterial);
+				setMeshRenderOrder(rival, PLAYER_RENDER_ORDER);
+				setMeshRenderOrder(mentor, PLAYER_RENDER_ORDER);
+			}
 		}
 	);
 
-	function render(snapshot: GameState): void {
+	function render(snapshot: GameState, deltaTime: number): void {
 		if (disposed) return;
 		const viewport = resize();
 
@@ -129,14 +120,14 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 		syncEffects(snapshot.effects, effects, resources, scene);
 
 		const desiredPose = computeWuxiaCameraPose({
-			phase: snapshot.phase,
+			phase: snapshot.phase === 'paused' ? snapshot.previousPhase : snapshot.phase,
 			playerPosition: snapshot.player.position,
 			rival: {
 				active: snapshot.rival.active,
 				position: snapshot.rival.position
 			}
 		});
-		cameraPose = followCameraPose(cameraPose, desiredPose, CAMERA_FOLLOW);
+		cameraPose = followCameraPose(cameraPose, desiredPose, cameraFollowFactor(deltaTime));
 		camera.position.set(cameraPose.position.x, cameraPose.position.y, cameraPose.position.z);
 		cameraTarget.set(cameraPose.target.x, cameraPose.target.y, cameraPose.target.z);
 		camera.lookAt(cameraTarget);
@@ -150,7 +141,11 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 		camera.far = frustum.far;
 		camera.updateProjectionMatrix();
 
-		sunlight.position.set(cameraPose.target.x - 9, 18, cameraPose.target.z + 6);
+		sunlight.position.set(
+			cameraPose.target.x + SUN_OFFSET.x,
+			SUN_OFFSET.y,
+			cameraPose.target.z + SUN_OFFSET.z
+		);
 		sunlight.target.position.set(cameraPose.target.x, 0, cameraPose.target.z);
 
 		renderer.render(scene, camera);
@@ -197,7 +192,7 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 		renderer.domElement.remove();
 	}
 
-	render(createInitialRenderState());
+	render(createInitialRenderState(), 1 / 60);
 
 	return { render, dispose };
 }
@@ -207,7 +202,7 @@ function addLighting(scene: THREE.Scene): THREE.DirectionalLight {
 	scene.add(hemi);
 
 	const key = new THREE.DirectionalLight(0xfff1d1, 2.4);
-	key.position.set(-9, 18, 6);
+	key.position.set(SUN_OFFSET.x, SUN_OFFSET.y, SUN_OFFSET.z);
 	key.castShadow = true;
 	key.shadow.mapSize.set(1024, 1024);
 	key.shadow.camera.left = -20;
