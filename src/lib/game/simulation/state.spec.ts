@@ -5,6 +5,7 @@ import {
 	LIGHT_ATTACK_TIMING,
 	QI_BURST_COST,
 	QI_BURST_TIMING,
+	RIVAL_ATTACK_COOLDOWN,
 	RIVAL_STRIKE_TIMING
 } from './combat';
 import type { GameState, InputSnapshot } from './types';
@@ -203,10 +204,44 @@ describe('wuxia simulation state', () => {
 
 		expect(state.rival.health).toBe(100 - LIGHT_ATTACK_TIMING.damage - 2);
 		expect(state.rival.combatAction.phase).toBe('hitstun');
+		expect(state.rival.rivalAttackCooldown).toBeGreaterThan(0);
+		expect(state.rival.rivalAttackCooldown).toBeLessThanOrEqual(RIVAL_ATTACK_COOLDOWN);
 
 		advance(state, RIVAL_STRIKE_TIMING.startup);
 
 		expect(state.player.health).toBe(110);
+	});
+
+	it('rival enters attack cooldown after strike recovery finishes, preventing immediate consecutive strikes', () => {
+		const state = setupDuel();
+
+		stepGame(state, idleInput, frame);
+		expect(state.rival.combatAction.kind).toBe('rivalStrike');
+
+		// Complete the full rival strike (startup + active + recovery)
+		advance(
+			state,
+			RIVAL_STRIKE_TIMING.startup +
+				RIVAL_STRIKE_TIMING.active +
+				RIVAL_STRIKE_TIMING.recovery +
+				frame
+		);
+
+		expect(state.rival.combatAction.phase).toBe('idle');
+		expect(state.rival.rivalAttackCooldown).toBeGreaterThan(0);
+
+		// Rival is in range and idle, but must not strike while on cooldown
+		stepGame(state, idleInput, frame);
+		expect(state.rival.combatAction.phase).toBe('idle');
+
+		// Advance past the remaining cooldown
+		advance(state, state.rival.rivalAttackCooldown + frame);
+		expect(state.rival.rivalAttackCooldown).toBe(0);
+
+		// Now rival can start a new strike
+		stepGame(state, idleInput, frame);
+		expect(state.rival.combatAction.kind).toBe('rivalStrike');
+		expect(state.rival.combatAction.phase).toBe('startup');
 	});
 
 	it('simultaneous active attacks both resolve before end-state checks', () => {
