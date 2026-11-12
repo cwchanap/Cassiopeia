@@ -11,6 +11,7 @@ import {
 	QI_BURST_COOLDOWN,
 	QI_BURST_COST,
 	QI_BURST_TIMING,
+	RIVAL_ATTACK_COOLDOWN,
 	RIVAL_ATTACK_RANGE,
 	RIVAL_SPEED,
 	RIVAL_STRIKE_TIMING,
@@ -411,6 +412,10 @@ function enterHitstun(fighter: FighterState, duration: number): void {
 		return;
 	}
 
+	if (fighter.combatAction.kind === 'rivalStrike') {
+		fighter.rivalAttackCooldown = RIVAL_ATTACK_COOLDOWN;
+	}
+
 	fighter.combatAction = {
 		kind: 'none',
 		phase: 'hitstun',
@@ -457,6 +462,9 @@ function advanceCombatActionPhase(fighter: FighterState): void {
 	}
 
 	if (action.phase === 'recovery' || action.phase === 'hitstun') {
+		if (action.kind === 'rivalStrike') {
+			fighter.rivalAttackCooldown = RIVAL_ATTACK_COOLDOWN;
+		}
 		fighter.combatAction = idleCombatAction();
 	}
 }
@@ -546,7 +554,11 @@ function updateRival(state: GameState, deltaTime: number): void {
 		state.rival.heading = Math.atan2(dx, dz);
 	}
 
-	if (range <= RIVAL_ATTACK_RANGE && canStartAction(state.rival)) {
+	if (
+		range <= RIVAL_ATTACK_RANGE &&
+		canStartAction(state.rival) &&
+		state.rival.rivalAttackCooldown === 0
+	) {
 		startAttack(state.rival, 'rivalStrike', RIVAL_STRIKE_TIMING);
 	}
 }
