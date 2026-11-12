@@ -12,7 +12,12 @@ export default defineConfig({
 			provider: 'v8',
 			reporter: ['text', 'lcov'],
 			include: ['src/**/*.{ts,svelte}'],
-			exclude: ['src/**/*.d.ts', 'src/**/*.e2e.{ts,js}']
+			exclude: [
+				'src/**/*.d.ts',
+				'src/**/*.e2e.{ts,js}',
+				'src/routes/demo/**',
+				'src/lib/vitest-examples/**'
+			]
 		},
 		projects: [
 			{

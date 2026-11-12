@@ -23,11 +23,11 @@ Thumbs.db
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 # Playwright
-test-results
-playwright-report
+/test-results
+/playwright-report
 
 # Coverage
-coverage
+/coverage
 
 # Claude
 .claude/settings.local.json
