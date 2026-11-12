@@ -78,7 +78,12 @@ test('plays through the Wuxia MVP opening, item loop, reward, and restart', asyn
 		await page.keyboard.press('k');
 		await expect(page.getByRole('meter', { name: 'Qi', exact: true })).toHaveAttribute(
 			'value',
-			/^(?:6[5-9]|[78][0-9]|9[0-9])$/
+			/^(?:6[5-9]|[78][0-9]|9[0-9])$/,
+			{ timeout: 1000 }
+		);
+		await expect(page.getByTestId('status-cluster')).toContainText(
+			/(?:6[5-9]|[78][0-9]|9[0-9])\/100/,
+			{ timeout: 1000 }
 		);
 	}).toPass({ timeout: 15000 });
 	await page.keyboard.press('3');
