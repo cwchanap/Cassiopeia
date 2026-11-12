@@ -56,7 +56,7 @@ Browser jobs use Ubuntu 24.04 for compatibility with the locked Playwright versi
 
 Enable `cwchanap/Cassiopeia` in [Codecov](https://app.codecov.io/gh/cwchanap/Cassiopeia).
 The coverage upload uses [GitHub OIDC](https://github.com/codecov/codecov-action#using-oidc), so no
-`CODECOV_TOKEN` secret is needed. Upload failures fail the unit-test job. Fork pull requests still run
+`CODECOV_TOKEN` secret is needed. Upload failures are non-blocking. Fork pull requests still run
 the tests and generate coverage, but skip the authenticated upload.
 
 To run the coverage suite locally:
