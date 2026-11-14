@@ -1,96 +1,80 @@
 # HPA-791 — First Day at the Sect (Design Spec)
 
 **Linear:** [HPA-791 — Village quest chain](https://linear.app/cwchanap/issue/HPA-791/village-quest-chain-first-day-at-the-sect)  
-**Depends on:** HPA-790 (complete); **unblocks:** HPA-792 (HUD)  
-**Delivery:** One draft PR for HPA-791, containing this spec, the implementation plan, and subsequent implementation.  
-**Status:** Proposed design only; gameplay changes are not implemented in this documentation commit.
+**Dependency:** HPA-790 (complete); **unblocks:** HPA-792 (HUD).  
+**Delivery:** One draft PR for HPA-791, including this spec, its plan, and eventual gameplay implementation.  
+**Status:** Proposed design only; no implementation is claimed by this document.
 
-## Goal and player journey
+## Goal and journey
 
-Replace `seekMentor → trainDash → duel → victory/defeat` with one data-authored quest, **入门第一日 / First Day at the Sect**, playable in the existing fixed-isometric village. Preserve the existing fight, item definitions, reward roll, movement, world collisions, and camera.
+Replace the old mentor → one dash → duel tutorial with **入门第一日 / First Day at the Sect** in the existing fixed-isometric village. The quest is data-authored and ends in free roam. Preserve current movement/collision, combat timing, item definitions, reward roll, map, and camera.
 
-1. **拜师 / Pay Respects** — Courtyard: approach Elder Shen and advance his dialogue with E. Complete when his dialogue finishes.
-2. **轻功 / Lightness Training** — Courtyard to village gate: dash through three visible markers in order. Complete at the third marker crossed by a successful dash.
-3. **取药 / Fetch Medicine** — Village street: speak with Auntie Qin, receive existing healing pills, then explicitly assign a pill to a quick slot in the bag. Complete after dialogue, one-time grant and assignment.
-4. **鸣钟 / Ring the Shrine Bell** — Whispering Bamboo Shrine: reach the bell and press E. Complete on a valid bell interaction.
-5. **切磋 / Spar with the Rival** — Return to the courtyard, talk to Senior Brother Lu and win the existing duel. Complete after the victory reward.
+1. **拜师 / Pay Respects** — Find Elder Shen in the courtyard; complete his E-advanced dialogue.
+2. **轻功 / Lightness Training** — Dash through three ordered markers on the open approach to the village gate. A dash must actually cross each marker.
+3. **取药 / Fetch Medicine** — Talk to Auntie Qin outside the Herbalist. Receive two existing Lesser Healing Pills, open the bag, and explicitly assign one to a quick slot.
+4. **鸣钟 / Ring the Shrine Bell** — Walk west to Whispering Bamboo Shrine and press E within reach of the bell.
+5. **切磋 / Spar with the Rival** — Return to the courtyard, finish Senior Brother Lu's dialogue, win the existing duel, and receive one normal victory reward.
 
-## Decisions
+After victory the quest is complete and exploration continues. Defeat respawns the player in the courtyard with full health/qi, still on step 5; talking to the rival starts a rematch. No rest/healing system or repeatable rewards after completion.
 
-### 1. One simple mode and quest state
+## Architecture: small pure modules and one mutator
 
-Replace `GamePhase`/`ActiveGamePhase`, `previousPhase`, and the phase-specific objective map with:
+Keep `stepGame` in `simulation/state.ts` as the only game-state mutator. Do not introduce a quest engine, event bus, generic script interpreter, server persistence, or migrations.
 
-- `GameMode = 'explore' | 'dialogue' | 'duel' | 'paused'` and a `previousMode` for Escape toggle; inventory remains the existing independent overlay.
-- `QuestProgress`: `stepIndex` (0–5, where 5 means complete), `dashMarkerIndex` (0–3) and `medicineReceived` (boolean). This is the **only persistent quest state**. When the dialogue ends in step 3, set `medicineReceived` before granting pills so repeated conversations cannot duplicate them. A quick-slot assignment then completes the step.
-- Transient `DialogueState = { villagerId, lineIndex } | null`. It is intentionally not saved: reopening a dialogue or reloading can replay lines without replaying one-time rewards.
-- Existing `FighterState` and `ItemProgress` stay intact. Combat remains gated on `mode === 'duel'`; no extra battle-state abstraction or event bus.
+- `simulation/villageContent.ts` contains five stationary villager records, their names/English dialogue, colors, positions, the bell, three dash markers, and five ordered quest step definitions. Step instances are data; five kinds stay in a small code switch: `talk | dashMarkers | receiveItem | object | duel`. Each has a stable ID, target ID, hanzi/English title, one-line instruction, and kind-specific data (e.g. `grant: { itemId, count }`). More content of an existing kind is a data edit.
+- `simulation/interaction.ts` selects the nearest eligible villager or bell within `INTERACT_RANGE`, a rename of existing `MENTOR_INTERACT_RANGE` (1.5 m) in `combat.ts`, using existing `distance`. Resolve ties by content order; dash markers are not E targets.
+- `simulation/dialogue.ts` handles linear lines and one E edge per line. Ambient dialogue has no quest effect.
+- `simulation/quest.ts` evaluates typed completion events for the active step. Use `QuestProgress = { stepIndex: number, stepProgress: number }`: stepIndex 0–5 (5 = complete), stepProgress 0–2 for the next marker or 0/1 for item grant, 0 otherwise. Reset stepProgress to 0 when advancing. Validate based on the active step's required progress, not item-specific saved fields.
+- `simulation/world.ts` already reads `world-layout.json` and remains the collision authority. Add a pure `regionAt(position)` over existing region bounds. Keep route and collision logic unchanged.
+- `simulation/items.ts` exports a small `grantItem(progress, itemId, count)` wrapper around its existing private `incrementItem`, so the quest never mutates raw inventory counts itself.
 
-`stepGame` stays the sole game mutator. Its order is: process allowed bag commands, handle pause/overlay, advance dialogue on E (and return without simulating movement/combat), otherwise move and process the nearest E interaction, recognize **successful** dash-marker crossings, then run combat only during the duel. Use one input snapshot per animation frame as today.
+### Game mode, pause, dialogue, and overlay
 
-Esc while dialogue is active pauses/resumes the dialogue; E advances it. Opening the bag is disabled in dialogue or while paused; existing bag focus behavior remains unchanged in exploration and duels. When the bag is open, movement and combat are frozen as before. Dialogue and pause never allow movement or attacks to leak through on the same frame.
+Use `GameState.mode` as a tagged union: `{ kind: 'explore' } | { kind: 'dialogue'; villagerId; lineIndex } | { kind: 'duel' }`, with an independent `paused: boolean` and the existing `inventoryOpen: boolean`. This replaces `GamePhase`, `ActiveGamePhase`, `previousPhase`, the redundant nullable dialogue state, and stored phase-specific objective text. No compatibility alias is needed.
 
-### 2. Small pure simulation modules; content is data
+`HudSnapshot` derives a readable mode plus `isPaused` without hiding the underlying duel context when paused. The rival meter stays visible behind the pause overlay; pause toggles do not change the camera's duel framing. Esc pauses/resumes any activity; in dialogue, E advances only while not paused. Do not open the bag while dialogue or pause is active. Existing bag focus and action handling remain in exploration/duels.
 
-Keep `state.ts` as orchestration and retain `combat.ts`/`items.ts` rather than building a generic RPG framework.
+`stepGame` processes allowed inventory commands first (including **quest completion triggered by a deliberate assignment**), then handles pause/overlay early returns, dialogue E, exploration movement/interactions/markers, and duel logic. A bag assignment is routed through the existing zero-dt `runInventoryCommand` path, so the receive-item step MUST advance inside `processInventoryCommands`, **before** the `inventoryOpen` early return. Opening the bag and assigning slots never move the player or advance combat.
 
-- `simulation/villageContent.ts` holds the single ordered quest definition, five static villager records, dialogue lines, three marker positions, bell position, and their display names/colors. Steps have IDs, hanzi/English titles, a one-line instruction, an interaction kind (`dialogue`, `dashMarkers`, `medicine`, `object`, `duel`), and target ID. Adding another step of an existing kind or another villager is a data edit; a **new kind** may require new logic.
-- `simulation/interaction.ts` contains deterministic pure selection of the closest in-range eligible villager or object; E uses one common interaction range (start at 1.5 m, matching today's mentor). Resolve distance ties by stable content order. Dash markers are proximity **crossing triggers**, not E interactables.
-- `simulation/dialogue.ts` starts and advances a linear sequence of lines with E and emits a completion result. Ambient conversations with Old Zhu and Peddler Wei do not advance the quest.
-- `simulation/quest.ts` contains the five-step progress reducer/helpers and typed completion events. The step rules reference content IDs and existing actions; there is no dialogue tree, scripting language, command registry, or separate engine.
-- `simulation/world.ts` remains the collision authority. Reuse `world-layout.json` for region rectangles and existing walkability checks; do not modify terrain/building geometry.
+### Interaction and completion rules
 
-Use content positions that are actually reachable according to `canStandAt`, including the narrow village gateway and shrine frontage. The current layout has the Elder at (-4, -3), courtyard/gate near (0, -7), Herbalist building at (5, -10), Bamboo Shrine at (-44, -18), and Jadebank Market near (30, 40). Seed the three ordered dash markers approximately along the open gate corridor (around x = 0, z = -1.5/-3.7/-5.9); validate/tune the exact positions and crossing radius against collision and actual screen-aligned movement, not by visual guess. Place the bell on walkable ground **in front of** the shrine. The shrine keeper is nearby; the peddler lives at the market.
+- Elder Shen's step-1 dialogue advances the quest **on the last line**. After step 1, he offers ambient dialogue only. Old Zhu and Peddler Wei always offer ambient lines. Auntie Qin outside step 3 is ambient. E out of range and wrong-step interactions never advance the quest.
+- `movePlayer` returns the actual dash segment (`{ from, to } | null`), only when the cooldown allows a dash and `moveThroughWorld` has changed the position. The quest tests that segment against the next marker radius using a point-to-segment distance check; walking, blocked/cooling dashes, out-of-order markers, and a repeated same-frame event do not count. Each successful dash may advance at most one marker.
+- In step 3, finishing Auntie Qin's dialogue changes `stepProgress` from 0 to 1 **before** granting two `lesser_healing_pill` via `grantItem`. Reopening dialogue cannot grant again. Because the starter kit already has a healing pill in slot 1, require an explicit `assignQuickSlot` command of `lesser_healing_pill` while at progress 1; it may reaffirm slot 1. Complete the step during that command even with bag open and dt = 0. Combined save of items + quest prevents a partial reload from duplicating pills.
+- In step 4, E within range of the bell completes the step. The bell has no other mechanic.
+- At step 5, E on Lu starts his short dialogue; the duel begins on the **last line**. Before step 5 he is ambient. Each duel start refills player health and qi to equipment-derived maxima, clears temporary actions/cooldowns and resets rival health, position and AI. On defeat, respawn at a safe courtyard position, refill to max, clear combat effects, and keep step 5 pending. E on Lu repeats the same dialogue and starts the rematch.
+- On first victory, call existing `grantVictoryReward` exactly once, mark the quest complete, hide duel-only UI, and resume free roam with non-blocking reward text. After completion Lu is ambient; he cannot start another duel or roll another reward.
 
-### 3. Interaction and progress rules
+### Content reachability
 
-- E in `explore` selects the nearest eligible villager or bell within range. Elder Shen is the existing mentor; Senior Brother Lu is the existing rival, now visible while idle. Auntie Qin, Old Zhu, and Peddler Wei are new stationary villagers, reusing character appearance with different robe colors. A villager's ambient lines must not accidentally complete the wrong quest step.
-- Elder dialogue completion advances step 1 once. The player may explore freely between every step; markers/quest actions outside their active step cannot skip progress.
-- Each marker counts only if the player **actually dashes** (dash ready, world movement applied) and the dash path intersects the current marker's radius. Compare the movement segment to the marker center so fast dashes cannot tunnel past; do not credit normal walking, a blocked dash, or an input during cooldown. Advance at most one marker per dash and preserve index 0–3 in progress.
-- On Auntie Qin's step-3 dialogue completion, grant **two `lesser_healing_pill`** through the existing inventory data and set `medicineReceived`. Because the starter kit already assigns a healing pill to slot 1, require a deliberate `assignQuickSlot` command during this step (including reaffirming slot 1) rather than treating that pre-existing assignment as completion. Only an assignment to `lesser_healing_pill` after medicine receipt advances the quest. No new items, shop, or economy.
-- The bell is a simple E target at the shrine. Other E interactions are allowed, but only the bell completes step 4.
-- Interact with the rival in step 5 to begin the duel at the courtyard. Refill player health and qi to equipment-derived maxima and reset temporary combat actions/cooldowns; reactivate and reset the rival. Keep existing attack timing, damage, AI, hitstun, consumables, and `grantVictoryReward` untouched. Award exactly once at the win transition. On defeat, move the player to a safe courtyard point, clear temporary combat state, restore them to playable health, leave quest step 5 pending, and expose rival interaction for the rematch. Do not grant a defeat reward.
-- At victory, enter exploration immediately. Quest completion is persistent; free roam and bag usage remain available. Do not re-enable the obsolete restart-gated terminal phase.
+Reuse `world.spec.ts`'s waypoint routes, which already reach the Bamboo Shrine region through `moveThroughWorld`, and add a real-collision Node quest journey. Do not place objects at building centers: `world.spec.ts` explicitly proves (-44, -18), the shrine building center, is **blocked**. Place the bell on walkable shrine frontage, not at the shrine center. Position Auntie Qin outside the Herbalist's collision box at (5, -10), and the peddler on the walkable market path. Keep Elder Shen at (-4, -3) and Lu at the courtyard ring. Tune marker centers along a traversable southbound gate line using test-backed dash paths, not visual guesses.
 
-### 4. Rendering and temporary HUD contract
+Test every intended interaction position with `canStandAt` **and** reachability via `moveThroughWorld` from the courtyard, using existing world routes. This is content validation only; do not change world geometry.
 
-The renderer reads world/state data and draws only; it never decides quest completion or interaction range. Reuse `createDisciple` for fallback villagers. On GLB load, reuse existing character models for the extra three villagers using clones with shared geometry and individually tinted robe materials; register any cloned materials for disposal. Keep the new villagers on the procedural fallback path if GLB loading fails. Draw three lightweight marker meshes only during training, with the active marker visually distinguished, and one simple bell mesh at the shrine; no art-generation task or imported textures.
+## Rendering and temporary HUD
 
-Update `HudSnapshot` to expose what HPA-792 will consume without implementing its design:
+Render data-defined villagers, markers, and bell in the existing Three.js scene without adding models or artwork. Reuse `createDisciple` fallback meshes for the three new villagers. When GLB assets become ready, clone the attached `Mentor` model in the existing `onStatus('ready')` callback (no new loader targets); clone and tint the `Handpainted_Wuxia_Atlas` material per villager as a placeholder, since the GLB has no separate robe material. Share geometry/texture, register cloned materials for disposal, and preserve procedural fallback if assets fail.
 
-- `mode`, current quest step ID/index/title/instruction, and ordered marker progress;
-- current speaker, current dialogue line and line index/count;
-- nearest eligible interaction target ID/name/kind/position and the current region name (from `layout.regions`, or `null` outside one);
-- static villager IDs/names/positions, plus positions for the active quest target if present;
-- existing vitals, duel rival health, cooldowns, inventory, and item feedback.
+Apply `setMeshRenderOrder(…, PLAYER_RENDER_ORDER)` to **all five non-player actors**, both procedural and GLB paths, so the player's ink silhouette cannot draw over them. Marker and bell meshes are visuals only; simulation owns trigger rules.
 
-For this ticket only, use the **existing** objective chip and prompt line to display the step title, contextual E prompt, dash-marker progress, or spoken line. Hide/disable combat hints during dialogue. Remove the old victory/defeat restart modal; show one non-blocking reward/completion message via the current feedback/prompt system. World-anchored name tags, minimap, paper scroll, and art remain HPA-792's responsibility. Do not add DOM/Three.js imports to simulation.
+Extend `HudSnapshot` with the fields HPA-792 explicitly needs: gameplay mode/paused state, quest step/title/instruction and marker progress, speaker/current line/line index, nearest eligible interact target, current region, and villager IDs/names/positions. Keep existing vitals, cooldowns, rival meter and bag/quick-slot fields; do not add a redundant target-position or minimap projection service. The later HUD ticket can add fields required by its actual components.
 
-### 5. Versioned save, with no migration
+For HPA-791 only, retain `+page.svelte`'s objective chip and prompt line for the step title, E interaction, dialogue line, markers, medicine instruction and reward. Keep old DOM test IDs where the element survives; remove the old victory/defeat modal and restart action. Initialize the page HUD via `toHudSnapshot(createInitialGameState())` rather than duplicating its object shape; use the same initial state for the renderer. Keep HPA-792's minimap, anchors, ink-paper components, fonts, portraits and mockups out of scope.
 
-Today `runtime/save.ts` persists only `ItemProgress` under `cassiopeia.itemProgress.v1`. Switch to one new key, `cassiopeia.gameProgress.v2`, with a compact envelope:
+## Save and reload
 
-- `version: 2`
-- `items: ItemProgress` (keep its internal version 1 and normalization)
-- `quest: QuestProgress`
+Save a single JSON object **`{ items, quest }`** under `cassiopeia.gameProgress.v2`. The key encodes schema version; do not add a duplicate top-level `version` field. `ItemProgress` retains its internal v1 format and normalization. Validate quest step/progress bounds against the current content; invalid or unreadable data creates fresh items and quest at step 1. Ignore `cassiopeia.itemProgress.v1` entirely, without migration.
 
-`loadGameProgress` returns starter items and quest step 1 for missing/invalid storage. Ignore the old v1 key entirely: the ticket explicitly permits discarding old saves, so no migration or compatibility read path. Validate the small quest bounds and booleans; malformed data resets to a new game. Save only after the serialized item or quest fields change, retrying if a storage write fails as the current runtime does. Dialogue, player position, cooldowns, rival state, transient effects, mode and overlay state are not persisted. After reload, respawn in the courtyard in exploration at the saved step/substep; never reopen a duel/dialogue automatically.
+Runtime persists only when serialized item/quest data change and retries failed writes. Dialogue, mode, paused flag, position, active duel, cooldowns, effects, and UI overlays are transient. Reload places the player at courtyard spawn, exploring at the saved quest step/substep; it does not restart a conversation or active duel.
 
-Do not add server persistence, storage abstractions, save slots, or migration machinery.
+## Acceptance criteria
 
-## Scope boundaries
+1. **Deterministic end-to-end journey:** one Node `stepGame` test drives real `moveThroughWorld` waypoint navigation, all five quest stages, dialogue E, three actual dash crossings, medicine grant and deliberate slot assignment, bell E, duel victory, one reward, and post-win exploration. Focused Node tests cover distance, cooldown/blocked dash, step ordering, pause/dialogue freeze, defeat respawn/rematch, v2 reload at marker/item stages, idempotency and old-key rejection.
+2. **Desktop browser opening:** the existing Playwright E2E exercises real inputs for Elder dialogue → three markers → Auntie Qin → bag assignment. It then seeds the **real v2 localStorage save** at step 5, reloads, starts the actual duel through Lu's dialogue, verifies reward/free roam, and reloads to check completion. The long shrine route is covered by the Node journey, not flaky timed browser key holds. No production debug API.
+3. **macOS and Windows end-to-end acceptance:** the focused Playwright browser smoke checks execute with keyboard controls and validate the opening, seeded duel, and persistence. Preserve Linux GitHub Actions as CI, without creating a cross-OS runner matrix solely for this task. iOS touch is out of scope for this keyboard-first prototype.
+4. **Visual acceptance (macOS and Windows):** browser checks at 960×640 and a desktop-wide viewport verify visible NPCs, active marker, shrine bell, prompt/dialogue text, and the duel meter with the pause overlay. Capture screenshots as diagnostic artifacts; **no committed screenshot baselines** for temporary HUD art. HPA-791 has no attached UI mockup; HPA-792's four mockups belong to its own ticket.
+5. **Quality and lifecycle:** unit tests cover quest/event/data logic and renderer ownership; GLB-ready and fallback paths do not leak cloned materials/meshes/listeners. `bun run check`, `bun run lint`, and `bun run test` stay green at every vertical slice. Linux verification is CI-only; no Android/Linux or human acceptance criterion.
 
-No HUD visual rebuild (HPA-792), new art/SFX (HPA-793 is separate and complete), combat tuning, new NPC AI, schedules/pathfinding, shops/currency, branching choices, interiors, new regions/buildings, touch/gamepad controls, or compatibility for superseded saves/phases.
+## Explicitly deferred
 
-## Acceptance criteria (end-to-end)
-
-1. **Desktop journey (macOS and Windows):** automated Chromium/Playwright coverage starts from clear storage, completes all five steps through actual controls (WASD/arrows, Space, E, bag quick-slot assignment, J/K), wins the duel, verifies one reward, and continues moving/using the bag after victory without restart.
-2. **Recovery and persistence (macOS and Windows):** a reload during the marker step restores its marker index; a reload after medicine pickup does not grant duplicate pills; a reload at step 4/5 retains that step; a defeat respawns the player in the courtyard and E on the rival begins a full-health/full-qi rematch; completion persists across reload.
-3. **Mode and rule boundaries:** dialogue E advances one line per keypress while movement/combat are paused; Esc pause, inventory overlay, out-of-range E, wrong-order markers, cooldown/blocked dashes, and ambient NPC dialogue cannot bypass quest gates. Existing world collisions and combat/reward rules remain intact.
-4. **Visual check (macOS and Windows):** automated browser screenshots at the existing 960×640 viewport and a 1440×900 desktop viewport show all five villagers, readable temporary objective/dialogue text, an active dash marker, the shrine bell, and unobstructed player/rival during the duel. Compare with committed screenshot references or assertions for these states. **HPA-791 has no attached UI mockup**; do not use HPA-792's separate HUD mockups as this ticket's target.
-5. **Pure module and lifecycle coverage:** Node tests cover target-range selection, linear dialogue, quest event ordering, marker segment crossing, item grant idempotence, rematch/reset, and save normalization. Render tests/automated browser checks cover GLB-ready and fallback appearances without leaked meshes or listeners.
-6. `bun run check`, `bun run lint`, and `bun run test` pass in CI. Linux verification comes from existing CI; no Android/Linux manual acceptance and no human sign-off criterion. iOS touch gameplay is out of scope.
-
-## Follow-up
-
-HPA-792 can consume the quest/dialogue/region/villager fields from `HudSnapshot` and create its ink-and-paper presentation without changing quest gameplay. Keep it in its own single-ticket PR.
+HPA-792 ink-and-paper HUD, world-anchored name tags and minimap, new image/SFX assets, shops and currency, dialogue choices, villager schedules/pathfinding, new combat moves, gamepad/touch controls, interiors, save migrations and cross-platform CI infrastructure. Keep all HPA-791 implementation in this **one PR**.
