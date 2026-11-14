@@ -9,15 +9,11 @@
 
 Replace `seekMentor → trainDash → duel → victory/defeat` with one data-authored quest, **入门第一日 / First Day at the Sect**, playable in the existing fixed-isometric village. Preserve the existing fight, item definitions, reward roll, movement, world collisions, and camera.
 
-| Step | Location and player action | Completion event |
-| --- | --- | --- |
-| 1. 拜师 / Pay Respects | Courtyard: approach Elder Shen and advance his dialogue with E | Elder dialogue finishes |
-| 2. 轻功 / Lightness Training | Courtyard to village gate: dash through three visible markers in order | Third marker is crossed by a successful dash |
-| 3. 取药 / Fetch Medicine | Village street: speak with Auntie Qin, receive existing healing pills, and explicitly assign a pill to a quick slot using the bag | Dialogue finished, pills granted once, and quick-slot assignment made |
-| 4. 鸣钟 / Ring the Shrine Bell | Whispering Bamboo Shrine: reach the bell and press E | Bell interaction succeeds in range |
-| 5. 切磋 / Spar with the Rival | Return to the courtyard, talk to Senior Brother Lu, and win the existing duel | Rival is defeated; existing reward roll grants one reward |
-
-After the first victory, mark the chain complete and return to **free roaming**, with no forced restart or results modal. A defeat ends the current duel without completing step 5: the player wakes in the courtyard, and E on Senior Brother Lu starts a fresh rematch. There is no repeatable post-completion duel requirement in this ticket.
+1. **拜师 / Pay Respects** — Courtyard: approach Elder Shen and advance his dialogue with E. Complete when his dialogue finishes.
+2. **轻功 / Lightness Training** — Courtyard to village gate: dash through three visible markers in order. Complete at the third marker crossed by a successful dash.
+3. **取药 / Fetch Medicine** — Village street: speak with Auntie Qin, receive existing healing pills, then explicitly assign a pill to a quick slot in the bag. Complete after dialogue, one-time grant and assignment.
+4. **鸣钟 / Ring the Shrine Bell** — Whispering Bamboo Shrine: reach the bell and press E. Complete on a valid bell interaction.
+5. **切磋 / Spar with the Rival** — Return to the courtyard, talk to Senior Brother Lu and win the existing duel. Complete after the victory reward.
 
 ## Decisions
 
