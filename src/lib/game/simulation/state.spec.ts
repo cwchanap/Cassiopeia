@@ -14,7 +14,8 @@ import {
 	DASH_MARKERS,
 	PLAYER_SPAWN,
 	QUEST_STEPS,
-	SHRINE_BELL
+	SHRINE_BELL,
+	VILLAGERS
 } from './villageContent';
 import { createStarterItemProgress } from './items';
 import { loadGameProgress, saveGameProgress } from '$lib/game/runtime/save';
@@ -144,6 +145,10 @@ describe('wuxia simulation state', () => {
 		expect(state.mode).toEqual({ kind: 'explore' });
 		expect(state.quest.stepIndex).toBe(1);
 		expect(toHudSnapshot(state).objective).toBe(QUEST_STEPS[1].instruction);
+	});
+
+	it('points the initiate at gate-marker training from Elder Shen’s last line', () => {
+		expect(elder.questLines.at(-1)).toMatch(/gate markers/i);
 	});
 
 	it('offers only ambient lines outside the active step and never advances the quest', () => {
@@ -1011,6 +1016,66 @@ describe('first-day journey', () => {
 		expect(state.mode).toEqual({ kind: 'explore' });
 		expect(state.items.inventory).toEqual(inventoryAfterVictory);
 		expect(state.quest).toEqual({ stepIndex: QUEST_STEPS.length, stepProgress: 0 });
+	});
+});
+
+describe('hud snapshot contract', () => {
+	it('exposes the active quest step index, title and instruction as plain data', () => {
+		const state = createInitialGameState();
+
+		expect(toHudSnapshot(state).quest).toEqual({
+			stepIndex: 0,
+			title: QUEST_STEPS[0].title,
+			instruction: QUEST_STEPS[0].instruction
+		});
+
+		state.quest = { stepIndex: 1, stepProgress: 2 };
+		expect(toHudSnapshot(state).quest).toEqual({
+			stepIndex: 1,
+			title: QUEST_STEPS[1].title,
+			instruction: QUEST_STEPS[1].instruction
+		});
+	});
+
+	it('reports no quest step but keeps a readable objective once the day is complete', () => {
+		const state = createInitialGameState();
+		state.quest = { stepIndex: QUEST_STEPS.length, stepProgress: 0 };
+
+		const hud = toHudSnapshot(state);
+		expect(hud.quest).toBeNull();
+		expect(hud.objective).toContain('free roam');
+	});
+
+	it('lists every villager id, name and live position through the HUD boundary', () => {
+		const state = createInitialGameState();
+		const hud = toHudSnapshot(state);
+
+		expect(hud.villagers.map((villager) => villager.id)).toEqual(
+			VILLAGERS.map((villager) => villager.id)
+		);
+		for (const entry of hud.villagers) {
+			const content = getVillager(entry.id);
+			expect(entry.name).toBe(content.name);
+			expect(entry.position).toEqual(content.position);
+		}
+	});
+
+	it('tracks Lu’s live duel position and his reset to the authored post through the HUD', () => {
+		const state = setupDuel();
+		const luEntry = () =>
+			toHudSnapshot(state).villagers.find((villager) => villager.id === 'senior_brother_lu')!;
+
+		state.rival.position = { x: 3, z: 4 };
+		expect(luEntry().position).toEqual({ x: 3, z: 4 });
+
+		state.rival.position = { x: 0.8, z: 0.5 };
+		state.rival.health = 1;
+		stepGame(state, { ...idleInput, lightAttack: true }, frame);
+		advance(state, LIGHT_ATTACK_TIMING.startup + LIGHT_ATTACK_TIMING.active / 2);
+
+		expect(state.mode).toEqual({ kind: 'explore' });
+		expect(state.quest.stepIndex).toBe(QUEST_STEPS.length);
+		expect(luEntry().position).toEqual(lu.position);
 	});
 });
 

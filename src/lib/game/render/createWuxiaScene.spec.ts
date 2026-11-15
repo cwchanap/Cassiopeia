@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import * as THREE from 'three';
-import type { CombatEffect } from '$lib/game/simulation/types';
+import { createInitialGameState, stepGame } from '$lib/game/simulation/state';
+import type { CombatEffect, InputSnapshot } from '$lib/game/simulation/types';
 import {
 	DASH_MARKERS,
 	getVillager,
@@ -442,5 +443,51 @@ describe('scene lifecycle', () => {
 		handle.dispose();
 		expect(renderer.disposed).toBe(true);
 		expect(renderer.domElement.removed).toBe(true);
+	});
+
+	test('renders Lu visible at his authored post and heading after a real duel victory', () => {
+		loaderMock.loadWuxiaAssets.mockImplementation(() => () => {});
+		const { handle, scene } = createScene();
+
+		const idleInput: InputSnapshot = {
+			moveX: 0,
+			moveZ: 0,
+			dash: false,
+			lightAttack: false,
+			qiBurst: false,
+			interact: false,
+			pause: false,
+			quickSlot: null,
+			toggleInventory: false
+		};
+		const state = createInitialGameState();
+		state.quest = { stepIndex: 4, stepProgress: 0 };
+		state.mode = { kind: 'duel' };
+		state.rival.active = true;
+		state.rival.position = { x: 1.2, z: 0.5 };
+		state.rival.heading = 0;
+		state.rival.health = 1;
+
+		stepGame(state, { ...idleInput, lightAttack: true }, 1 / 60);
+		for (let i = 0; i < 600 && state.mode.kind === 'duel'; i++) {
+			stepGame(state, idleInput, 1 / 60);
+		}
+		expect(state.mode).toEqual({ kind: 'explore' });
+		expect(state.quest.stepIndex).toBe(QUEST_STEPS.length);
+
+		handle.render(state, 1 / 60);
+
+		const lu = getVillager('senior_brother_lu');
+		expect(actorAt(scene, { x: 1.2, z: 0.5 })).toBeUndefined();
+		const post = actorAt(scene, lu.position);
+		expect(post).toBeDefined();
+		expect(post!.rotation.y).toBeCloseTo(lu.heading);
+		const meshes = meshesOf(post!);
+		expect(meshes.length).toBeGreaterThan(0);
+		for (const mesh of meshes) {
+			expect(mesh.visible).toBe(true);
+		}
+
+		handle.dispose();
 	});
 });

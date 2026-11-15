@@ -15,6 +15,7 @@ describe('Wuxia MVP route', () => {
 	it('derives the initial objective and prompt from the first HUD snapshot', async () => {
 		render(Page);
 
+		await expect.element(page.getByTestId('objective-chip')).toHaveTextContent('拜师 Pay Respects');
 		await expect
 			.element(page.getByTestId('objective-chip'))
 			.toHaveTextContent('Pay respects to Elder Shen in the courtyard');
