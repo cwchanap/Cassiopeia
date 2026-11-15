@@ -468,24 +468,31 @@ describe('scene lifecycle', () => {
 		state.rival.heading = 0;
 		state.rival.health = 1;
 
+		handle.render(state, 1 / 60);
+		const duelist = actorAt(scene, state.rival.position);
+		expect(duelist).toBeDefined();
+		expect(duelist!.visible).toBe(true);
+
 		stepGame(state, { ...idleInput, lightAttack: true }, 1 / 60);
 		for (let i = 0; i < 600 && state.mode.kind === 'duel'; i++) {
 			stepGame(state, idleInput, 1 / 60);
 		}
 		expect(state.mode).toEqual({ kind: 'explore' });
 		expect(state.quest.stepIndex).toBe(QUEST_STEPS.length);
+		expect(state.rival.active).toBe(false);
 
 		handle.render(state, 1 / 60);
 
 		const lu = getVillager('senior_brother_lu');
 		expect(actorAt(scene, { x: 1.2, z: 0.5 })).toBeUndefined();
 		const post = actorAt(scene, lu.position);
-		expect(post).toBeDefined();
+		expect(post).toBe(duelist);
 		expect(post!.rotation.y).toBeCloseTo(lu.heading);
 		const meshes = meshesOf(post!);
 		expect(meshes.length).toBeGreaterThan(0);
 		for (const mesh of meshes) {
 			expect(mesh.visible).toBe(true);
+			mesh.traverseAncestors((ancestor) => expect(ancestor.visible).toBe(true));
 		}
 
 		handle.dispose();
