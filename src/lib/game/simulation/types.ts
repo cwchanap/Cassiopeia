@@ -1,4 +1,9 @@
-export type VillagerId = 'elder_shen' | 'senior_brother_lu' | 'auntie_qin' | 'old_zhu';
+export type VillagerId =
+	| 'elder_shen'
+	| 'senior_brother_lu'
+	| 'auntie_qin'
+	| 'old_zhu'
+	| 'peddler_wei';
 
 export type InteractTargetId = VillagerId | 'shrine_bell';
 

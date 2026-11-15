@@ -93,6 +93,19 @@ it('reaches the walkable shrine frontage holding the bell and Old Zhu', () => {
 	}
 });
 
+it('keeps Peddler Wei on the walkable market path inside Jadebank Market', () => {
+	const wei = getVillager('peddler_wei');
+	expect(canStandAt(wei.position)).toBe(true);
+	expect(regionAt(wei.position)).toBe('Jadebank Market');
+
+	let position = { x: 0, z: 0 };
+	for (const waypoint of [{ x: 14.5, z: 0 }, { x: 14.5, z: 40 }, { x: 30, z: 40 }, wei.position]) {
+		position = moveThroughWorld(position, waypoint);
+		expect(position.x).toBeCloseTo(waypoint.x);
+		expect(position.z).toBeCloseTo(waypoint.z);
+	}
+});
+
 it('names the authored regions at their posts and stays null in the open village', () => {
 	expect(regionAt({ x: -44, z: -9 })).toBe('Whispering Bamboo Shrine');
 	expect(regionAt(SHRINE_BELL.position)).toBe('Whispering Bamboo Shrine');

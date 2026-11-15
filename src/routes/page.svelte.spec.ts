@@ -11,4 +11,15 @@ describe('Wuxia MVP route', () => {
 		await expect.element(page.getByTestId('objective-chip')).toBeInTheDocument();
 		await expect.element(page.getByTestId('status-cluster')).toBeInTheDocument();
 	});
+
+	it('derives the initial objective and prompt from the first HUD snapshot', async () => {
+		render(Page);
+
+		await expect
+			.element(page.getByTestId('objective-chip'))
+			.toHaveTextContent('Pay respects to Elder Shen in the courtyard');
+		await expect
+			.element(page.getByTestId('game-prompt'))
+			.toHaveTextContent('Press E to speak with Senior Brother Lu');
+	});
 });

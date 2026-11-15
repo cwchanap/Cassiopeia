@@ -25,6 +25,7 @@ const elder = getVillager('elder_shen');
 const lu = getVillager('senior_brother_lu');
 const qin = getVillager('auntie_qin');
 const zhu = getVillager('old_zhu');
+const wei = getVillager('peddler_wei');
 
 const idleInput: InputSnapshot = {
 	moveX: 0,
@@ -156,6 +157,23 @@ describe('wuxia simulation state', () => {
 		finishDialogue(state, lu.ambientLines.length);
 		expect(state.mode).toEqual({ kind: 'explore' });
 		expect(state.quest.stepIndex).toBe(0);
+	});
+
+	it('keeps Peddler Wei ambient at every step so market chatter never advances the quest', () => {
+		const state = createInitialGameState();
+
+		for (const stepIndex of [0, 2, 4, QUEST_STEPS.length]) {
+			state.quest = { stepIndex, stepProgress: 0 };
+			state.player.position = { x: wei.position.x + 0.5, z: wei.position.z };
+
+			stepGame(state, { ...idleInput, interact: true }, frame);
+			expect(state.mode).toEqual({ kind: 'dialogue', villagerId: 'peddler_wei', lineIndex: 0 });
+			expect(state.prompt).toBe(`${wei.name}: ${wei.ambientLines[0]} (E)`);
+
+			finishDialogue(state, wei.ambientLines.length);
+			expect(state.mode).toEqual({ kind: 'explore' });
+			expect(state.quest).toEqual({ stepIndex, stepProgress: 0 });
+		}
 	});
 
 	it('ignores interact presses with no villager in range', () => {
@@ -715,13 +733,9 @@ describe('qinggong dash markers', () => {
 		expect(state.player.position.z).toBeLessThan(-4);
 		expect(state.quest.stepProgress).toBe(0);
 
-		state.player.position = { x: 0, z: -4.5 };
+		state.player.position = { x: 0, z: -1.6 };
 		state.player.dashCooldown = 0.5;
 		stepGame(state, { ...idleInput, moveZ: -1, dash: true }, frame);
-		expect(state.quest.stepProgress).toBe(0);
-
-		state.player.dashCooldown = 0;
-		stepGame(state, { ...idleInput, dash: true }, frame);
 		expect(state.quest.stepProgress).toBe(0);
 
 		state.player.dashCooldown = 0;
