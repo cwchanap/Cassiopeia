@@ -20,12 +20,16 @@ async function expectBagItemCount(page: Page, testId: string, count: number): Pr
 
 // Holding a direction overshoots the 1.5 m talk window long before a poll sees the prompt,
 // so tap the key and only assert while the player is standing still inside the window.
-async function walkToPrompt(page: Page, key: string, text: string): Promise<void> {
+async function walkToPrompt(page: Page, keys: string[], text: string, holdMs = 120): Promise<void> {
 	const prompt = page.getByTestId('game-prompt');
 	await expect(async () => {
-		await page.keyboard.down(key);
-		await page.waitForTimeout(120);
-		await page.keyboard.up(key);
+		for (const key of keys) {
+			await page.keyboard.down(key);
+		}
+		await page.waitForTimeout(holdMs);
+		for (const key of keys) {
+			await page.keyboard.up(key);
+		}
 		await page.waitForTimeout(300);
 		expect(await prompt.innerText().catch(() => '')).toBe(text);
 	}).toPass({ timeout: 60000 });
@@ -34,7 +38,7 @@ async function walkToPrompt(page: Page, key: string, text: string): Promise<void
 test('plays through the first day quest, duel, reward, and free roam', async ({ page }) => {
 	// Software WebGL can drop below 5 fps; the capped simulation step then advances only a
 	// fraction of a game second per wall second, so keep wall-clock limits generous.
-	test.setTimeout(300000);
+	test.setTimeout(420000);
 	await page.goto('/');
 	await page.evaluate(() => localStorage.clear());
 	await page.reload();
@@ -75,7 +79,7 @@ test('plays through the first day quest, duel, reward, and free roam', async ({ 
 	await expect(page.getByTestId('bag-toggle')).toBeFocused();
 	await expect(page.getByTestId('quick-slot-3')).toContainText('Qi Pill');
 
-	await walkToPrompt(page, 'w', 'Press E to speak with Elder Shen');
+	await walkToPrompt(page, ['w'], 'Press E to speak with Elder Shen');
 
 	await page.keyboard.press('e');
 	const prompt = page.getByTestId('game-prompt');
@@ -90,17 +94,49 @@ test('plays through the first day quest, duel, reward, and free roam', async ({ 
 	await page.keyboard.press('e');
 	await expect(prompt).toContainText('Senior Brother Lu waits by the duel ring');
 	await page.keyboard.press('e');
-	await expect(page.getByTestId('objective-chip')).toContainText(
-		'Speak with Senior Brother Lu and win the spar'
-	);
+	const objectiveChip = page.getByTestId('objective-chip');
+	await expect(objectiveChip).toContainText('Dash through the three gate markers in order');
+	await expect(objectiveChip).toContainText('0/3');
 	await expect(page.getByTestId('bag-toggle')).toBeEnabled();
 
 	await page.reload();
 	await expect(page.getByTestId('game-shell')).toBeVisible();
-	await expect(page.getByTestId('objective-chip')).toContainText(
-		'Speak with Senior Brother Lu and win the spar'
-	);
+	await expect(objectiveChip).toContainText('Dash through the three gate markers in order');
+	await expect(objectiveChip).toContainText('0/3');
 	await expect(page.getByTestId('quick-slot-3')).toContainText('Qi Pill');
+	await expect(prompt).toHaveText('Press E to speak with Senior Brother Lu');
+
+	// Space must land while W+D is still held so the dash runs along the live
+	// northward move — at these frame rates a frame reliably lands between the two
+	// key releases and leaves the last heading aimed northeast. Releasing both keys
+	// before the long cooldown wait keeps the player from walking past the next
+	// marker, which a northward dash could then never cross. Alternating the key
+	// order each poll cancels the stray single-key frames, keeping the dash line on
+	// the marker column while retried polls continue from wherever the last dash
+	// ended and the marker stays inside its window.
+	let markerTaps = 0;
+	const dashThroughNextMarker = async (expected: RegExp) => {
+		await expect(async () => {
+			const [first, second] = markerTaps++ % 2 ? ['w', 'd'] : ['d', 'w'];
+			await page.keyboard.down(first);
+			await page.keyboard.down(second);
+			await page.waitForTimeout(900);
+			await page.keyboard.press('Space');
+			await page.waitForTimeout(500);
+			await page.keyboard.up(first);
+			await page.keyboard.up(second);
+			await page.waitForTimeout(14000);
+			expect(await objectiveChip.innerText()).toMatch(expected);
+		}).toPass({ timeout: 90000 });
+	};
+	await dashThroughNextMarker(/1\/3/);
+	await dashThroughNextMarker(/2\/3/);
+	await dashThroughNextMarker(/Speak with Senior Brother Lu and win the spar/);
+
+	// The spar objective persists through a reload, which restores the player to
+	// the spawn beside Lu instead of leaving them at the far end of the corridor.
+	await page.reload();
+	await expect(page.getByTestId('game-shell')).toBeVisible();
 	await expect(prompt).toHaveText('Press E to speak with Senior Brother Lu');
 
 	await page.keyboard.press('e');
