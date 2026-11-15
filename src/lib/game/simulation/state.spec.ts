@@ -472,6 +472,21 @@ describe('wuxia simulation state', () => {
 		expect(fresh.quest).toEqual({ stepIndex: 0, stepProgress: 0 });
 	});
 
+	it('restores saved quest progress into a courtyard exploration spawn', () => {
+		const state = createInitialGameState();
+		state.player.position = { x: 9, z: 4 };
+		state.player.health = 30;
+
+		const fresh = createInitialGameState(state.items, { stepIndex: 1, stepProgress: 0 });
+
+		expect(fresh.quest).toEqual({ stepIndex: 1, stepProgress: 0 });
+		expect(fresh.mode).toEqual({ kind: 'explore' });
+		expect(fresh.paused).toBe(false);
+		expect(fresh.player.position).toEqual(PLAYER_SPAWN);
+		expect(fresh.player.health).toBe(fresh.player.maxHealth);
+		expect(toHudSnapshot(fresh).objective).toBe(QUEST_STEPS[1].instruction);
+	});
+
 	it('opens the inventory overlay and pauses combat simulation', () => {
 		const state = setupDuel();
 

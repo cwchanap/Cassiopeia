@@ -70,7 +70,10 @@ function idleCombatAction(): CombatActionState {
 	};
 }
 
-export function createInitialGameState(itemProgress = createStarterItemProgress()): GameState {
+export function createInitialGameState(
+	itemProgress = createStarterItemProgress(),
+	questProgress = createInitialQuest()
+): GameState {
 	const items = cloneItemProgress(itemProgress);
 	const playerStats = derivePlayerItemStats(items);
 	const elderShen = getVillager('elder_shen');
@@ -78,7 +81,7 @@ export function createInitialGameState(itemProgress = createStarterItemProgress(
 	const state: GameState = {
 		mode: { kind: 'explore' },
 		paused: false,
-		quest: createInitialQuest(),
+		quest: { ...questProgress },
 		prompt: null,
 		player: {
 			position: { ...PLAYER_SPAWN },

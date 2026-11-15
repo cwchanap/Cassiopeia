@@ -3,35 +3,65 @@ import {
 	createStarterItemProgress,
 	normalizeItemProgress
 } from '$lib/game/simulation/items';
-import type { ItemProgress } from '$lib/game/simulation/types';
+import { createInitialQuest, normalizeQuestProgress } from '$lib/game/simulation/quest';
+import type { ItemProgress, QuestProgress } from '$lib/game/simulation/types';
 
-export const ITEM_SAVE_KEY = 'cassiopeia.itemProgress.v1';
+export const GAME_SAVE_KEY = 'cassiopeia.gameProgress.v2';
+
+export type GameProgress = {
+	items: ItemProgress;
+	quest: QuestProgress;
+};
 
 function getDefaultStorage(): Storage {
 	return window.localStorage;
 }
 
-export function loadItemProgress(storage?: Storage): ItemProgress {
+function createFreshGameProgress(): GameProgress {
+	return { items: createStarterItemProgress(), quest: createInitialQuest() };
+}
+
+export function loadGameProgress(storage?: Storage): GameProgress {
 	try {
-		const raw = (storage ?? getDefaultStorage()).getItem(ITEM_SAVE_KEY);
+		const raw = (storage ?? getDefaultStorage()).getItem(GAME_SAVE_KEY);
 		if (!raw) {
-			return createStarterItemProgress();
+			return createFreshGameProgress();
 		}
 
-		return normalizeItemProgress(JSON.parse(raw));
+		const parsed: unknown = JSON.parse(raw);
+		if (!isRecord(parsed) || !isRecord(parsed.items)) {
+			return createFreshGameProgress();
+		}
+
+		const quest = normalizeQuestProgress(parsed.quest);
+		if (!quest) {
+			return createFreshGameProgress();
+		}
+
+		return { items: normalizeItemProgress(parsed.items), quest };
 	} catch {
-		return createStarterItemProgress();
+		return createFreshGameProgress();
 	}
 }
 
-export function saveItemProgress(progress: ItemProgress, storage?: Storage): boolean {
+export function saveGameProgress(progress: GameProgress, storage?: Storage): boolean {
 	try {
 		(storage ?? getDefaultStorage()).setItem(
-			ITEM_SAVE_KEY,
-			JSON.stringify(cloneItemProgress(progress))
+			GAME_SAVE_KEY,
+			JSON.stringify({
+				items: cloneItemProgress(progress.items),
+				quest: {
+					stepIndex: progress.quest.stepIndex,
+					stepProgress: progress.quest.stepProgress
+				}
+			})
 		);
 		return true;
 	} catch {
 		return false;
 	}
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

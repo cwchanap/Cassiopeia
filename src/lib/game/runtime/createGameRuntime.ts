@@ -1,6 +1,6 @@
 import { createInputController, type InputController } from '$lib/game/input/createInputController';
 import { createWuxiaScene, type WuxiaScene } from '$lib/game/render/createWuxiaScene';
-import { loadItemProgress, saveItemProgress } from '$lib/game/runtime/save';
+import { loadGameProgress, saveGameProgress } from '$lib/game/runtime/save';
 import { createInitialGameState, stepGame, toHudSnapshot } from '$lib/game/simulation/state';
 import type {
 	GameState,
@@ -27,8 +27,9 @@ export type RuntimeOptions = {
 };
 
 export function createGameRuntime(options: RuntimeOptions): GameRuntime {
-	const state: GameState = createInitialGameState(loadItemProgress());
-	let lastSavedItems = JSON.stringify(state.items);
+	const savedProgress = loadGameProgress();
+	const state: GameState = createInitialGameState(savedProgress.items, savedProgress.quest);
+	let lastSavedProgress = JSON.stringify({ items: state.items, quest: state.quest });
 	let input: InputController | null = null;
 	let scene: WuxiaScene | null = null;
 	let frameId: number | null = null;
@@ -40,14 +41,14 @@ export function createGameRuntime(options: RuntimeOptions): GameRuntime {
 		options.onHudUpdate(toHudSnapshot(state));
 	}
 
-	function persistItemsIfChanged(): void {
-		const nextSavedItems = JSON.stringify(state.items);
-		if (nextSavedItems === lastSavedItems) {
+	function persistProgressIfChanged(): void {
+		const nextSavedProgress = JSON.stringify({ items: state.items, quest: state.quest });
+		if (nextSavedProgress === lastSavedProgress) {
 			return;
 		}
 
-		if (saveItemProgress(state.items)) {
-			lastSavedItems = nextSavedItems;
+		if (saveGameProgress({ items: state.items, quest: state.quest })) {
+			lastSavedProgress = nextSavedProgress;
 		}
 	}
 
@@ -62,7 +63,7 @@ export function createGameRuntime(options: RuntimeOptions): GameRuntime {
 		stepGame(state, input.getSnapshot(), deltaTime);
 		scene.render(state, deltaTime);
 		publish();
-		persistItemsIfChanged();
+		persistProgressIfChanged();
 
 		frameId = window.requestAnimationFrame(loop);
 	}
@@ -108,7 +109,7 @@ export function createGameRuntime(options: RuntimeOptions): GameRuntime {
 			[command]
 		);
 		publish();
-		persistItemsIfChanged();
+		persistProgressIfChanged();
 	}
 
 	function toggleInventory(): void {
