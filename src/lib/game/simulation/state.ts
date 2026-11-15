@@ -33,9 +33,9 @@ import {
 	useConsumable
 } from './items';
 import { activeDialogueLine, advanceDialogue } from './dialogue';
-import { nearestInteractTarget } from './interaction';
+import { nearestInteractTarget, villagerPosition } from './interaction';
 import { activeQuestStep, advanceQuest, createInitialQuest } from './quest';
-import { DASH_MARKERS, getVillager, PLAYER_SPAWN, SHRINE_BELL } from './villageContent';
+import { DASH_MARKERS, getVillager, PLAYER_SPAWN, SHRINE_BELL, VILLAGERS } from './villageContent';
 import type { AttackTiming } from './combat';
 import type {
 	CombatActionKind,
@@ -198,6 +198,14 @@ export function toHudSnapshot(state: GameState): HudSnapshot {
 	const step = activeQuestStep(state.quest);
 	return {
 		mode: state.mode.kind,
+		quest: step
+			? { stepIndex: state.quest.stepIndex, title: step.title, instruction: step.instruction }
+			: null,
+		villagers: VILLAGERS.map((villager) => ({
+			id: villager.id,
+			name: villager.name,
+			position: { ...villagerPosition(state, villager.id) }
+		})),
 		objective: step?.instruction ?? QUEST_COMPLETE_OBJECTIVE,
 		markerProgress:
 			step?.kind === 'dashMarkers'

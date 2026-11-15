@@ -27,56 +27,124 @@ const elder = getVillager('elder_shen');
 const lu = getVillager('senior_brother_lu');
 const qin = getVillager('auntie_qin');
 
-type CanvasProbe = { samples: number; varied: number; warm: number; colors: number };
+type DiscProbe = { samples: number; sig: number; run: number };
+type Signature = 'maroon' | 'darkGreen' | 'nearBlack' | 'paleGold' | 'sage';
 
 function projectAt(point: { x: number; y: number; z: number }, focus: Vec2) {
 	const pose = computeWuxiaCameraPose({ mode: 'explore', playerPosition: focus, rival: null });
 	return projectWorldToScreen(point, pose, VIEWPORT);
 }
 
-async function probeCanvas(page: Page, x: number, y: number, radius: number): Promise<CanvasProbe> {
-	return page.evaluate(
-		([cx, cy, radius]) => {
-			const empty = { samples: 0, varied: 0, warm: 0, colors: 0 };
-			const canvas = document.querySelector<HTMLCanvasElement>('canvas.wuxia-canvas');
-			if (!canvas || canvas.width < 8 || canvas.clientWidth === 0) return empty;
-			const probe = document.createElement('canvas');
-			probe.width = canvas.width;
-			probe.height = canvas.height;
-			const ctx = probe.getContext('2d', { willReadFrequently: true });
-			if (!ctx) return empty;
-			ctx.drawImage(canvas, 0, 0);
-			const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-			const corner = (4 * canvas.width + 4) * 4;
-			const br = data[corner];
-			const bg = data[corner + 1];
-			const bb = data[corner + 2];
-			const scale = (canvas.width / canvas.clientWidth + canvas.height / canvas.clientHeight) / 2;
-			const px = Math.round((cx * canvas.width) / canvas.clientWidth);
-			const py = Math.round((cy * canvas.height) / canvas.clientHeight);
-			const pr = Math.max(4, Math.round(radius * scale));
-			const buckets = new Set<number>();
-			const stats = { samples: 0, varied: 0, warm: 0, colors: 0 };
+// Reads back the preserved WebGL canvas through a 2D copy. Each disc is sampled on a
+// strided grid; `sig` counts samples matching the named signature and `run` is the
+// longest run of consecutive matching samples on one scan line — a real ring band or
+// robe is contiguous, while flagstone speckle never forms a run.
+async function probeDiscs(
+	page: Page,
+	discs: { x: number; y: number; r: number; sig?: Signature }[]
+): Promise<DiscProbe[]> {
+	return page.evaluate((requests) => {
+		const signatures: Record<string, (r: number, g: number, b: number) => boolean> = {
+			maroon: (r, g, b) => r > g + 12 && r > b + 12 && r < 170 && g < 110,
+			darkGreen: (r, g, b) => g > r + 8 && g > b + 8 && g <= 140,
+			nearBlack: (r, g, b) => r + g + b < 60,
+			paleGold: (r, g, b) => r > 220 && g > 210 && b > 170 && r > b + 15 && r - g < 25,
+			sage: (r, g, b) => g > r + 8 && g > b + 10 && g < 215
+		};
+		const empty = { samples: 0, sig: 0, run: 0 };
+		const canvas = document.querySelector<HTMLCanvasElement>('canvas.wuxia-canvas');
+		if (!canvas || canvas.width < 8 || canvas.clientWidth === 0) {
+			return requests.map(() => empty);
+		}
+		const probe = document.createElement('canvas');
+		probe.width = canvas.width;
+		probe.height = canvas.height;
+		const ctx = probe.getContext('2d', { willReadFrequently: true });
+		if (!ctx) return requests.map(() => empty);
+		ctx.drawImage(canvas, 0, 0);
+		const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+		const scale = (canvas.width / canvas.clientWidth + canvas.height / canvas.clientHeight) / 2;
+		return requests.map(({ x, y, r, sig }) => {
+			const px = Math.round((x * canvas.width) / canvas.clientWidth);
+			const py = Math.round((y * canvas.height) / canvas.clientHeight);
+			const pr = Math.max(3, Math.round(r * scale));
+			const match = sig ? signatures[sig] : undefined;
+			const stats = { samples: 0, sig: 0, run: 0 };
 			for (let sy = Math.max(0, py - pr); sy <= Math.min(canvas.height - 1, py + pr); sy += 2) {
+				let streak = 0;
 				for (let sx = Math.max(0, px - pr); sx <= Math.min(canvas.width - 1, px + pr); sx += 2) {
-					if ((sx - px) * (sx - px) + (sy - py) * (sy - py) > pr * pr) continue;
+					if ((sx - px) * (sx - px) + (sy - py) * (sy - py) > pr * pr) {
+						streak = 0;
+						continue;
+					}
 					const i = (sy * canvas.width + sx) * 4;
 					const red = data[i];
 					const green = data[i + 1];
 					const blue = data[i + 2];
 					stats.samples += 1;
-					buckets.add((red >> 4) * 256 + (green >> 4) * 16 + (blue >> 4));
-					if (Math.abs(red - br) + Math.abs(green - bg) + Math.abs(blue - bb) > 60) {
-						stats.varied += 1;
+					if (match?.(red, green, blue)) {
+						stats.sig += 1;
+						streak += 1;
+						if (streak > stats.run) stats.run = streak;
+					} else {
+						streak = 0;
 					}
-					if (red > 140 && red - blue > 40 && green > blue) stats.warm += 1;
 				}
 			}
-			stats.colors = buckets.size;
 			return stats;
-		},
-		[x, y, radius] as const
+		});
+	}, discs);
+}
+
+// The actor's robe/skin signature fills its projected chest disc while the paired disc
+// one `dx` shift over sits on plain scenery — hiding the actor collapses the target
+// signature to the control's level.
+async function expectActorVisible(
+	page: Page,
+	point: { x: number; y: number },
+	signature: Signature,
+	{ r = 11, dx = 30 }: { r?: number; dx?: number } = {}
+): Promise<void> {
+	const [target, control] = await probeDiscs(page, [
+		{ x: point.x, y: point.y, r, sig: signature },
+		{ x: point.x + dx, y: point.y, r, sig: signature }
+	]);
+	console.log('actorProbe', signature, JSON.stringify({ point, target, control }));
+	expect(target.samples).toBeGreaterThan(0);
+	expect(target.sig).toBeGreaterThan(20);
+	expect(target.sig).toBeGreaterThan(control.sig * 3 + 10);
+}
+
+// The next dash marker is a contiguous pale-gold emissive ring while the two idle
+// markers — the same torus in the same corridor — render sage. Counting a contiguous
+// gold run separates the emissive band from flagstone speckle, and requiring the idle
+// controls to still show sage proves the comparison is between rendered markers, so a
+// hidden mesh, a grey highlight, or a wrongly-lit marker all fail.
+async function expectActiveMarker(page: Page, focus: Vec2): Promise<void> {
+	const points = DASH_MARKERS.map((marker) => projectAt({ ...marker, y: 0.1 }, focus));
+	for (const point of points) {
+		expect(point.inView).toBe(true);
+	}
+	const discs = points.map((point) => ({ x: point.x, y: point.y, r: 26 }));
+	const [active, ...idle] = await probeDiscs(
+		page,
+		discs.map((disc) => ({ ...disc, sig: 'paleGold' as const }))
 	);
+	const [, ...idleSage] = await probeDiscs(
+		page,
+		discs.map((disc) => ({ ...disc, sig: 'sage' as const }))
+	);
+	console.log('markerProbes', JSON.stringify({ points, active, idle, idleSage }));
+	expect(active.samples).toBeGreaterThan(0);
+	expect(active.sig).toBeGreaterThanOrEqual(25);
+	expect(active.run).toBeGreaterThanOrEqual(5);
+	for (const idleProbe of idle) {
+		expect(active.sig).toBeGreaterThan(idleProbe.sig);
+		expect(active.run).toBeGreaterThan(idleProbe.run);
+	}
+	for (const sageProbe of idleSage) {
+		expect(sageProbe.sig).toBeGreaterThanOrEqual(12);
+	}
 }
 
 test('plays through the first day quest, duel, reward, and free roam', async ({
@@ -90,6 +158,7 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	await page.reload();
 
 	await expect(page.getByTestId('game-shell')).toBeVisible();
+	await expect(page.getByTestId('objective-chip')).toContainText('拜师 Pay Respects');
 	await expect(page.getByTestId('objective-chip')).toContainText(
 		'Pay respects to Elder Shen in the courtyard'
 	);
@@ -109,14 +178,12 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	await expect(page.getByTestId('quick-slot-2')).toContainText('x2');
 
 	const spawnFocus = { x: 0, z: 0 };
-	const elderPoint = projectAt({ ...elder.position, y: 1 }, spawnFocus);
-	const luPoint = projectAt({ ...lu.position, y: 1 }, spawnFocus);
+	const elderPoint = projectAt({ ...elder.position, y: 1.15 }, spawnFocus);
+	const luPoint = projectAt({ ...lu.position, y: 1.15 }, spawnFocus);
 	expect(elderPoint.inView).toBe(true);
 	expect(luPoint.inView).toBe(true);
-	const elderProbe = await probeCanvas(page, elderPoint.x, elderPoint.y, 45);
-	const luProbe = await probeCanvas(page, luPoint.x, luPoint.y, 35);
-	expect(elderProbe.colors).toBeGreaterThanOrEqual(10);
-	expect(luProbe.colors).toBeGreaterThanOrEqual(10);
+	await expectActorVisible(page, elderPoint, 'darkGreen');
+	await expectActorVisible(page, luPoint, 'maroon');
 	await testInfo.attach('first-day-opening-960x640.png', {
 		body: await page.screenshot(),
 		contentType: 'image/png'
@@ -183,16 +250,12 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	await page.keyboard.press('e');
 	await expect(prompt).toContainText('From today you train beneath this roof');
 	await page.keyboard.press('e');
-	await expect(prompt).toContainText('Senior Brother Lu waits by the duel ring');
+	await expect(prompt).toContainText('gate markers on the north road');
 	await page.keyboard.press('e');
 	const objectiveChip = page.getByTestId('objective-chip');
 	await expect(objectiveChip).toContainText('Dash through the three gate markers in order');
 	await expect(objectiveChip).toContainText('0/3');
 	await expect(page.getByTestId('bag-toggle')).toBeEnabled();
-
-	const markerPoint = projectAt({ ...DASH_MARKERS[0], y: 0.1 }, elder.position);
-	const markerProbe = await probeCanvas(page, markerPoint.x, markerPoint.y, 95);
-	expect(markerProbe.warm).toBeGreaterThan(3);
 
 	await page.reload();
 	await expect(page.getByTestId('game-shell')).toBeVisible();
@@ -200,6 +263,11 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	await expect(objectiveChip).toContainText('0/3');
 	await expect(page.getByTestId('quick-slot-3')).toContainText('Qi Pill');
 	await expect(prompt).toHaveText('Press E to speak with Senior Brother Lu');
+
+	// After the reload the player is at the authored spawn, so the camera focus is the
+	// exact spawn point — the marker projections are deterministic.
+	await renderedFrames(6);
+	await expectActiveMarker(page, { x: 0, z: 0 });
 
 	const qinggongReady = page.locator('.technique', { hasText: 'Qinggong' }).locator('small');
 	let markerTaps = 0;
@@ -229,9 +297,11 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	await walkFramesToPrompt(['w', 'd'], 'Press E to speak with Auntie Qin');
 
 	await renderedFrames(8);
-	const qinPoint = projectAt({ ...qin.position, y: 1 }, qin.position);
-	const qinProbe = await probeCanvas(page, qinPoint.x, qinPoint.y, 95);
-	expect(qinProbe.colors).toBeGreaterThanOrEqual(10);
+	// The walk stops within interact range of Qin; the camera focus only needs to be
+	// near the stop point — her dark robe fills the disc regardless of the exact stop.
+	const qinPoint = projectAt({ ...qin.position, y: 0.45 }, { x: 0.6, z: -8.7 });
+	expect(qinPoint.inView).toBe(true);
+	await expectActorVisible(page, qinPoint, 'nearBlack', { r: 20, dx: 46 });
 
 	await page.keyboard.press('e');
 	await expect(prompt).toContainText('Auntie Qin:');
@@ -397,9 +467,14 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	await page.reload();
 	await expect(page.getByTestId('game-shell')).toBeVisible();
 	await expect(page.getByTestId('objective-chip')).toContainText('free roam');
+	// The maroon signature matches the loaded GLB robe — the procedural fallback is
+	// teal-grey, so the probe must wait for assets to be ready like the opening probe.
+	await expect(page.locator('canvas')).not.toHaveAttribute('data-assets', 'loading', {
+		timeout: 30000
+	});
+	await expect(page.locator('canvas')).toHaveAttribute('data-assets', 'ready');
 	await renderedFrames(3);
-	const luPostProbe = await probeCanvas(page, luPoint.x, luPoint.y, 45);
-	expect(luPostProbe.colors).toBeGreaterThanOrEqual(10);
+	await expectActorVisible(page, luPoint, 'maroon');
 	await page.getByTestId('bag-toggle').click();
 	await expect(page.getByTestId('bag-panel')).toBeVisible();
 	await expectBagItemCount(page, rewardItem.testId, expectedRewardItemCount);

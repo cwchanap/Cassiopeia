@@ -219,8 +219,22 @@ export type HudInteractTarget = {
 	name: string;
 };
 
+export type HudQuestStep = {
+	stepIndex: number;
+	title: string;
+	instruction: string;
+};
+
+export type HudVillager = {
+	id: VillagerId;
+	name: string;
+	position: Vec2;
+};
+
 export type HudSnapshot = {
 	mode: GameModeKind;
+	quest: HudQuestStep | null;
+	villagers: HudVillager[];
 	objective: string;
 	markerProgress: { current: number; total: number } | null;
 	prompt: string | null;

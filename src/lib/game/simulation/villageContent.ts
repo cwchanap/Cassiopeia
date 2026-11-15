@@ -43,7 +43,7 @@ export const VILLAGERS: VillagerContent[] = [
 		questLines: [
 			'So you are the new initiate. Bow, and let me look at you.',
 			'Good. From today you train beneath this roof.',
-			'Senior Brother Lu waits by the duel ring. Go and pay your respects.'
+			'The gate markers on the north road come first — dash through all three in order.'
 		],
 		ambientLines: ['The mountain rewards those who keep climbing.']
 	},
