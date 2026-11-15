@@ -1,13 +1,12 @@
 import * as THREE from 'three';
 import { createInitialGameState } from '$lib/game/simulation/state';
-import { activeQuestStep } from '$lib/game/simulation/quest';
 import {
 	DASH_MARKERS,
 	getVillager,
 	SHRINE_BELL,
 	type VillagerContent
 } from '$lib/game/simulation/villageContent';
-import type { CombatEffect, GameState, QuestProgress, Vec2 } from '$lib/game/simulation/types';
+import type { CombatEffect, GameState, Vec2 } from '$lib/game/simulation/types';
 import {
 	cameraFollowFactor,
 	computeWuxiaCameraPose,
@@ -148,6 +147,9 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 			const clone = cloneVillagerModel(mentorModel, color, resources);
 			group.add(clone);
 			glbVillagers.push(clone);
+			for (const joint of ['Arm_L', 'Arm_R', 'Leg_L', 'Leg_R']) {
+				group.userData[joint] = clone.getObjectByName(`${mentorModel.name}_${joint}`);
+			}
 		}
 	}
 
@@ -169,12 +171,17 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 			snapshot.rival.combatAction,
 			snapshot.elapsed
 		);
-		applyFighter(mentor, snapshot.mentor.position, elderShen.heading, createIdleRenderAction());
+		applyFighter(mentor, elderShen.position, elderShen.heading, createIdleRenderAction());
 		applyFighter(qin, auntieQin.position, auntieQin.heading, createIdleRenderAction());
 		applyFighter(zhu, oldZhu.position, oldZhu.heading, createIdleRenderAction());
 		applyFighter(wei, peddlerWei.position, peddlerWei.heading, createIdleRenderAction());
 		syncEffects(snapshot.effects, effects, resources, scene);
-		syncMarkers(snapshot.quest, dashMarkers, markerActiveMaterial, markerIdleMaterial);
+		syncMarkers(
+			snapshot.markerProgress?.current ?? -1,
+			dashMarkers,
+			markerActiveMaterial,
+			markerIdleMaterial
+		);
 
 		const desiredPose = computeWuxiaCameraPose({
 			mode: snapshot.mode.kind,
@@ -721,13 +728,11 @@ export function createDashMarkers(
 }
 
 export function syncMarkers(
-	quest: QuestProgress,
+	activeIndex: number,
 	markers: THREE.Mesh[],
 	activeMaterial: THREE.Material,
 	idleMaterial: THREE.Material
 ): void {
-	const step = activeQuestStep(quest);
-	const activeIndex = step?.kind === 'dashMarkers' ? quest.stepProgress : -1;
 	for (const [index, marker] of markers.entries()) {
 		marker.material = index === activeIndex ? activeMaterial : idleMaterial;
 	}

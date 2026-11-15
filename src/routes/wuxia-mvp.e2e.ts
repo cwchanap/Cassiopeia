@@ -262,7 +262,7 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	await expect(objectiveChip).toContainText('Dash through the three gate markers in order');
 	await expect(objectiveChip).toContainText('0/3');
 	await expect(page.getByTestId('quick-slot-3')).toContainText('Qi Pill');
-	await expect(prompt).toHaveText('Press E to speak with Senior Brother Lu');
+	await expect(prompt).toHaveText('Dash through the three gate markers in order');
 
 	// After the reload the player is at the authored spawn, so the camera focus is the
 	// exact spawn point — the marker projections are deterministic.
@@ -292,7 +292,9 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	await page.reload();
 	await expect(page.getByTestId('game-shell')).toBeVisible();
 	await expect(objectiveChip).toContainText('Fetch medicine from Auntie Qin');
-	await expect(prompt).toHaveText('Press E to speak with Senior Brother Lu');
+	await expect(prompt).toHaveText(
+		'Fetch medicine from Auntie Qin by the Herbalist and assign a pill to a quick slot'
+	);
 
 	await walkFramesToPrompt(['w', 'd'], 'Press E to speak with Auntie Qin');
 
@@ -358,8 +360,9 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	await page.reload();
 	await expect(page.getByTestId('game-shell')).toBeVisible();
 	await expect(objectiveChip).toContainText('Speak with Senior Brother Lu and win the spar');
-	await expect(prompt).toHaveText('Press E to speak with Senior Brother Lu');
+	await expect(prompt).toHaveText('Speak with Senior Brother Lu and win the spar');
 
+	await walkFramesToPrompt(['s', 'd'], 'Press E to speak with Senior Brother Lu');
 	await page.keyboard.press('e');
 	await expect(prompt).toContainText('Senior Brother Lu:');
 	await expect(prompt).toContainText('Elder Shen sent you?');

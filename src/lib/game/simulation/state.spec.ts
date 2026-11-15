@@ -3,6 +3,7 @@ import { createInitialGameState, stepGame, toHudSnapshot } from './state';
 import {
 	DASH_DISTANCE,
 	distance,
+	INTERACT_RANGE,
 	LIGHT_ATTACK_TIMING,
 	QI_BURST_COST,
 	QI_BURST_TIMING,
@@ -116,9 +117,51 @@ describe('wuxia simulation state', () => {
 		expect(state.rival.health).toBe(100);
 		expect(state.rival.active).toBe(false);
 		expect(state.rival.position).toEqual(lu.position);
-		expect(state.mentor.position).toEqual(elder.position);
+		expect(hud.villagers.find((villager) => villager.id === 'elder_shen')?.position).toEqual(
+			elder.position
+		);
 		expect(state.player.combatAction.phase).toBe('idle');
 		expect(state.rival.combatAction.phase).toBe('idle');
+	});
+
+	it('keeps the spawn outside every interact range so the first prompt points at the quest', () => {
+		for (const villager of VILLAGERS) {
+			expect(distance(PLAYER_SPAWN, villager.position)).toBeGreaterThan(INTERACT_RANGE);
+		}
+
+		const state = createInitialGameState();
+		expect(state.interactTarget).toBeNull();
+		expect(state.prompt).toBe(QUEST_STEPS[0].instruction);
+
+		stepGame(state, idleInput, frame);
+		expect(toHudSnapshot(state).interactTarget).toBeNull();
+		expect(toHudSnapshot(state).prompt).toBe(QUEST_STEPS[0].instruction);
+	});
+
+	it('exposes an interact target only while exploring', () => {
+		const state = createInitialGameState();
+		state.player.position = { x: elder.position.x + 0.5, z: elder.position.z };
+		stepGame(state, idleInput, frame);
+		expect(toHudSnapshot(state).interactTarget).toEqual({
+			id: 'elder_shen',
+			name: elder.name
+		});
+
+		stepGame(state, { ...idleInput, toggleInventory: true }, frame);
+		expect(state.inventoryOpen).toBe(true);
+		expect(toHudSnapshot(state).interactTarget).toBeNull();
+		stepGame(state, { ...idleInput, toggleInventory: true }, frame);
+
+		stepGame(state, { ...idleInput, interact: true }, frame);
+		expect(state.mode.kind).toBe('dialogue');
+		expect(toHudSnapshot(state).interactTarget).toBeNull();
+		finishDialogue(state, elder.questLines.length);
+
+		const duel = setupDuel();
+		stepGame(duel, idleInput, frame);
+		expect(toHudSnapshot(duel).interactTarget).toBeNull();
+		stepGame(duel, { ...idleInput, pause: true }, frame);
+		expect(toHudSnapshot(duel).interactTarget).toBeNull();
 	});
 
 	it('runs the Elder dialogue one E edge per line and completes the step on the last line', () => {
@@ -837,6 +880,29 @@ describe('fetch medicine', () => {
 			{ type: 'assignQuickSlot', slot: 1, itemId: 'lesser_healing_pill' }
 		]);
 		expect(beforeGrant.quest).toEqual({ stepIndex: 2, stepProgress: 0 });
+	});
+
+	it('advances the step only when the pill assignment actually lands in the slot', () => {
+		const state = setupMedicine(1);
+		state.inventoryOpen = true;
+
+		state.items.inventory.lesser_healing_pill = 0;
+		stepGame(state, idleInput, 0, [
+			{ type: 'assignQuickSlot', slot: 3, itemId: 'lesser_healing_pill' }
+		]);
+		expect(state.items.quickSlots[3]).toBeNull();
+		expect(state.quest).toEqual({ stepIndex: 2, stepProgress: 1 });
+
+		state.items.inventory.lesser_healing_pill = 2;
+		stepGame(state, idleInput, 0, [{ type: 'assignQuickSlot', slot: 3, itemId: 'training_sword' }]);
+		expect(state.items.quickSlots[3]).toBeNull();
+		expect(state.quest).toEqual({ stepIndex: 2, stepProgress: 1 });
+
+		stepGame(state, idleInput, 0, [
+			{ type: 'assignQuickSlot', slot: 3, itemId: 'lesser_healing_pill' }
+		]);
+		expect(state.items.quickSlots[3]).toBe('lesser_healing_pill');
+		expect(state.quest).toEqual({ stepIndex: 3, stepProgress: 0 });
 	});
 
 	it('restores a granted pill count and pending assignment from a reload', () => {

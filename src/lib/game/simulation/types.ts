@@ -7,6 +7,11 @@ export type VillagerId =
 
 export type InteractTargetId = VillagerId | 'shrine_bell';
 
+export type InteractTarget = {
+	id: InteractTargetId;
+	position: Vec2;
+};
+
 export type GameMode =
 	| { kind: 'explore' }
 	| { kind: 'dialogue'; villagerId: VillagerId; lineIndex: number }
@@ -191,6 +196,11 @@ export type HudInventorySnapshot = {
 	lastRewardText: string | null;
 };
 
+export type MarkerProgress = {
+	current: number;
+	total: number;
+};
+
 export type GameState = {
 	mode: GameMode;
 	paused: boolean;
@@ -198,13 +208,14 @@ export type GameState = {
 	prompt: string | null;
 	player: FighterState;
 	rival: FighterState;
-	mentor: { position: Vec2 };
 	effects: CombatEffect[];
 	elapsed: number;
 	nextEffectId: number;
 	items: ItemProgress;
 	inventoryOpen: boolean;
 	itemFeedback: string | null;
+	interactTarget: InteractTarget | null;
+	markerProgress: MarkerProgress | null;
 };
 
 export type HudDialogue = {
@@ -236,7 +247,7 @@ export type HudSnapshot = {
 	quest: HudQuestStep | null;
 	villagers: HudVillager[];
 	objective: string;
-	markerProgress: { current: number; total: number } | null;
+	markerProgress: MarkerProgress | null;
 	prompt: string | null;
 	dialogue: HudDialogue | null;
 	interactTarget: HudInteractTarget | null;

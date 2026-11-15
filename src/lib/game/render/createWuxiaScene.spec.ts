@@ -153,18 +153,16 @@ describe('dash markers', () => {
 		const idle = new THREE.MeshStandardMaterial();
 		const active = new THREE.MeshStandardMaterial();
 		const markers = createDashMarkers(resources, idle);
-		const markerStepIndex = QUEST_STEPS.findIndex((step) => step.kind === 'dashMarkers');
-		expect(markerStepIndex).toBeGreaterThan(0);
 
-		syncMarkers({ stepIndex: markerStepIndex, stepProgress: 1 }, markers, active, idle);
+		syncMarkers(1, markers, active, idle);
 		expect(markers[0].material).toBe(idle);
 		expect(markers[1].material).toBe(active);
 		expect(markers[2].material).toBe(idle);
 
-		syncMarkers({ stepIndex: 0, stepProgress: 0 }, markers, active, idle);
+		syncMarkers(-1, markers, active, idle);
 		expect(markers.every((marker) => marker.material === idle)).toBe(true);
 
-		syncMarkers({ stepIndex: QUEST_STEPS.length, stepProgress: 0 }, markers, active, idle);
+		syncMarkers(DASH_MARKERS.length, markers, active, idle);
 		expect(markers.every((marker) => marker.material === idle)).toBe(true);
 	});
 });
@@ -334,6 +332,13 @@ describe('scene lifecycle', () => {
 					model.name = name;
 					model.add(new THREE.Mesh(sharedGeometry, atlas));
 					model.add(new THREE.Mesh(sharedGeometry, accent));
+					if (name === 'Mentor') {
+						for (const joint of ['Arm_L', 'Arm_R', 'Leg_L', 'Leg_R']) {
+							const node = new THREE.Object3D();
+							node.name = `Mentor_${joint}`;
+							model.add(node);
+						}
+					}
 					target.add(model);
 					attached.push(model);
 				}
@@ -369,6 +374,9 @@ describe('scene lifecycle', () => {
 			const actor = actorAt(scene, getVillager(id).position)!;
 			const clone = actor.getObjectByName('Mentor');
 			expect(clone).toBeDefined();
+			for (const joint of ['Arm_L', 'Arm_R', 'Leg_L', 'Leg_R']) {
+				expect(actor.userData[joint]).toBe(clone!.getObjectByName(`Mentor_${joint}`));
+			}
 			for (const mesh of meshesOf(clone!)) {
 				expect(mesh.visible).toBe(true);
 				for (const entry of [mesh.material].flat()) {

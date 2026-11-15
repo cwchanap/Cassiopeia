@@ -50,8 +50,8 @@ export const VILLAGERS: VillagerContent[] = [
 	{
 		id: 'senior_brother_lu',
 		name: 'Senior Brother Lu',
-		position: { x: 0.8, z: 0 },
-		heading: Math.PI,
+		position: { x: 2.6, z: 1 },
+		heading: -Math.PI * 0.5,
 		questLines: [
 			'Elder Shen sent you? Then you can stand in the ring.',
 			'Enough talk — show me what those legs can do!'

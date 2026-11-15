@@ -149,9 +149,9 @@ export function isItemProgressSave(raw: unknown): raw is Record<string, unknown>
 	return isRecord(raw) && raw.version === SAVE_VERSION && hasRequiredSaveSections(raw);
 }
 
-export function normalizeItemProgress(raw: unknown): ItemProgress {
+export function parseItemProgress(raw: unknown): ItemProgress | null {
 	if (!isItemProgressSave(raw)) {
-		return createStarterItemProgress();
+		return null;
 	}
 
 	const inventory = normalizeInventory(raw.inventory);
@@ -171,6 +171,10 @@ export function normalizeItemProgress(raw: unknown): ItemProgress {
 		rewardSeed,
 		lastReward
 	};
+}
+
+export function normalizeItemProgress(raw: unknown): ItemProgress {
+	return parseItemProgress(raw) ?? createStarterItemProgress();
 }
 
 export function cloneItemProgress(progress: ItemProgress): ItemProgress {
@@ -306,6 +310,10 @@ export function assignQuickSlot(
 	}
 
 	const item = ITEM_CATALOG[itemId];
+	if ((progress.inventory[itemId] ?? 0) <= 0) {
+		return `${item.name} is unavailable`;
+	}
+
 	if (!item.consumable) {
 		return `${item.name} cannot be assigned`;
 	}
@@ -315,7 +323,7 @@ export function assignQuickSlot(
 }
 
 export function grantItem(progress: ItemProgress, itemId: ItemId, count: number): void {
-	incrementItem(progress, itemId, count);
+	progress.inventory[itemId] = (progress.inventory[itemId] ?? 0) + count;
 }
 
 export function grantVictoryReward(progress: ItemProgress): ItemReward {
@@ -324,7 +332,7 @@ export function grantVictoryReward(progress: ItemProgress): ItemReward {
 
 	progress.rewardSeed = nextSeed;
 	progress.lastReward = reward;
-	incrementItem(progress, reward.itemId, reward.count);
+	grantItem(progress, reward.itemId, reward.count);
 
 	return reward;
 }
@@ -406,10 +414,6 @@ function toHudQuickSlot(progress: ItemProgress, slot: QuickSlotNumber): HudQuick
 		count,
 		usable: count > 0
 	};
-}
-
-function incrementItem(progress: ItemProgress, itemId: ItemId, count: number): void {
-	progress.inventory[itemId] = (progress.inventory[itemId] ?? 0) + count;
 }
 
 function decrementItem(progress: ItemProgress, itemId: ItemId): void {
