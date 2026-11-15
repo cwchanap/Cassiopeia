@@ -48,7 +48,6 @@ function advance(state: GameState, seconds: number): void {
 	}
 }
 
-/** Walks every E edge of the dialogue against `villagerId`; assumes it already started. */
 function finishDialogue(state: GameState, lineCount: number): void {
 	for (let i = 0; i < lineCount; i++) {
 		stepGame(state, { ...idleInput, interact: true }, frame);
@@ -391,7 +390,6 @@ describe('wuxia simulation state', () => {
 
 		stepGame(state, idleInput, frame);
 
-		// The rival's lethal hit still resolves before the victory check wins the exchange.
 		expect(state.player.health).toBe(0);
 		expect(state.mode).toEqual({ kind: 'explore' });
 		expect(state.quest.stepIndex).toBe(QUEST_STEPS.length);
@@ -576,7 +574,6 @@ describe('wuxia simulation state', () => {
 		expect(state.mode).toEqual({ kind: 'explore' });
 		expect(state.quest.stepIndex).toBe(QUEST_STEPS.length);
 		expect(state.itemFeedback).toMatch(/^Won: /);
-		// Lu idles at his authored post again; the renderer reads these same coordinates.
 		expect(state.rival.position).toEqual(lu.position);
 		expect(state.rival.heading).toBe(lu.heading);
 		expect(state.rival.active).toBe(false);
@@ -616,7 +613,6 @@ describe('wuxia simulation state', () => {
 		const state = setupDuel();
 		state.player.health = 1;
 
-		// The rival is already in range; let it finish the player off.
 		advance(state, RIVAL_STRIKE_TIMING.startup + RIVAL_STRIKE_TIMING.active + frame);
 
 		expect(state.mode).toEqual({ kind: 'explore' });

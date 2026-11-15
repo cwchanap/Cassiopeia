@@ -326,7 +326,6 @@ function finishDialogue(state: GameState, villagerId: VillagerId): void {
 	}
 }
 
-/** Each duel start refills the player and resets the rival's health, position and AI. */
 function startDuel(state: GameState): void {
 	state.mode = { kind: 'duel' };
 	state.player.health = state.player.maxHealth;
@@ -355,7 +354,6 @@ function startDuel(state: GameState): void {
 	);
 }
 
-/** Lu returns to his authored courtyard post after a win or a loss; the duel is over. */
 function resetRivalToPost(state: GameState): void {
 	const lu = getVillager('senior_brother_lu');
 	state.rival.position = { ...lu.position };
@@ -439,7 +437,6 @@ function processInventoryInput(state: GameState, input: InputSnapshot): void {
 	}
 }
 
-/** Opening the bag is blocked while paused or in dialogue; closing stays allowed. */
 function bagOpenBlocked(state: GameState): boolean {
 	return !state.inventoryOpen && (state.paused || state.mode.kind === 'dialogue');
 }
