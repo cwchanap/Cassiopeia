@@ -314,6 +314,10 @@ export function assignQuickSlot(
 	return `Assigned ${item.name} to slot ${slot}`;
 }
 
+export function grantItem(progress: ItemProgress, itemId: ItemId, count: number): void {
+	incrementItem(progress, itemId, count);
+}
+
 export function grantVictoryReward(progress: ItemProgress): ItemReward {
 	const nextSeed = nextRewardSeed(progress.rewardSeed);
 	const reward = REWARD_TABLE[nextSeed % REWARD_TABLE.length];

@@ -9,11 +9,13 @@ import {
 	RIVAL_STRIKE_TIMING
 } from './combat';
 import { getVillager, DASH_MARKERS, PLAYER_SPAWN, QUEST_STEPS } from './villageContent';
+import { createStarterItemProgress } from './items';
 import type { GameState, InputSnapshot } from './types';
 import { canStandAt, moveThroughWorld } from './world';
 
 const elder = getVillager('elder_shen');
 const lu = getVillager('senior_brother_lu');
+const qin = getVillager('auntie_qin');
 
 const idleInput: InputSnapshot = {
 	moveX: 0,
@@ -31,7 +33,7 @@ const frame = 1 / 60;
 
 function setupDuel(): GameState {
 	const state = createInitialGameState();
-	state.quest = { stepIndex: 2, stepProgress: 0 };
+	state.quest = { stepIndex: 3, stepProgress: 0 };
 	state.mode = { kind: 'duel' };
 	state.rival.active = true;
 	state.player.position = { x: 0, z: 0 };
@@ -69,7 +71,7 @@ describe('wuxia simulation state', () => {
 
 	it('keeps the duel rival spawn out of the water near the river', () => {
 		const state = createInitialGameState();
-		state.quest = { stepIndex: 2, stepProgress: 0 };
+		state.quest = { stepIndex: 3, stepProgress: 0 };
 		state.player.position = { x: 17, z: 8 };
 		state.player.heading = Math.PI / 2;
 		state.mode = {
@@ -208,7 +210,7 @@ describe('wuxia simulation state', () => {
 
 	it('starts the spar on the last line of Lu’s dialogue and refills the duel', () => {
 		const state = createInitialGameState();
-		state.quest = { stepIndex: 2, stepProgress: 0 };
+		state.quest = { stepIndex: 3, stepProgress: 0 };
 		state.player.position = { x: lu.position.x + 0.5, z: lu.position.z };
 		state.player.health = 40;
 		state.player.qi = 10;
@@ -616,7 +618,7 @@ describe('wuxia simulation state', () => {
 		advance(state, RIVAL_STRIKE_TIMING.startup + RIVAL_STRIKE_TIMING.active + frame);
 
 		expect(state.mode).toEqual({ kind: 'explore' });
-		expect(state.quest.stepIndex).toBe(2);
+		expect(state.quest.stepIndex).toBe(3);
 		expect(state.player.position).toEqual(PLAYER_SPAWN);
 		expect(state.player.health).toBe(state.player.maxHealth);
 		expect(state.player.qi).toBe(state.player.maxQi);
@@ -723,5 +725,110 @@ describe('qinggong dash markers', () => {
 		stepGame(state, { ...idleInput, dash: true }, frame);
 		expect(state.player.position).toEqual({ x: 5, z: -6.5 });
 		expect(state.quest.stepProgress).toBe(0);
+	});
+});
+
+describe('fetch medicine', () => {
+	function setupMedicine(stepProgress = 0): GameState {
+		const state = createInitialGameState();
+		state.quest = { stepIndex: 2, stepProgress };
+		state.player.position = { x: qin.position.x - 0.5, z: qin.position.z };
+		return state;
+	}
+
+	it('seeds Auntie Qin on reachable walkable street outside the Herbalist footprint', () => {
+		expect(canStandAt(qin.position)).toBe(true);
+		expect(canStandAt({ x: 5, z: -10 })).toBe(false);
+
+		let position = { x: 0, z: 0 };
+		for (const waypoint of [{ x: 0, z: -9 }, qin.position]) {
+			position = moveThroughWorld(position, waypoint);
+		}
+		expect(position.x).toBeCloseTo(qin.position.x);
+		expect(position.z).toBeCloseTo(qin.position.z);
+	});
+
+	it('grants two healing pills once when Qin’s dialogue finishes', () => {
+		const state = setupMedicine();
+		expect(state.items.inventory.lesser_healing_pill).toBe(3);
+
+		stepGame(state, { ...idleInput, interact: true }, frame);
+		expect(state.mode).toEqual({ kind: 'dialogue', villagerId: 'auntie_qin', lineIndex: 0 });
+		expect(state.prompt).toBe(`${qin.name}: ${qin.questLines[0]} (E)`);
+
+		finishDialogue(state, qin.questLines.length);
+
+		expect(state.mode).toEqual({ kind: 'explore' });
+		expect(state.quest).toEqual({ stepIndex: 2, stepProgress: 1 });
+		expect(state.items.inventory.lesser_healing_pill).toBe(5);
+		expect(toHudSnapshot(state).objective).toBe(QUEST_STEPS[2].instruction);
+	});
+
+	it('plays ambient lines on later visits without granting again', () => {
+		const state = setupMedicine(1);
+		state.items.inventory.lesser_healing_pill = 5;
+
+		stepGame(state, { ...idleInput, interact: true }, frame);
+		expect(state.prompt).toBe(`${qin.name}: ${qin.ambientLines[0]} (E)`);
+
+		finishDialogue(state, qin.ambientLines.length);
+
+		expect(state.mode).toEqual({ kind: 'explore' });
+		expect(state.quest).toEqual({ stepIndex: 2, stepProgress: 1 });
+		expect(state.items.inventory.lesser_healing_pill).toBe(5);
+	});
+
+	it('completes the step on a deliberate pill assignment while the bag is open at zero dt', () => {
+		const state = setupMedicine(1);
+		state.inventoryOpen = true;
+
+		stepGame(state, idleInput, 0, [
+			{ type: 'assignQuickSlot', slot: 1, itemId: 'lesser_healing_pill' }
+		]);
+
+		expect(state.inventoryOpen).toBe(true);
+		expect(state.itemFeedback).toBe('Assigned Lesser Healing Pill to slot 1');
+		expect(state.quest).toEqual({ stepIndex: 3, stepProgress: 0 });
+		expect(toHudSnapshot(state).objective).toBe(QUEST_STEPS[3].instruction);
+	});
+
+	it('ignores assignments of other items and any assignment before the grant', () => {
+		const state = setupMedicine(1);
+		state.inventoryOpen = true;
+
+		stepGame(state, idleInput, 0, [{ type: 'assignQuickSlot', slot: 3, itemId: 'lesser_qi_pill' }]);
+		expect(state.quest).toEqual({ stepIndex: 2, stepProgress: 1 });
+
+		stepGame(state, idleInput, 0, [{ type: 'assignQuickSlot', slot: 3, itemId: null }]);
+		expect(state.quest).toEqual({ stepIndex: 2, stepProgress: 1 });
+
+		const beforeGrant = setupMedicine();
+		expect(beforeGrant.items.quickSlots[1]).toBe('lesser_healing_pill');
+		stepGame(beforeGrant, idleInput, 0, [
+			{ type: 'assignQuickSlot', slot: 1, itemId: 'lesser_healing_pill' }
+		]);
+		expect(beforeGrant.quest).toEqual({ stepIndex: 2, stepProgress: 0 });
+	});
+
+	it('restores a granted pill count and pending assignment from a reload', () => {
+		const items = createStarterItemProgress();
+		items.inventory.lesser_healing_pill = 5;
+		const state = createInitialGameState(items, { stepIndex: 2, stepProgress: 1 });
+
+		expect(state.quest).toEqual({ stepIndex: 2, stepProgress: 1 });
+		expect(state.items.inventory.lesser_healing_pill).toBe(5);
+
+		state.player.position = { x: qin.position.x - 0.5, z: qin.position.z };
+		stepGame(state, { ...idleInput, interact: true }, frame);
+		expect(state.prompt).toBe(`${qin.name}: ${qin.ambientLines[0]} (E)`);
+		finishDialogue(state, qin.ambientLines.length);
+		expect(state.items.inventory.lesser_healing_pill).toBe(5);
+
+		state.inventoryOpen = true;
+		stepGame(state, idleInput, 0, [
+			{ type: 'assignQuickSlot', slot: 1, itemId: 'lesser_healing_pill' }
+		]);
+		expect(state.quest).toEqual({ stepIndex: 3, stepProgress: 0 });
+		expect(state.items.inventory.lesser_healing_pill).toBe(5);
 	});
 });

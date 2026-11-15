@@ -4,7 +4,7 @@ import { expect, test, type Page } from '@playwright/test';
 test.use({ viewport: { width: 960, height: 640 } });
 
 const rewardItemsByName: Record<string, { testId: string; countBeforeReward: number }> = {
-	'Lesser Healing Pill': { testId: 'bag-item-lesser_healing_pill', countBeforeReward: 3 },
+	'Lesser Healing Pill': { testId: 'bag-item-lesser_healing_pill', countBeforeReward: 5 },
 	'Lesser Qi Pill': { testId: 'bag-item-lesser_qi_pill', countBeforeReward: 1 },
 	'Tempered Practice Sword': { testId: 'bag-item-tempered_practice_sword', countBeforeReward: 0 },
 	'Reinforced Training Robe': { testId: 'bag-item-reinforced_training_robe', countBeforeReward: 0 },
@@ -121,6 +121,19 @@ test('plays through the first day quest, duel, reward, and free roam', async ({ 
 			count
 		);
 	const qinggongReady = page.locator('.technique', { hasText: 'Qinggong' }).locator('small');
+	const walkFramesToPrompt = async (keys: string[], text: string) => {
+		await expect(async () => {
+			for (const key of keys) {
+				await page.keyboard.down(key);
+			}
+			await renderedFrames(3);
+			for (const key of keys) {
+				await page.keyboard.up(key);
+			}
+			await renderedFrames(1);
+			expect(await prompt.innerText().catch(() => '')).toBe(text);
+		}).toPass({ timeout: 120000 });
+	};
 	let markerTaps = 0;
 	const dashThroughNextMarker = async (expected: RegExp) => {
 		await expect(async () => {
@@ -138,10 +151,41 @@ test('plays through the first day quest, duel, reward, and free roam', async ({ 
 	};
 	await dashThroughNextMarker(/1\/3/);
 	await dashThroughNextMarker(/2\/3/);
-	await dashThroughNextMarker(/Speak with Senior Brother Lu and win the spar/);
+	await dashThroughNextMarker(/Fetch medicine from Auntie Qin/);
 
 	await page.reload();
 	await expect(page.getByTestId('game-shell')).toBeVisible();
+	await expect(objectiveChip).toContainText('Fetch medicine from Auntie Qin');
+	await expect(prompt).toHaveText('Press E to speak with Senior Brother Lu');
+
+	await walkFramesToPrompt(['w', 'd'], 'Press E to speak with Auntie Qin');
+
+	await page.keyboard.press('e');
+	await expect(prompt).toContainText('Auntie Qin:');
+	await expect(prompt).toContainText('He sends every first-day disciple to me');
+	await page.keyboard.press('e');
+	await expect(prompt).toContainText('Two Lesser Healing Pills');
+	await page.keyboard.press('e');
+	await expect(prompt).toContainText('set it on a quick slot');
+	await page.keyboard.press('e');
+	await expect(prompt).toHaveText('Press E to speak with Auntie Qin');
+	await expect(objectiveChip).toContainText('Fetch medicine from Auntie Qin');
+	await expect(page.getByTestId('item-feedback')).toHaveText('Received Lesser Healing Pill x2');
+
+	await page.getByTestId('bag-toggle').click();
+	await expect(page.getByTestId('bag-panel')).toBeVisible();
+	await expectBagItemCount(page, 'bag-item-lesser_healing_pill', 5);
+	await page.getByTestId('bag-assign-lesser_healing_pill-slot-1').click();
+	await expect(page.getByTestId('item-feedback')).toHaveText(
+		'Assigned Lesser Healing Pill to slot 1'
+	);
+	await page.getByTestId('bag-close').click();
+	await expect(page.getByTestId('bag-panel')).toBeHidden();
+	await expect(objectiveChip).toContainText('Speak with Senior Brother Lu and win the spar');
+
+	await page.reload();
+	await expect(page.getByTestId('game-shell')).toBeVisible();
+	await expect(objectiveChip).toContainText('Speak with Senior Brother Lu and win the spar');
 	await expect(prompt).toHaveText('Press E to speak with Senior Brother Lu');
 
 	await page.keyboard.press('e');

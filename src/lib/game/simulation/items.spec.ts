@@ -5,6 +5,7 @@ import {
 	derivePlayerItemStats,
 	equipItem,
 	formatReward,
+	grantItem,
 	grantVictoryReward,
 	isItemProgressSave,
 	normalizeItemProgress,
@@ -175,6 +176,16 @@ describe('item system rules', () => {
 
 		expect(assignQuickSlot(progress, 2, null)).toBe('Cleared slot 2');
 		expect(progress.quickSlots[2]).toBeNull();
+	});
+
+	it('grants items through the shared inventory increment', () => {
+		const progress = createStarterItemProgress();
+
+		grantItem(progress, 'lesser_healing_pill', 2);
+		expect(progress.inventory.lesser_healing_pill).toBe(5);
+
+		grantItem(progress, 'jade_breathing_charm', 1);
+		expect(progress.inventory.jade_breathing_charm).toBe(1);
 	});
 
 	it('grants deterministic victory rewards and formats reward feedback', () => {

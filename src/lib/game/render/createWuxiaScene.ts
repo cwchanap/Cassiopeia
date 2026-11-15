@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { createInitialGameState } from '$lib/game/simulation/state';
 import { activeQuestStep } from '$lib/game/simulation/quest';
-import { DASH_MARKERS } from '$lib/game/simulation/villageContent';
+import { DASH_MARKERS, getVillager } from '$lib/game/simulation/villageContent';
 import type { CombatEffect, GameState, QuestProgress, Vec2 } from '$lib/game/simulation/types';
 import {
 	cameraFollowFactor,
@@ -35,6 +35,7 @@ type SceneResources = {
 const playerColor = 0xf4eee4;
 const rivalColor = 0x33413b;
 const mentorColor = 0x6a796c;
+const qinColor = 0x7a5560;
 const SUN_OFFSET = { x: -9, y: 18, z: 6 };
 
 export function createWuxiaScene(host: HTMLElement): WuxiaScene {
@@ -67,9 +68,12 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 	addInkSilhouette(player, inkMaterial);
 	const rival = createDisciple(rivalColor, resources);
 	const mentor = createDisciple(mentorColor, resources);
+	const auntieQin = getVillager('auntie_qin');
+	const qin = createDisciple(qinColor, resources);
 	// Actors draw after ink so an occluded player's silhouette never paints over them.
 	setMeshRenderOrder(rival, PLAYER_RENDER_ORDER);
 	setMeshRenderOrder(mentor, PLAYER_RENDER_ORDER);
+	setMeshRenderOrder(qin, PLAYER_RENDER_ORDER);
 	const effects = new Map<number, THREE.Mesh>();
 	let disposed = false;
 
@@ -85,6 +89,7 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 	scene.add(player);
 	scene.add(rival);
 	scene.add(mentor);
+	scene.add(qin);
 	const markerIdleMaterial = material(
 		new THREE.MeshStandardMaterial({ color: 0x8fa89b, roughness: 0.7 }),
 		resources
@@ -135,6 +140,7 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 			snapshot.elapsed
 		);
 		applyFighter(mentor, snapshot.mentor.position, Math.PI * 0.25, createIdleRenderAction());
+		applyFighter(qin, auntieQin.position, auntieQin.heading, createIdleRenderAction());
 		syncEffects(snapshot.effects, effects, resources, scene);
 		syncMarkers(snapshot.quest, dashMarkers, markerActiveMaterial, markerIdleMaterial);
 

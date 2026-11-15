@@ -14,8 +14,19 @@ describe('dialogueLinesFor', () => {
 		expect(dialogueLinesFor(quest, lu)).toBe(lu.ambientLines);
 		expect(dialogueLinesFor({ stepIndex: 1, stepProgress: 0 }, elder)).toBe(elder.ambientLines);
 		expect(dialogueLinesFor({ stepIndex: 1, stepProgress: 0 }, lu)).toBe(lu.ambientLines);
-		expect(dialogueLinesFor({ stepIndex: 2, stepProgress: 0 }, lu)).toBe(lu.questLines);
-		expect(dialogueLinesFor({ stepIndex: 3, stepProgress: 0 }, lu)).toBe(lu.ambientLines);
+		expect(dialogueLinesFor({ stepIndex: 2, stepProgress: 0 }, lu)).toBe(lu.ambientLines);
+		expect(dialogueLinesFor({ stepIndex: 3, stepProgress: 0 }, lu)).toBe(lu.questLines);
+		expect(dialogueLinesFor({ stepIndex: 4, stepProgress: 0 }, lu)).toBe(lu.ambientLines);
+	});
+
+	it('gives Auntie Qin her errand lines until the grant, then ambient lines only', () => {
+		const qin = getVillager('auntie_qin');
+
+		expect(dialogueLinesFor({ stepIndex: 0, stepProgress: 0 }, qin)).toBe(qin.ambientLines);
+		expect(dialogueLinesFor({ stepIndex: 1, stepProgress: 0 }, qin)).toBe(qin.ambientLines);
+		expect(dialogueLinesFor({ stepIndex: 2, stepProgress: 0 }, qin)).toBe(qin.questLines);
+		expect(dialogueLinesFor({ stepIndex: 2, stepProgress: 1 }, qin)).toBe(qin.ambientLines);
+		expect(dialogueLinesFor({ stepIndex: 3, stepProgress: 0 }, qin)).toBe(qin.ambientLines);
 	});
 });
 

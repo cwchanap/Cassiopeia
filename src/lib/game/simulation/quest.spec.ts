@@ -31,13 +31,13 @@ describe('quest progress', () => {
 		expect(advanceQuest(quest, { type: 'duelWon' }).stepIndex).toBe(0);
 		expect(advanceQuest(quest, { type: 'markerCrossed' }).stepIndex).toBe(0);
 
-		const atSpar = { stepIndex: 2, stepProgress: 0 };
+		const atSpar = { stepIndex: 3, stepProgress: 0 };
 		expect(
 			advanceQuest(atSpar, { type: 'dialogueComplete', villagerId: 'senior_brother_lu' }).stepIndex
-		).toBe(2);
+		).toBe(3);
 		expect(
 			advanceQuest(atSpar, { type: 'dialogueComplete', villagerId: 'elder_shen' }).stepIndex
-		).toBe(2);
+		).toBe(3);
 	});
 
 	it('counts ordered marker crossings and advances after the third', () => {
@@ -56,11 +56,56 @@ describe('quest progress', () => {
 
 		const done = advanceQuest(second, { type: 'markerCrossed' });
 		expect(done).toEqual({ stepIndex: 2, stepProgress: 0 });
+		expect(activeQuestStep(done)?.id).toBe('fetch_medicine');
+	});
+
+	it('stages the medicine grant on dialogue then completes on a matching quick-slot assignment', () => {
+		const atMedicine = { stepIndex: 2, stepProgress: 0 };
+		const step = QUEST_STEPS[2];
+		expect(step.id).toBe('fetch_medicine');
+		expect(step.grant).toEqual({ itemId: 'lesser_healing_pill', count: 2 });
+
+		expect(advanceQuest(atMedicine, { type: 'duelWon' })).toEqual(atMedicine);
+		expect(advanceQuest(atMedicine, { type: 'markerCrossed' })).toEqual(atMedicine);
+		expect(
+			advanceQuest(atMedicine, { type: 'dialogueComplete', villagerId: 'senior_brother_lu' })
+		).toEqual(atMedicine);
+		expect(
+			advanceQuest(atMedicine, {
+				type: 'quickSlotAssigned',
+				itemId: 'lesser_healing_pill'
+			})
+		).toEqual(atMedicine);
+
+		const granted = advanceQuest(atMedicine, {
+			type: 'dialogueComplete',
+			villagerId: 'auntie_qin'
+		});
+		expect(granted).toEqual({ stepIndex: 2, stepProgress: 1 });
+
+		const grantedAgain = advanceQuest(granted, {
+			type: 'dialogueComplete',
+			villagerId: 'auntie_qin'
+		});
+		expect(grantedAgain).toEqual({ stepIndex: 2, stepProgress: 1 });
+
+		expect(advanceQuest(granted, { type: 'quickSlotAssigned', itemId: 'lesser_qi_pill' })).toEqual(
+			granted
+		);
+		expect(advanceQuest(granted, { type: 'quickSlotAssigned', itemId: 'training_sword' })).toEqual(
+			granted
+		);
+
+		const done = advanceQuest(granted, {
+			type: 'quickSlotAssigned',
+			itemId: 'lesser_healing_pill'
+		});
+		expect(done).toEqual({ stepIndex: 3, stepProgress: 0 });
 		expect(activeQuestStep(done)?.id).toBe('spar');
 	});
 
 	it('completes the quest on the duel win and stays complete', () => {
-		const atSpar = { stepIndex: 2, stepProgress: 0 };
+		const atSpar = { stepIndex: 3, stepProgress: 0 };
 
 		const done = advanceQuest(atSpar, { type: 'duelWon' });
 		expect(done.stepIndex).toBe(QUEST_STEPS.length);
@@ -89,6 +134,14 @@ describe('normalizeQuestProgress', () => {
 			stepIndex: 2,
 			stepProgress: 0
 		});
+		expect(normalizeQuestProgress({ stepIndex: 2, stepProgress: 1 })).toEqual({
+			stepIndex: 2,
+			stepProgress: 1
+		});
+		expect(normalizeQuestProgress({ stepIndex: 3, stepProgress: 0 })).toEqual({
+			stepIndex: 3,
+			stepProgress: 0
+		});
 	});
 
 	it('accepts quest completion only with zero step progress', () => {
@@ -102,7 +155,8 @@ describe('normalizeQuestProgress', () => {
 	it('rejects progress the active step cannot produce', () => {
 		expect(normalizeQuestProgress({ stepIndex: 0, stepProgress: 1 })).toBeNull();
 		expect(normalizeQuestProgress({ stepIndex: 1, stepProgress: 3 })).toBeNull();
-		expect(normalizeQuestProgress({ stepIndex: 2, stepProgress: 1 })).toBeNull();
+		expect(normalizeQuestProgress({ stepIndex: 2, stepProgress: 2 })).toBeNull();
+		expect(normalizeQuestProgress({ stepIndex: 3, stepProgress: 1 })).toBeNull();
 		expect(normalizeQuestProgress({ stepIndex: 0, stepProgress: -1 })).toBeNull();
 	});
 
