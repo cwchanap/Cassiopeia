@@ -1,5 +1,5 @@
 import { DASH_MARKERS, QUEST_STEPS, type QuestStep } from './villageContent';
-import type { ItemId, QuestProgress, VillagerId } from './types';
+import type { ItemId, MarkerProgress, QuestProgress, VillagerId } from './types';
 
 export type QuestEvent =
 	| { type: 'dialogueComplete'; villagerId: VillagerId }
@@ -14,6 +14,13 @@ export function createInitialQuest(): QuestProgress {
 
 export function activeQuestStep(progress: QuestProgress): QuestStep | null {
 	return QUEST_STEPS[progress.stepIndex] ?? null;
+}
+
+export function markerProgress(progress: QuestProgress): MarkerProgress | null {
+	const step = activeQuestStep(progress);
+	return step?.kind === 'dashMarkers'
+		? { current: progress.stepProgress, total: DASH_MARKERS.length }
+		: null;
 }
 
 export function advanceQuest(progress: QuestProgress, event: QuestEvent): QuestProgress {

@@ -1,19 +1,13 @@
 import { distance, INTERACT_RANGE } from './combat';
 import { activeQuestStep } from './quest';
 import { getVillager, SHRINE_BELL, VILLAGERS, type VillagerContent } from './villageContent';
-import type { GameState, InteractTargetId, Vec2, VillagerId } from './types';
+import type { GameState, InteractTarget, Vec2, VillagerId } from './types';
 
-export type InteractTarget = {
-	id: InteractTargetId;
-	position: Vec2;
-};
+export type { InteractTarget };
 
 export function villagerPosition(state: GameState, villagerId: VillagerId): Vec2 {
 	if (villagerId === 'senior_brother_lu') {
 		return state.rival.position;
-	}
-	if (villagerId === 'elder_shen') {
-		return state.mentor.position;
 	}
 	return getVillager(villagerId).position;
 }

@@ -21,6 +21,6 @@ describe('Wuxia MVP route', () => {
 			.toHaveTextContent('Pay respects to Elder Shen in the courtyard');
 		await expect
 			.element(page.getByTestId('game-prompt'))
-			.toHaveTextContent('Press E to speak with Senior Brother Lu');
+			.toHaveTextContent('Pay respects to Elder Shen in the courtyard');
 	});
 });

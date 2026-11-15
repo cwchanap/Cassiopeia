@@ -178,6 +178,14 @@ describe('item system rules', () => {
 		expect(progress.quickSlots[2]).toBeNull();
 	});
 
+	it('rejects quick-slot assignments the inventory cannot back', () => {
+		const progress = createStarterItemProgress();
+		progress.inventory.lesser_qi_pill = 0;
+
+		expect(assignQuickSlot(progress, 3, 'lesser_qi_pill')).toBe('Lesser Qi Pill is unavailable');
+		expect(progress.quickSlots[3]).toBeNull();
+	});
+
 	it('grants items through the shared inventory increment', () => {
 		const progress = createStarterItemProgress();
 

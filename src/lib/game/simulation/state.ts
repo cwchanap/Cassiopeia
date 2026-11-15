@@ -34,7 +34,7 @@ import {
 } from './items';
 import { activeDialogueLine, advanceDialogue } from './dialogue';
 import { nearestInteractTarget, villagerPosition } from './interaction';
-import { activeQuestStep, advanceQuest, createInitialQuest } from './quest';
+import { activeQuestStep, advanceQuest, createInitialQuest, markerProgress } from './quest';
 import { DASH_MARKERS, getVillager, PLAYER_SPAWN, SHRINE_BELL, VILLAGERS } from './villageContent';
 import type { AttackTiming } from './combat';
 import type {
@@ -79,7 +79,6 @@ export function createInitialGameState(
 ): GameState {
 	const items = cloneItemProgress(itemProgress);
 	const playerStats = derivePlayerItemStats(items);
-	const elderShen = getVillager('elder_shen');
 	const lu = getVillager('senior_brother_lu');
 	const state: GameState = {
 		mode: { kind: 'explore' },
@@ -114,14 +113,16 @@ export function createInitialGameState(
 			active: false,
 			combatAction: idleCombatAction()
 		},
-		mentor: { position: { ...elderShen.position } },
 		effects: [],
 		elapsed: 0,
 		nextEffectId: 1,
 		items,
 		inventoryOpen: false,
-		itemFeedback: null
+		itemFeedback: null,
+		interactTarget: null,
+		markerProgress: null
 	};
+	state.interactTarget = nearestInteractTarget(state, state.player.position);
 	updatePrompt(state);
 	return state;
 }
@@ -174,6 +175,7 @@ export function stepGame(
 	handleDashMarkers(state, movePlayer(state, input, dt));
 
 	if (state.mode.kind === 'explore') {
+		state.interactTarget = nearestInteractTarget(state, state.player.position);
 		handleInteract(state, input);
 	}
 
@@ -207,10 +209,7 @@ export function toHudSnapshot(state: GameState): HudSnapshot {
 			position: { ...villagerPosition(state, villager.id) }
 		})),
 		objective: step?.instruction ?? QUEST_COMPLETE_OBJECTIVE,
-		markerProgress:
-			step?.kind === 'dashMarkers'
-				? { current: state.quest.stepProgress, total: DASH_MARKERS.length }
-				: null,
+		markerProgress: markerProgress(state.quest),
 		prompt: state.prompt,
 		dialogue: activeDialogueLine(state),
 		interactTarget: hudInteractTarget(state),
@@ -230,7 +229,7 @@ export function toHudSnapshot(state: GameState): HudSnapshot {
 }
 
 function hudInteractTarget(state: GameState): HudSnapshot['interactTarget'] {
-	const target = nearestInteractTarget(state, state.player.position);
+	const target = state.interactTarget;
 	if (!target) {
 		return null;
 	}
@@ -324,7 +323,7 @@ function handleInteract(state: GameState, input: InputSnapshot): void {
 		return;
 	}
 
-	const target = nearestInteractTarget(state, state.player.position);
+	const target = state.interactTarget;
 	if (!target) {
 		return;
 	}
@@ -459,7 +458,7 @@ function processInventoryCommands(state: GameState, commands: InventoryCommand[]
 		}
 
 		state.itemFeedback = assignQuickSlot(state.items, command.slot, command.itemId);
-		if (command.itemId !== null) {
+		if (command.itemId !== null && state.items.quickSlots[command.slot] === command.itemId) {
 			state.quest = advanceQuest(state.quest, {
 				type: 'quickSlotAssigned',
 				itemId: command.itemId
@@ -711,6 +710,11 @@ function resolveEndState(state: GameState): void {
 }
 
 function updatePrompt(state: GameState): void {
+	state.markerProgress = markerProgress(state.quest);
+	if (state.mode.kind !== 'explore' || state.paused || state.inventoryOpen) {
+		state.interactTarget = null;
+	}
+
 	if (state.inventoryOpen) {
 		state.prompt = 'Bag open';
 		return;
@@ -733,7 +737,7 @@ function updatePrompt(state: GameState): void {
 	}
 
 	const step = activeQuestStep(state.quest);
-	const target = nearestInteractTarget(state, state.player.position);
+	const target = state.interactTarget;
 	if (target) {
 		state.prompt =
 			target.id === SHRINE_BELL.id
