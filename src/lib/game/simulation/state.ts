@@ -621,8 +621,6 @@ function resolveEndState(state: GameState): void {
 		const reward = grantVictoryReward(state.items);
 		state.itemFeedback = `Won: ${formatReward(reward)}`;
 		state.quest = advanceQuest(state.quest, { type: 'duelWon' });
-		// The swing that ended the duel must not follow the player into free roam; combat
-		// actions only advance in duel mode.
 		state.player.combatAction = idleCombatAction();
 		resetRivalToPost(state);
 		state.mode = { kind: 'explore' };
