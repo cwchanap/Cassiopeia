@@ -8,7 +8,13 @@ export type InteractTarget = {
 };
 
 export function villagerPosition(state: GameState, villagerId: VillagerId): Vec2 {
-	return villagerId === 'senior_brother_lu' ? state.rival.position : state.mentor.position;
+	if (villagerId === 'senior_brother_lu') {
+		return state.rival.position;
+	}
+	if (villagerId === 'elder_shen') {
+		return state.mentor.position;
+	}
+	return getVillager(villagerId).position;
 }
 
 export function interactTargets(state: GameState): InteractTarget[] {

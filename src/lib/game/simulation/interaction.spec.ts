@@ -54,4 +54,12 @@ describe('nearestVillager', () => {
 		expect(nearestVillager(state, { x: 6.5, z: 6 })?.id).toBe('senior_brother_lu');
 		expect(nearestVillager(state, lu.position)).toBeNull();
 	});
+
+	it('locates Auntie Qin at her authored street post', () => {
+		const state = createInitialGameState();
+		const qin = getVillager('auntie_qin');
+		const beside = { x: qin.position.x - 0.5, z: qin.position.z };
+
+		expect(nearestVillager(state, beside)?.id).toBe('auntie_qin');
+	});
 });

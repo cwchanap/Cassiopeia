@@ -28,6 +28,7 @@ import {
 	equipItem,
 	formatReward,
 	getPlayerAttackDamage,
+	grantItem,
 	grantVictoryReward,
 	useConsumable
 } from './items';
@@ -320,6 +321,15 @@ function finishDialogue(state: GameState, villagerId: VillagerId): void {
 		case 'talk':
 			state.quest = advanceQuest(state.quest, { type: 'dialogueComplete', villagerId });
 			break;
+		case 'receiveItem': {
+			const stepProgressBefore = state.quest.stepProgress;
+			state.quest = advanceQuest(state.quest, { type: 'dialogueComplete', villagerId });
+			if (step.grant && stepProgressBefore === 0 && state.quest.stepProgress === 1) {
+				grantItem(state.items, step.grant.itemId, step.grant.count);
+				state.itemFeedback = `Received ${formatReward(step.grant)}`;
+			}
+			break;
+		}
 		case 'duel':
 			startDuel(state);
 			break;
@@ -423,6 +433,12 @@ function processInventoryCommands(state: GameState, commands: InventoryCommand[]
 		}
 
 		state.itemFeedback = assignQuickSlot(state.items, command.slot, command.itemId);
+		if (command.itemId !== null) {
+			state.quest = advanceQuest(state.quest, {
+				type: 'quickSlotAssigned',
+				itemId: command.itemId
+			});
+		}
 	}
 }
 

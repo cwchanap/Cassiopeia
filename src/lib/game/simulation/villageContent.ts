@@ -1,6 +1,6 @@
-import type { Vec2, VillagerId } from './types';
+import type { ItemReward, Vec2, VillagerId } from './types';
 
-export type QuestStepKind = 'talk' | 'dashMarkers' | 'duel';
+export type QuestStepKind = 'talk' | 'dashMarkers' | 'receiveItem' | 'duel';
 
 export type QuestStep = {
 	id: string;
@@ -8,6 +8,7 @@ export type QuestStep = {
 	targetId: string;
 	title: string;
 	instruction: string;
+	grant?: ItemReward;
 };
 
 export type VillagerContent = {
@@ -50,6 +51,18 @@ export const VILLAGERS: VillagerContent[] = [
 			'Enough talk — show me what those legs can do!'
 		],
 		ambientLines: ['Earn your introduction first, initiate.']
+	},
+	{
+		id: 'auntie_qin',
+		name: 'Auntie Qin',
+		position: { x: 1.2, z: -9.5 },
+		heading: 0,
+		questLines: [
+			"Elder Shen's new sprout, aren't you? He sends every first-day disciple to me.",
+			'Two Lesser Healing Pills, fresh from the Herbalist. The sect keeps the tab.',
+			'Put one where your hand falls — open your bag and set it on a quick slot.'
+		],
+		ambientLines: ['The Herbalist keeps a poultice for every training bruise, little one.']
 	}
 ];
 
@@ -67,6 +80,15 @@ export const QUEST_STEPS: QuestStep[] = [
 		targetId: 'gate_markers',
 		title: '轻功 Lightness Training',
 		instruction: 'Dash through the three gate markers in order'
+	},
+	{
+		id: 'fetch_medicine',
+		kind: 'receiveItem',
+		targetId: 'auntie_qin',
+		title: '取药 Fetch Medicine',
+		instruction:
+			'Fetch medicine from Auntie Qin by the Herbalist and assign a pill to a quick slot',
+		grant: { itemId: 'lesser_healing_pill', count: 2 }
 	},
 	{
 		id: 'spar',

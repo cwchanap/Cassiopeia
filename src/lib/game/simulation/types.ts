@@ -1,4 +1,4 @@
-export type VillagerId = 'elder_shen' | 'senior_brother_lu';
+export type VillagerId = 'elder_shen' | 'senior_brother_lu' | 'auntie_qin';
 
 export type GameMode =
 	| { kind: 'explore' }

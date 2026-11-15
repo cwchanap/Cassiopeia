@@ -4,7 +4,13 @@ import type { GameMode, GameState, HudDialogue, QuestProgress, VillagerId } from
 
 export function dialogueLinesFor(progress: QuestProgress, villager: VillagerContent): string[] {
 	const step = activeQuestStep(progress);
-	return step?.targetId === villager.id ? villager.questLines : villager.ambientLines;
+	if (step?.targetId !== villager.id) {
+		return villager.ambientLines;
+	}
+	if (step.kind === 'receiveItem' && progress.stepProgress !== 0) {
+		return villager.ambientLines;
+	}
+	return villager.questLines;
 }
 
 export function activeDialogueLine(state: GameState): HudDialogue | null {

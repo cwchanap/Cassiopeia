@@ -1,10 +1,11 @@
 import { DASH_MARKERS, QUEST_STEPS, type QuestStep } from './villageContent';
-import type { QuestProgress, VillagerId } from './types';
+import type { ItemId, QuestProgress, VillagerId } from './types';
 
 export type QuestEvent =
 	| { type: 'dialogueComplete'; villagerId: VillagerId }
 	| { type: 'duelWon' }
-	| { type: 'markerCrossed' };
+	| { type: 'markerCrossed' }
+	| { type: 'quickSlotAssigned'; itemId: ItemId };
 
 export function createInitialQuest(): QuestProgress {
 	return { stepIndex: 0, stepProgress: 0 };
@@ -33,6 +34,18 @@ export function advanceQuest(progress: QuestProgress, event: QuestEvent): QuestP
 			if (event.type === 'markerCrossed') {
 				stepProgress += 1;
 				completed = stepProgress >= requiredStepEvents(step);
+			}
+			break;
+		case 'receiveItem':
+			if (event.type === 'dialogueComplete' && event.villagerId === step.targetId) {
+				stepProgress = Math.max(stepProgress, 1);
+			}
+			if (
+				event.type === 'quickSlotAssigned' &&
+				event.itemId === step.grant?.itemId &&
+				stepProgress === 1
+			) {
+				completed = true;
 			}
 			break;
 	}
@@ -79,6 +92,8 @@ function requiredStepEvents(step: QuestStep): number {
 			return 1;
 		case 'dashMarkers':
 			return DASH_MARKERS.length;
+		case 'receiveItem':
+			return 2;
 	}
 }
 
