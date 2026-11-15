@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createInitialGameState } from '$lib/game/simulation/state';
 import type { CombatEffect, GameState, Vec2 } from '$lib/game/simulation/types';
 import {
 	cameraFollowFactor,
@@ -114,13 +115,11 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 			snapshot.rival.combatAction,
 			snapshot.elapsed
 		);
-		rival.visible =
-			snapshot.rival.active || snapshot.phase === 'duel' || snapshot.phase === 'victory';
 		applyFighter(mentor, snapshot.mentor.position, Math.PI * 0.25, createIdleRenderAction());
 		syncEffects(snapshot.effects, effects, resources, scene);
 
 		const desiredPose = computeWuxiaCameraPose({
-			phase: snapshot.phase === 'paused' ? snapshot.previousPhase : snapshot.phase,
+			mode: snapshot.mode.kind,
 			playerPosition: snapshot.player.position,
 			rival: {
 				active: snapshot.rival.active,
@@ -192,7 +191,7 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 		renderer.domElement.remove();
 	}
 
-	render(createInitialRenderState(), 1 / 60);
+	render(createInitialGameState(), 1 / 60);
 
 	return { render, dispose };
 }
@@ -610,65 +609,6 @@ function createEffectMesh(effect: CombatEffect): THREE.Mesh {
 		mesh.rotation.x = Math.PI / 2;
 	}
 	return mesh;
-}
-
-function createInitialRenderState(): GameState {
-	return {
-		phase: 'seekMentor',
-		previousPhase: 'seekMentor',
-		objective: 'Meet the mentor',
-		prompt: null,
-		player: {
-			position: { x: 0, z: 0 },
-			heading: 0,
-			health: 100,
-			maxHealth: 100,
-			qi: 60,
-			maxQi: 60,
-			dashCooldown: 0,
-			attackCooldown: 0,
-			qiCooldown: 0,
-			rivalAttackCooldown: 0,
-			active: true,
-			combatAction: createIdleRenderAction()
-		},
-		rival: {
-			position: { x: 0.8, z: 0 },
-			heading: Math.PI,
-			health: 100,
-			maxHealth: 100,
-			qi: 0,
-			maxQi: 0,
-			dashCooldown: 0,
-			attackCooldown: 0,
-			qiCooldown: 0,
-			rivalAttackCooldown: 0,
-			active: false,
-			combatAction: createIdleRenderAction()
-		},
-		mentor: { position: { x: -4, z: -3 } },
-		effects: [],
-		elapsed: 0,
-		nextEffectId: 1,
-		items: {
-			version: 1,
-			inventory: {},
-			equipment: {
-				weapon: null,
-				robe: null,
-				accessory: null
-			},
-			quickSlots: {
-				1: null,
-				2: null,
-				3: null
-			},
-			rewardSeed: 1,
-			lastReward: null
-		},
-		inventoryOpen: false,
-		itemFeedback: null
-	};
 }
 
 function createIdleRenderAction() {

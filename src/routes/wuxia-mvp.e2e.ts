@@ -15,19 +15,34 @@ async function expectBagItemCount(page: Page, testId: string, count: number): Pr
 	const bagItem = page.getByTestId(testId);
 
 	await expect(bagItem).toBeVisible();
-	await expect(bagItem.locator('small')).toHaveText(`x${count}`);
+	await expect(bagItem).toContainText(new RegExp(`x${count}(?!\\d)`), { timeout: 15000 });
 }
 
-test('plays through the Wuxia MVP opening, item loop, reward, and restart', async ({ page }) => {
+// Holding a direction overshoots the 1.5 m talk window long before a poll sees the prompt,
+// so tap the key and only assert while the player is standing still inside the window.
+async function walkToPrompt(page: Page, key: string, text: string): Promise<void> {
+	const prompt = page.getByTestId('game-prompt');
+	await expect(async () => {
+		await page.keyboard.down(key);
+		await page.waitForTimeout(120);
+		await page.keyboard.up(key);
+		await page.waitForTimeout(300);
+		expect(await prompt.innerText().catch(() => '')).toBe(text);
+	}).toPass({ timeout: 60000 });
+}
+
+test('plays through the first day quest, duel, reward, and free roam', async ({ page }) => {
 	// Software WebGL can drop below 5 fps; the capped simulation step then advances only a
 	// fraction of a game second per wall second, so keep wall-clock limits generous.
-	test.setTimeout(180000);
+	test.setTimeout(300000);
 	await page.goto('/');
 	await page.evaluate(() => localStorage.clear());
 	await page.reload();
 
 	await expect(page.getByTestId('game-shell')).toBeVisible();
-	await expect(page.getByTestId('objective-chip')).toContainText('Meet the mentor');
+	await expect(page.getByTestId('objective-chip')).toContainText(
+		'Pay respects to Elder Shen in the courtyard'
+	);
 	await expect(page.locator('canvas')).toBeVisible();
 	// A slow GLB load on a loaded host can exceed the 5 s assertion default; wait out
 	// 'loading' with a real budget, then require 'ready' so 'fallback' still fails.
@@ -60,18 +75,52 @@ test('plays through the Wuxia MVP opening, item loop, reward, and restart', asyn
 	await expect(page.getByTestId('bag-toggle')).toBeFocused();
 	await expect(page.getByTestId('quick-slot-3')).toContainText('Qi Pill');
 
-	await page.keyboard.down('w');
-	await expect(page.getByTestId('game-prompt')).toHaveText('Press E to begin mentor training', {
-		timeout: 20000
-	});
-	await page.keyboard.up('w');
+	await walkToPrompt(page, 'w', 'Press E to speak with Elder Shen');
 
 	await page.keyboard.press('e');
-	await expect(page.getByTestId('objective-chip')).toContainText('Practice qinggong dash');
+	const prompt = page.getByTestId('game-prompt');
+	await expect(prompt).toContainText('Elder Shen:');
+	// The bag cannot be opened while a villager is talking; keyboard and button agree.
+	await expect(page.getByTestId('bag-toggle')).toBeDisabled();
+	await page.keyboard.press('i');
+	await expect(page.getByTestId('bag-panel')).toBeHidden();
+	await expect(prompt).toContainText('So you are the new initiate');
+	await page.keyboard.press('e');
+	await expect(prompt).toContainText('From today you train beneath this roof');
+	await page.keyboard.press('e');
+	await expect(prompt).toContainText('Senior Brother Lu waits by the duel ring');
+	await page.keyboard.press('e');
+	await expect(page.getByTestId('objective-chip')).toContainText(
+		'Speak with Senior Brother Lu and win the spar'
+	);
+	await expect(page.getByTestId('bag-toggle')).toBeEnabled();
 
-	await page.keyboard.press('Space');
-	await expect(page.getByTestId('objective-chip')).toContainText('Defeat the rival disciple');
-	await expect(page.getByTestId('status-cluster')).toContainText('Action');
+	await walkToPrompt(page, 's', 'Press E to speak with Senior Brother Lu');
+
+	await page.keyboard.press('e');
+	await expect(prompt).toContainText('Senior Brother Lu:');
+	await expect(prompt).toContainText('Elder Shen sent you?');
+
+	// Esc pauses inside a dialogue without losing the conversation.
+	await page.keyboard.press('Escape');
+	await expect(page.getByTestId('pause-panel')).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(page.getByTestId('pause-panel')).toBeHidden();
+	await expect(prompt).toContainText('Senior Brother Lu:');
+
+	await page.keyboard.press('e');
+	await expect(prompt).toContainText('Enough talk');
+	await page.keyboard.press('e');
+	// The last line starts the duel; the rival meter and duel prompt appear together.
+	await expect(prompt).toHaveText('J: strike  K: qi burst  Space: dash');
+	await expect(page.getByRole('meter', { name: 'Rival health' })).toBeVisible();
+
+	// Pausing mid-duel keeps the duel framing: rival meter stays under the pause overlay.
+	await page.keyboard.press('Escape');
+	await expect(page.getByTestId('pause-panel')).toBeVisible();
+	await expect(page.getByRole('meter', { name: 'Rival health' })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(page.getByTestId('pause-panel')).toBeHidden();
 
 	// The rival can stagger the player before the first burst, consuming that key press.
 	await expect(async () => {
@@ -94,18 +143,18 @@ test('plays through the Wuxia MVP opening, item loop, reward, and restart', asyn
 	// the duel can lag wall time several-fold. Keep attacking while the rival's health
 	// keeps dropping; only a sustained stall or the overall deadline fails the journey.
 	const rivalMeter = page.getByRole('meter', { name: 'Rival health' });
-	// The meter only exists during the duel; once it is gone the end state is showing.
+	// The meter only exists during the duel; once it is gone the spar is decided.
 	const readRivalHealth = () =>
 		rivalMeter
 			.getAttribute('value', { timeout: 2000 })
 			.then((value) => Number(value))
 			.catch(() => null);
-	const duelDeadline = Date.now() + 100000;
+	const duelDeadline = Date.now() + 150000;
 	let rivalHealth = 100;
 	let lastProgress = Date.now();
 	let presses = 0;
 
-	while (!(await page.getByTestId('end-state').isVisible())) {
+	while (await rivalMeter.isVisible().catch(() => false)) {
 		if (Date.now() > duelDeadline) {
 			throw new Error(`Duel timed out with the rival at ${rivalHealth}/100 health`);
 		}
@@ -119,18 +168,18 @@ test('plays through the Wuxia MVP opening, item loop, reward, and restart', asyn
 		} else if (Date.now() - lastProgress > 30000) {
 			throw new Error(`Duel stalled with the rival at ${rivalHealth}/100 health`);
 		}
-		await page.waitForTimeout(230);
+		await page.waitForTimeout(150);
 	}
 
-	await expect(page.getByTestId('end-state')).toBeVisible();
-	await expect(page.getByTestId('game-prompt')).toContainText('Won:');
-	const rewardPrompt = await page.getByTestId('game-prompt').innerText();
+	await expect(page.getByTestId('objective-chip')).toContainText('free roam');
+	await expect(page.getByTestId('item-feedback')).toContainText('Won:');
+	const rewardPrompt = await page.getByTestId('item-feedback').innerText();
 	const rewardMatch = rewardPrompt.match(/Won: (?<name>.+?) x(?<count>\d+)/);
 	const rewardName = rewardMatch?.groups?.name;
 	const rewardCount = Number(rewardMatch?.groups?.count);
 
 	if (!rewardName || !Number.isInteger(rewardCount) || rewardCount <= 0) {
-		throw new Error(`Expected victory reward in prompt: ${rewardPrompt}`);
+		throw new Error(`Expected victory reward in feedback: ${rewardPrompt}`);
 	}
 
 	const rewardItem = rewardItemsByName[rewardName];
@@ -141,12 +190,10 @@ test('plays through the Wuxia MVP opening, item loop, reward, and restart', asyn
 
 	const expectedRewardItemCount = rewardItem.countBeforeReward + rewardCount;
 
-	await page.getByTestId('restart-button').click();
-	await expect(page.getByTestId('objective-chip')).toContainText('Meet the mentor');
-
 	await page.getByTestId('bag-toggle').click();
 	await expect(page.getByTestId('bag-panel')).toBeVisible();
 	await expectBagItemCount(page, rewardItem.testId, expectedRewardItemCount);
+	await page.getByTestId('bag-close').click();
 
 	await page.reload();
 	await expect(page.getByTestId('game-shell')).toBeVisible();

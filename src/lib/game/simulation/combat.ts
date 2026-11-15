@@ -1,6 +1,6 @@
 import type { FighterState, Vec2 } from './types';
 
-export const MENTOR_INTERACT_RANGE = 1.5;
+export const INTERACT_RANGE = 1.5;
 export const LIGHT_ATTACK_RANGE = 1.35;
 export const QI_BURST_RANGE = 2.75;
 export const LIGHT_ATTACK_DAMAGE = 12;

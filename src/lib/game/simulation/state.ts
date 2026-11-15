@@ -4,7 +4,6 @@ import {
 	DASH_COOLDOWN,
 	DASH_DISTANCE,
 	LIGHT_ATTACK_TIMING,
-	MENTOR_INTERACT_RANGE,
 	normaliseMove,
 	PLAYER_BASE_HEALTH,
 	PLAYER_SPEED,
@@ -30,9 +29,12 @@ import {
 	grantVictoryReward,
 	useConsumable
 } from './items';
+import { activeDialogueLine, advanceDialogue } from './dialogue';
+import { nearestVillager } from './interaction';
+import { activeQuestStep, advanceQuest, createInitialQuest } from './quest';
+import { getVillager, PLAYER_SPAWN } from './villageContent';
 import type { AttackTiming } from './combat';
 import type {
-	ActiveGamePhase,
 	CombatActionKind,
 	CombatActionState,
 	CombatEffect,
@@ -43,7 +45,8 @@ import type {
 	InventoryCommand,
 	ItemId,
 	PlayerActionStatus,
-	Vec2
+	Vec2,
+	VillagerId
 } from './types';
 
 type PendingHit = {
@@ -55,13 +58,7 @@ type PendingHit = {
 	position: Vec2;
 };
 
-const OBJECTIVES: Record<ActiveGamePhase, string> = {
-	seekMentor: 'Meet the mentor',
-	trainDash: 'Practice qinggong dash',
-	duel: 'Defeat the rival disciple',
-	victory: 'Victory',
-	defeat: 'Defeat'
-};
+const QUEST_COMPLETE_OBJECTIVE = 'First day complete — free roam';
 
 function idleCombatAction(): CombatActionState {
 	return {
@@ -76,14 +73,15 @@ function idleCombatAction(): CombatActionState {
 export function createInitialGameState(itemProgress = createStarterItemProgress()): GameState {
 	const items = cloneItemProgress(itemProgress);
 	const playerStats = derivePlayerItemStats(items);
-
-	return {
-		phase: 'seekMentor',
-		previousPhase: 'seekMentor',
-		objective: OBJECTIVES.seekMentor,
-		prompt: 'Press E near the mentor to begin training',
+	const elderShen = getVillager('elder_shen');
+	const lu = getVillager('senior_brother_lu');
+	const state: GameState = {
+		mode: { kind: 'explore' },
+		paused: false,
+		quest: createInitialQuest(),
+		prompt: null,
 		player: {
-			position: { x: 0, z: 0 },
+			position: { ...PLAYER_SPAWN },
 			heading: 0,
 			health: playerStats.maxHealth,
 			maxHealth: playerStats.maxHealth,
@@ -97,8 +95,8 @@ export function createInitialGameState(itemProgress = createStarterItemProgress(
 			combatAction: idleCombatAction()
 		},
 		rival: {
-			position: { x: 0.8, z: 0 },
-			heading: Math.PI,
+			position: { ...lu.position },
+			heading: lu.heading,
 			health: PLAYER_BASE_HEALTH,
 			maxHealth: PLAYER_BASE_HEALTH,
 			qi: 0,
@@ -110,7 +108,7 @@ export function createInitialGameState(itemProgress = createStarterItemProgress(
 			active: false,
 			combatAction: idleCombatAction()
 		},
-		mentor: { position: { x: -4, z: -3 } },
+		mentor: { position: { ...elderShen.position } },
 		effects: [],
 		elapsed: 0,
 		nextEffectId: 1,
@@ -118,10 +116,8 @@ export function createInitialGameState(itemProgress = createStarterItemProgress(
 		inventoryOpen: false,
 		itemFeedback: null
 	};
-}
-
-export function restartGame(itemProgress = createStarterItemProgress()): GameState {
-	return createInitialGameState(itemProgress);
+	updatePrompt(state);
+	return state;
 }
 
 export function stepGame(
@@ -142,16 +138,23 @@ export function stepGame(
 			return;
 		}
 
-		togglePause(state);
-		return;
-	}
-
-	if (state.inventoryOpen) {
+		state.paused = !state.paused;
 		updatePrompt(state);
 		return;
 	}
 
-	if (state.phase === 'paused') {
+	if (state.inventoryOpen || state.paused) {
+		updatePrompt(state);
+		return;
+	}
+
+	if (state.mode.kind === 'dialogue') {
+		if (input.interact) {
+			const finishedVillager = advanceDialogue(state);
+			if (finishedVillager) {
+				finishDialogue(state, finishedVillager);
+			}
+		}
 		updatePrompt(state);
 		return;
 	}
@@ -159,16 +162,13 @@ export function stepGame(
 	state.elapsed += dt;
 	updateCooldowns(state, dt);
 	updateEffects(state, dt);
+	movePlayer(state, input, dt);
 
-	if (state.phase === 'victory' || state.phase === 'defeat') {
-		updatePrompt(state);
-		return;
+	if (state.mode.kind === 'explore') {
+		handleInteract(state, input);
 	}
 
-	movePlayer(state, input, dt);
-	handlePhaseProgression(state, input);
-
-	if (state.phase === 'duel') {
+	if (state.mode.kind === 'duel') {
 		const qiBeforeAttacks = state.player.qi;
 		handleQuickSlotUse(state, input.quickSlot);
 		handlePlayerAttacks(state, input);
@@ -178,7 +178,7 @@ export function stepGame(
 		advanceCombatAction(state.rival, dt);
 		resolveActiveHits(state);
 		resolveEndState(state);
-		if (state.phase === 'duel' && state.player.qi === qiBeforeAttacks) {
+		if (state.mode.kind === 'duel' && state.player.qi === qiBeforeAttacks) {
 			state.player.qi = Math.min(state.player.maxQi, state.player.qi + dt * 5);
 		}
 	}
@@ -187,9 +187,10 @@ export function stepGame(
 
 export function toHudSnapshot(state: GameState): HudSnapshot {
 	return {
-		phase: state.phase,
-		objective: state.objective,
+		mode: state.mode.kind,
+		objective: activeQuestStep(state.quest)?.instruction ?? QUEST_COMPLETE_OBJECTIVE,
 		prompt: state.prompt,
+		dialogue: activeDialogueLine(state),
 		playerHealth: Math.round(state.player.health),
 		playerMaxHealth: Math.round(state.player.maxHealth),
 		playerQi: Math.round(state.player.qi),
@@ -199,8 +200,7 @@ export function toHudSnapshot(state: GameState): HudSnapshot {
 		attackCooldown: state.player.attackCooldown,
 		qiCooldown: state.player.qiCooldown,
 		playerActionStatus: getPlayerActionStatus(state.player.combatAction),
-		showRestart: state.phase === 'victory' || state.phase === 'defeat',
-		isPaused: state.phase === 'paused',
+		isPaused: state.paused,
 		inventory: createHudInventorySnapshot(state.items, state.inventoryOpen, state.itemFeedback)
 	};
 }
@@ -219,22 +219,6 @@ function getPlayerActionStatus(combatAction: CombatActionState): PlayerActionSta
 	}
 
 	return 'Ready';
-}
-
-function togglePause(state: GameState): void {
-	if (state.phase === 'paused') {
-		state.phase = state.previousPhase;
-		state.objective = OBJECTIVES[state.phase];
-		return;
-	}
-
-	if (state.phase === 'victory' || state.phase === 'defeat') {
-		return;
-	}
-
-	state.previousPhase = state.phase;
-	state.phase = 'paused';
-	state.objective = 'Paused';
 }
 
 function updateCooldowns(state: GameState, deltaTime: number): void {
@@ -277,32 +261,85 @@ function movePlayer(state: GameState, input: InputSnapshot, deltaTime: number): 
 	}
 }
 
-function handlePhaseProgression(state: GameState, input: InputSnapshot): void {
-	if (
-		state.phase === 'seekMentor' &&
-		input.interact &&
-		distance(state.player.position, state.mentor.position) <= MENTOR_INTERACT_RANGE
-	) {
-		state.phase = 'trainDash';
-		state.previousPhase = 'trainDash';
-		state.objective = OBJECTIVES.trainDash;
+function handleInteract(state: GameState, input: InputSnapshot): void {
+	if (!input.interact) {
 		return;
 	}
 
-	if (state.phase === 'trainDash' && input.dash) {
-		state.phase = 'duel';
-		state.previousPhase = 'duel';
-		state.objective = OBJECTIVES.duel;
-		state.rival.active = true;
-		for (let i = 0; i < 8; i++) {
-			const angle = state.player.heading + 0.35 + (i * Math.PI) / 4;
-			state.rival.position = moveThroughWorld(state.player.position, {
-				x: state.player.position.x + Math.sin(angle) * 1.1,
-				z: state.player.position.z + Math.cos(angle) * 1.1
-			});
-			if (distance(state.rival.position, state.player.position) >= 0.8) break;
-		}
+	const villager = nearestVillager(state, state.player.position);
+	if (!villager) {
+		return;
 	}
+
+	state.mode = { kind: 'dialogue', villagerId: villager.id, lineIndex: 0 };
+}
+
+function finishDialogue(state: GameState, villagerId: VillagerId): void {
+	const step = activeQuestStep(state.quest);
+	if (!step || step.targetId !== villagerId) {
+		return;
+	}
+
+	switch (step.kind) {
+		case 'talk':
+			state.quest = advanceQuest(state.quest, { type: 'dialogueComplete', villagerId });
+			break;
+		case 'duel':
+			startDuel(state);
+			break;
+	}
+}
+
+/** Each duel start refills the player and resets the rival's health, position and AI. */
+function startDuel(state: GameState): void {
+	state.mode = { kind: 'duel' };
+	state.player.health = state.player.maxHealth;
+	state.player.qi = state.player.maxQi;
+	state.player.dashCooldown = 0;
+	state.player.attackCooldown = 0;
+	state.player.qiCooldown = 0;
+	state.player.combatAction = idleCombatAction();
+	state.effects = [];
+
+	state.rival.active = true;
+	state.rival.health = state.rival.maxHealth;
+	state.rival.rivalAttackCooldown = 0;
+	state.rival.combatAction = idleCombatAction();
+	for (let i = 0; i < 8; i++) {
+		const angle = state.player.heading + 0.35 + (i * Math.PI) / 4;
+		state.rival.position = moveThroughWorld(state.player.position, {
+			x: state.player.position.x + Math.sin(angle) * 1.1,
+			z: state.player.position.z + Math.cos(angle) * 1.1
+		});
+		if (distance(state.rival.position, state.player.position) >= 0.8) break;
+	}
+	state.rival.heading = Math.atan2(
+		state.player.position.x - state.rival.position.x,
+		state.player.position.z - state.rival.position.z
+	);
+}
+
+/** Lu returns to his authored courtyard post after a win or a loss; the duel is over. */
+function resetRivalToPost(state: GameState): void {
+	const lu = getVillager('senior_brother_lu');
+	state.rival.position = { ...lu.position };
+	state.rival.heading = lu.heading;
+	state.rival.health = state.rival.maxHealth;
+	state.rival.active = false;
+	state.rival.combatAction = idleCombatAction();
+	state.rival.rivalAttackCooldown = 0;
+}
+
+function respawnPlayer(state: GameState): void {
+	state.player.position = { ...PLAYER_SPAWN };
+	state.player.heading = 0;
+	state.player.health = state.player.maxHealth;
+	state.player.qi = state.player.maxQi;
+	state.player.dashCooldown = 0;
+	state.player.attackCooldown = 0;
+	state.player.qiCooldown = 0;
+	state.player.combatAction = idleCombatAction();
+	state.effects = [];
 }
 
 function handlePlayerAttacks(state: GameState, input: InputSnapshot): void {
@@ -325,6 +362,10 @@ function handlePlayerAttacks(state: GameState, input: InputSnapshot): void {
 function processInventoryCommands(state: GameState, commands: InventoryCommand[]): void {
 	for (const command of commands) {
 		if (command.type === 'toggleInventory') {
+			if (bagOpenBlocked(state)) {
+				state.itemFeedback = 'Cannot open the bag right now';
+				continue;
+			}
 			state.inventoryOpen = !state.inventoryOpen;
 			state.itemFeedback = state.inventoryOpen ? 'Bag opened' : 'Bag closed';
 			continue;
@@ -353,9 +394,18 @@ function processInventoryCommands(state: GameState, commands: InventoryCommand[]
 
 function processInventoryInput(state: GameState, input: InputSnapshot): void {
 	if (input.toggleInventory) {
+		if (bagOpenBlocked(state)) {
+			state.itemFeedback = 'Cannot open the bag right now';
+			return;
+		}
 		state.inventoryOpen = !state.inventoryOpen;
 		state.itemFeedback = state.inventoryOpen ? 'Bag opened' : 'Bag closed';
 	}
+}
+
+/** Opening the bag is blocked while paused or in dialogue; closing stays allowed. */
+function bagOpenBlocked(state: GameState): boolean {
+	return !state.inventoryOpen && (state.paused || state.mode.kind === 'dialogue');
 }
 
 function handleQuickSlotUse(state: GameState, slot: InputSnapshot['quickSlot']): void {
@@ -567,17 +617,17 @@ function resolveEndState(state: GameState): void {
 	if (state.rival.health <= 0) {
 		const reward = grantVictoryReward(state.items);
 		state.itemFeedback = `Won: ${formatReward(reward)}`;
-		state.phase = 'victory';
-		state.previousPhase = 'victory';
-		state.objective = OBJECTIVES.victory;
-		state.rival.active = false;
+		state.quest = advanceQuest(state.quest, { type: 'duelWon' });
+		resetRivalToPost(state);
+		state.mode = { kind: 'explore' };
 		return;
 	}
 
 	if (state.player.health <= 0) {
-		state.phase = 'defeat';
-		state.previousPhase = 'defeat';
-		state.objective = OBJECTIVES.defeat;
+		respawnPlayer(state);
+		resetRivalToPost(state);
+		state.itemFeedback = 'Defeated — find your breath and speak with Lu again';
+		state.mode = { kind: 'explore' };
 	}
 }
 
@@ -587,37 +637,36 @@ function updatePrompt(state: GameState): void {
 		return;
 	}
 
-	if (state.phase === 'seekMentor') {
-		state.prompt =
-			distance(state.player.position, state.mentor.position) <= MENTOR_INTERACT_RANGE
-				? 'Press E to begin mentor training'
-				: 'Find the mentor at the shrine gate';
+	if (state.paused) {
+		state.prompt = 'Paused';
 		return;
 	}
 
-	if (state.phase === 'trainDash') {
-		state.prompt = 'Press Space to dash and call out the rival disciple';
+	if (state.mode.kind === 'dialogue') {
+		const dialogue = activeDialogueLine(state);
+		state.prompt = dialogue ? `${dialogue.speaker}: ${dialogue.line} (E)` : null;
 		return;
 	}
 
-	if (state.phase === 'duel') {
+	if (state.mode.kind === 'duel') {
 		state.prompt = 'J: strike  K: qi burst  Space: dash';
 		return;
 	}
 
-	if (state.phase === 'victory') {
-		state.prompt = state.items.lastReward
-			? `Victory. Won: ${formatReward(state.items.lastReward)}.`
-			: 'Victory. Restart to train again.';
+	const step = activeQuestStep(state.quest);
+	const villager = nearestVillager(state, state.player.position);
+	if (villager) {
+		state.prompt = `Press E to speak with ${villager.name}`;
 		return;
 	}
 
-	if (state.phase === 'defeat') {
-		state.prompt = 'Defeat. Restart and try the duel again.';
+	if (step) {
+		state.prompt = step.instruction;
 		return;
 	}
 
-	state.prompt = 'Paused';
+	const reward = formatReward(state.items.lastReward);
+	state.prompt = reward ? `Victory. Won: ${reward}` : 'The village is yours to explore.';
 }
 
 function addEffect(state: GameState, kind: CombatEffect['kind'], position: Vec2): void {
