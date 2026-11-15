@@ -31,13 +31,13 @@ describe('quest progress', () => {
 		expect(advanceQuest(quest, { type: 'duelWon' }).stepIndex).toBe(0);
 		expect(advanceQuest(quest, { type: 'markerCrossed' }).stepIndex).toBe(0);
 
-		const atSpar = { stepIndex: 3, stepProgress: 0 };
+		const atSpar = { stepIndex: 4, stepProgress: 0 };
 		expect(
 			advanceQuest(atSpar, { type: 'dialogueComplete', villagerId: 'senior_brother_lu' }).stepIndex
-		).toBe(3);
+		).toBe(4);
 		expect(
 			advanceQuest(atSpar, { type: 'dialogueComplete', villagerId: 'elder_shen' }).stepIndex
-		).toBe(3);
+		).toBe(4);
 	});
 
 	it('counts ordered marker crossings and advances after the third', () => {
@@ -101,11 +101,33 @@ describe('quest progress', () => {
 			itemId: 'lesser_healing_pill'
 		});
 		expect(done).toEqual({ stepIndex: 3, stepProgress: 0 });
+		expect(activeQuestStep(done)?.id).toBe('ring_shrine_bell');
+	});
+
+	it('rings the shrine bell only while its step is active', () => {
+		const atBell = { stepIndex: 3, stepProgress: 0 };
+		expect(QUEST_STEPS[3].id).toBe('ring_shrine_bell');
+
+		expect(advanceQuest(atBell, { type: 'duelWon' })).toEqual(atBell);
+		expect(advanceQuest(atBell, { type: 'markerCrossed' })).toEqual(atBell);
+		expect(advanceQuest(atBell, { type: 'dialogueComplete', villagerId: 'old_zhu' })).toEqual(
+			atBell
+		);
+		expect(advanceQuest(atBell, { type: 'objectUsed', targetId: 'gate_markers' })).toEqual(atBell);
+		expect(
+			advanceQuest(
+				{ stepIndex: 0, stepProgress: 0 },
+				{ type: 'objectUsed', targetId: 'shrine_bell' }
+			).stepIndex
+		).toBe(0);
+
+		const done = advanceQuest(atBell, { type: 'objectUsed', targetId: 'shrine_bell' });
+		expect(done).toEqual({ stepIndex: 4, stepProgress: 0 });
 		expect(activeQuestStep(done)?.id).toBe('spar');
 	});
 
 	it('completes the quest on the duel win and stays complete', () => {
-		const atSpar = { stepIndex: 3, stepProgress: 0 };
+		const atSpar = { stepIndex: 4, stepProgress: 0 };
 
 		const done = advanceQuest(atSpar, { type: 'duelWon' });
 		expect(done.stepIndex).toBe(QUEST_STEPS.length);
@@ -142,6 +164,10 @@ describe('normalizeQuestProgress', () => {
 			stepIndex: 3,
 			stepProgress: 0
 		});
+		expect(normalizeQuestProgress({ stepIndex: 4, stepProgress: 0 })).toEqual({
+			stepIndex: 4,
+			stepProgress: 0
+		});
 	});
 
 	it('accepts quest completion only with zero step progress', () => {
@@ -157,6 +183,7 @@ describe('normalizeQuestProgress', () => {
 		expect(normalizeQuestProgress({ stepIndex: 1, stepProgress: 3 })).toBeNull();
 		expect(normalizeQuestProgress({ stepIndex: 2, stepProgress: 2 })).toBeNull();
 		expect(normalizeQuestProgress({ stepIndex: 3, stepProgress: 1 })).toBeNull();
+		expect(normalizeQuestProgress({ stepIndex: 4, stepProgress: 1 })).toBeNull();
 		expect(normalizeQuestProgress({ stepIndex: 0, stepProgress: -1 })).toBeNull();
 	});
 

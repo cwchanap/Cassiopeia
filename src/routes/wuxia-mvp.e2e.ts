@@ -181,8 +181,37 @@ test('plays through the first day quest, duel, reward, and free roam', async ({ 
 	);
 	await page.getByTestId('bag-close').click();
 	await expect(page.getByTestId('bag-panel')).toBeHidden();
-	await expect(objectiveChip).toContainText('Speak with Senior Brother Lu and win the spar');
+	await expect(objectiveChip).toContainText('Whispering Bamboo Shrine');
 
+	await page.evaluate(() => {
+		localStorage.setItem(
+			'cassiopeia.gameProgress.v2',
+			JSON.stringify({
+				items: {
+					version: 1,
+					inventory: {
+						lesser_healing_pill: 5,
+						lesser_qi_pill: 2,
+						training_sword: 1,
+						linen_training_robe: 1
+					},
+					equipment: {
+						weapon: 'training_sword',
+						robe: 'linen_training_robe',
+						accessory: null
+					},
+					quickSlots: {
+						1: 'lesser_healing_pill',
+						2: 'lesser_qi_pill',
+						3: 'lesser_qi_pill'
+					},
+					rewardSeed: 7,
+					lastReward: null
+				},
+				quest: { stepIndex: 4, stepProgress: 0 }
+			})
+		);
+	});
 	await page.reload();
 	await expect(page.getByTestId('game-shell')).toBeVisible();
 	await expect(objectiveChip).toContainText('Speak with Senior Brother Lu and win the spar');
