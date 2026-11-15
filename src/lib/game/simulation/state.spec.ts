@@ -17,6 +17,7 @@ import {
 	SHRINE_BELL
 } from './villageContent';
 import { createStarterItemProgress } from './items';
+import { loadGameProgress, saveGameProgress } from '$lib/game/runtime/save';
 import type { GameState, InputSnapshot, Vec2 } from './types';
 import { canStandAt, moveThroughWorld } from './world';
 
@@ -996,5 +997,108 @@ describe('first-day journey', () => {
 		expect(state.mode).toEqual({ kind: 'explore' });
 		expect(state.items.inventory).toEqual(inventoryAfterVictory);
 		expect(state.quest).toEqual({ stepIndex: QUEST_STEPS.length, stepProgress: 0 });
+	});
+});
+
+describe('partial-progress reload', () => {
+	function createMemoryStorage(): Storage {
+		const values = new Map<string, string>();
+		return {
+			get length() {
+				return values.size;
+			},
+			clear() {
+				values.clear();
+			},
+			getItem(key: string) {
+				return values.get(key) ?? null;
+			},
+			key(index: number) {
+				return Array.from(values.keys())[index] ?? null;
+			},
+			removeItem(key: string) {
+				values.delete(key);
+			},
+			setItem(key: string, value: string) {
+				values.set(key, value);
+			}
+		};
+	}
+
+	function reloadFrom(state: GameState): GameState {
+		const storage = createMemoryStorage();
+		expect(saveGameProgress({ items: state.items, quest: state.quest }, storage)).toBe(true);
+		const progress = loadGameProgress(storage);
+		return createInitialGameState(progress.items, progress.quest);
+	}
+
+	it('resumes saved marker substeps without losing their ordering', () => {
+		for (const markerCount of [1, 2]) {
+			const played = createInitialGameState();
+			played.quest = { stepIndex: 1, stepProgress: 0 };
+			for (let marker = 0; marker < markerCount; marker++) {
+				played.player.position = { x: 0, z: DASH_MARKERS[marker].z + 1.6 };
+				played.player.heading = Math.PI;
+				played.player.dashCooldown = 0;
+				stepGame(played, { ...idleInput, dash: true }, frame);
+			}
+			expect(played.quest).toEqual({ stepIndex: 1, stepProgress: markerCount });
+
+			const state = reloadFrom(played);
+			expect(state.quest).toEqual({ stepIndex: 1, stepProgress: markerCount });
+			expect(state.player.position).toEqual(PLAYER_SPAWN);
+			expect(state.mode).toEqual({ kind: 'explore' });
+			expect(toHudSnapshot(state).markerProgress).toEqual({
+				current: markerCount,
+				total: DASH_MARKERS.length
+			});
+
+			state.player.position = { x: 0, z: DASH_MARKERS[0].z + 1.6 };
+			state.player.heading = Math.PI;
+			stepGame(state, { ...idleInput, dash: true }, frame);
+			expect(state.quest).toEqual({ stepIndex: 1, stepProgress: markerCount });
+
+			state.player.position = { x: 0, z: DASH_MARKERS[markerCount].z + 1.6 };
+			state.player.heading = Math.PI;
+			state.player.dashCooldown = 0;
+			stepGame(state, { ...idleInput, dash: true }, frame);
+			if (markerCount + 1 < DASH_MARKERS.length) {
+				expect(state.quest).toEqual({ stepIndex: 1, stepProgress: markerCount + 1 });
+			} else {
+				expect(state.quest).toEqual({ stepIndex: 2, stepProgress: 0 });
+			}
+		}
+	});
+
+	it('resumes the granted-but-unassigned medicine step without duplicating pills', () => {
+		const played = createInitialGameState();
+		played.quest = { stepIndex: 2, stepProgress: 0 };
+		played.player.position = { x: qin.position.x - 0.5, z: qin.position.z };
+		stepGame(played, { ...idleInput, interact: true }, frame);
+		finishDialogue(played, qin.questLines.length);
+		expect(played.quest).toEqual({ stepIndex: 2, stepProgress: 1 });
+		expect(played.items.inventory.lesser_healing_pill).toBe(5);
+
+		const state = reloadFrom(played);
+		expect(state.quest).toEqual({ stepIndex: 2, stepProgress: 1 });
+		expect(state.items.inventory.lesser_healing_pill).toBe(5);
+
+		state.player.position = { x: qin.position.x - 0.5, z: qin.position.z };
+		stepGame(state, { ...idleInput, interact: true }, frame);
+		expect(state.prompt).toBe(`${qin.name}: ${qin.ambientLines[0]} (E)`);
+		finishDialogue(state, qin.ambientLines.length);
+		expect(state.mode).toEqual({ kind: 'explore' });
+		expect(state.items.inventory.lesser_healing_pill).toBe(5);
+		expect(state.quest).toEqual({ stepIndex: 2, stepProgress: 1 });
+
+		stepGame(state, { ...idleInput, toggleInventory: true }, frame);
+		expect(state.inventoryOpen).toBe(true);
+		stepGame(state, idleInput, 0, [{ type: 'assignQuickSlot', slot: 3, itemId: 'lesser_qi_pill' }]);
+		expect(state.quest).toEqual({ stepIndex: 2, stepProgress: 1 });
+		stepGame(state, idleInput, 0, [
+			{ type: 'assignQuickSlot', slot: 1, itemId: 'lesser_healing_pill' }
+		]);
+		expect(state.quest).toEqual({ stepIndex: 3, stepProgress: 0 });
+		expect(state.items.inventory.lesser_healing_pill).toBe(5);
 	});
 });
