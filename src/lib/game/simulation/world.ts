@@ -15,6 +15,15 @@ const obstacles = [
 	...layout.trees.map((tree) => ({ ...tree, width: 0.4, depth: 0.4 }))
 ];
 
+export function regionAt(position: Vec2): string | null {
+	const region = layout.regions.find(
+		(entry) =>
+			Math.abs(position.x - entry.x) <= entry.width / 2 &&
+			Math.abs(position.z - entry.z) <= entry.depth / 2
+	);
+	return region?.name ?? null;
+}
+
 export function canStandAt(position: Vec2): boolean {
 	const { x, z } = position;
 	if (

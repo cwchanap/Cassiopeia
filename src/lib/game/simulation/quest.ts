@@ -5,6 +5,7 @@ export type QuestEvent =
 	| { type: 'dialogueComplete'; villagerId: VillagerId }
 	| { type: 'duelWon' }
 	| { type: 'markerCrossed' }
+	| { type: 'objectUsed'; targetId: string }
 	| { type: 'quickSlotAssigned'; itemId: ItemId };
 
 export function createInitialQuest(): QuestProgress {
@@ -35,6 +36,9 @@ export function advanceQuest(progress: QuestProgress, event: QuestEvent): QuestP
 				stepProgress += 1;
 				completed = stepProgress >= requiredStepEvents(step);
 			}
+			break;
+		case 'object':
+			completed = event.type === 'objectUsed' && event.targetId === step.targetId;
 			break;
 		case 'receiveItem':
 			if (event.type === 'dialogueComplete' && event.villagerId === step.targetId) {
@@ -88,6 +92,7 @@ export function normalizeQuestProgress(raw: unknown): QuestProgress | null {
 function requiredStepEvents(step: QuestStep): number {
 	switch (step.kind) {
 		case 'talk':
+		case 'object':
 		case 'duel':
 			return 1;
 		case 'dashMarkers':

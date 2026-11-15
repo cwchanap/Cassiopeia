@@ -15,8 +15,9 @@ describe('dialogueLinesFor', () => {
 		expect(dialogueLinesFor({ stepIndex: 1, stepProgress: 0 }, elder)).toBe(elder.ambientLines);
 		expect(dialogueLinesFor({ stepIndex: 1, stepProgress: 0 }, lu)).toBe(lu.ambientLines);
 		expect(dialogueLinesFor({ stepIndex: 2, stepProgress: 0 }, lu)).toBe(lu.ambientLines);
-		expect(dialogueLinesFor({ stepIndex: 3, stepProgress: 0 }, lu)).toBe(lu.questLines);
-		expect(dialogueLinesFor({ stepIndex: 4, stepProgress: 0 }, lu)).toBe(lu.ambientLines);
+		expect(dialogueLinesFor({ stepIndex: 3, stepProgress: 0 }, lu)).toBe(lu.ambientLines);
+		expect(dialogueLinesFor({ stepIndex: 4, stepProgress: 0 }, lu)).toBe(lu.questLines);
+		expect(dialogueLinesFor({ stepIndex: 5, stepProgress: 0 }, lu)).toBe(lu.ambientLines);
 	});
 
 	it('gives Auntie Qin her errand lines until the grant, then ambient lines only', () => {

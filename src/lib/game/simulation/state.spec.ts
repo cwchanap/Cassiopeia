@@ -2,20 +2,28 @@ import { describe, expect, it } from 'vitest';
 import { createInitialGameState, stepGame, toHudSnapshot } from './state';
 import {
 	DASH_DISTANCE,
+	distance,
 	LIGHT_ATTACK_TIMING,
 	QI_BURST_COST,
 	QI_BURST_TIMING,
 	RIVAL_ATTACK_COOLDOWN,
 	RIVAL_STRIKE_TIMING
 } from './combat';
-import { getVillager, DASH_MARKERS, PLAYER_SPAWN, QUEST_STEPS } from './villageContent';
+import {
+	getVillager,
+	DASH_MARKERS,
+	PLAYER_SPAWN,
+	QUEST_STEPS,
+	SHRINE_BELL
+} from './villageContent';
 import { createStarterItemProgress } from './items';
-import type { GameState, InputSnapshot } from './types';
+import type { GameState, InputSnapshot, Vec2 } from './types';
 import { canStandAt, moveThroughWorld } from './world';
 
 const elder = getVillager('elder_shen');
 const lu = getVillager('senior_brother_lu');
 const qin = getVillager('auntie_qin');
+const zhu = getVillager('old_zhu');
 
 const idleInput: InputSnapshot = {
 	moveX: 0,
@@ -33,7 +41,7 @@ const frame = 1 / 60;
 
 function setupDuel(): GameState {
 	const state = createInitialGameState();
-	state.quest = { stepIndex: 3, stepProgress: 0 };
+	state.quest = { stepIndex: 4, stepProgress: 0 };
 	state.mode = { kind: 'duel' };
 	state.rival.active = true;
 	state.player.position = { x: 0, z: 0 };
@@ -71,7 +79,7 @@ describe('wuxia simulation state', () => {
 
 	it('keeps the duel rival spawn out of the water near the river', () => {
 		const state = createInitialGameState();
-		state.quest = { stepIndex: 3, stepProgress: 0 };
+		state.quest = { stepIndex: 4, stepProgress: 0 };
 		state.player.position = { x: 17, z: 8 };
 		state.player.heading = Math.PI / 2;
 		state.mode = {
@@ -210,7 +218,7 @@ describe('wuxia simulation state', () => {
 
 	it('starts the spar on the last line of Lu’s dialogue and refills the duel', () => {
 		const state = createInitialGameState();
-		state.quest = { stepIndex: 3, stepProgress: 0 };
+		state.quest = { stepIndex: 4, stepProgress: 0 };
 		state.player.position = { x: lu.position.x + 0.5, z: lu.position.z };
 		state.player.health = 40;
 		state.player.qi = 10;
@@ -618,7 +626,7 @@ describe('wuxia simulation state', () => {
 		advance(state, RIVAL_STRIKE_TIMING.startup + RIVAL_STRIKE_TIMING.active + frame);
 
 		expect(state.mode).toEqual({ kind: 'explore' });
-		expect(state.quest.stepIndex).toBe(3);
+		expect(state.quest.stepIndex).toBe(4);
 		expect(state.player.position).toEqual(PLAYER_SPAWN);
 		expect(state.player.health).toBe(state.player.maxHealth);
 		expect(state.player.qi).toBe(state.player.maxQi);
@@ -830,5 +838,163 @@ describe('fetch medicine', () => {
 		]);
 		expect(state.quest).toEqual({ stepIndex: 3, stepProgress: 0 });
 		expect(state.items.inventory.lesser_healing_pill).toBe(5);
+	});
+});
+
+describe('shrine bell', () => {
+	function atShrine(): GameState {
+		const state = createInitialGameState();
+		state.quest = { stepIndex: 3, stepProgress: 0 };
+		state.player.position = { ...SHRINE_BELL.position };
+		return state;
+	}
+
+	it('advertises the bell inside its step and completes it with a single E press', () => {
+		const state = atShrine();
+		stepGame(state, idleInput, frame);
+
+		expect(state.prompt).toBe('Press E to ring the shrine bell');
+		const hud = toHudSnapshot(state);
+		expect(hud.interactTarget).toEqual({ id: 'shrine_bell', name: 'Shrine Bell' });
+		expect(hud.region).toBe('Whispering Bamboo Shrine');
+
+		stepGame(state, { ...idleInput, interact: true }, frame);
+
+		expect(state.mode).toEqual({ kind: 'explore' });
+		expect(state.quest).toEqual({ stepIndex: 4, stepProgress: 0 });
+		expect(toHudSnapshot(state).objective).toBe(QUEST_STEPS[4].instruction);
+	});
+
+	it('ignores the bell outside its step and keeps Old Zhu ambient', () => {
+		const wrongStep = createInitialGameState();
+		wrongStep.player.position = { ...SHRINE_BELL.position };
+		stepGame(wrongStep, { ...idleInput, interact: true }, frame);
+		expect(wrongStep.mode).toEqual({ kind: 'explore' });
+		expect(wrongStep.quest).toEqual({ stepIndex: 0, stepProgress: 0 });
+
+		const atZhu = createInitialGameState();
+		atZhu.quest = { stepIndex: 3, stepProgress: 0 };
+		atZhu.player.position = { x: zhu.position.x + 0.6, z: zhu.position.z };
+		stepGame(atZhu, { ...idleInput, interact: true }, frame);
+		expect(atZhu.mode).toEqual({ kind: 'dialogue', villagerId: 'old_zhu', lineIndex: 0 });
+		expect(atZhu.prompt).toBe(`${zhu.name}: ${zhu.ambientLines[0]} (E)`);
+
+		finishDialogue(atZhu, zhu.ambientLines.length);
+		expect(atZhu.mode).toEqual({ kind: 'explore' });
+		expect(atZhu.quest).toEqual({ stepIndex: 3, stepProgress: 0 });
+	});
+});
+
+describe('first-day journey', () => {
+	function walkTo(state: GameState, destination: Vec2): void {
+		for (let i = 0; i < 60 * 60 && distance(state.player.position, destination) > 0.08; i++) {
+			const dx = destination.x - state.player.position.x;
+			const dz = destination.z - state.player.position.z;
+			const length = Math.hypot(dx, dz) || 1;
+			stepGame(state, { ...idleInput, moveX: dx / length, moveZ: dz / length }, frame);
+		}
+		expect(distance(state.player.position, destination)).toBeLessThanOrEqual(0.12);
+	}
+
+	function dashNorth(state: GameState): void {
+		for (let i = 0; i < 300 && state.player.dashCooldown > 0; i++) {
+			stepGame(state, idleInput, frame);
+		}
+		stepGame(state, { ...idleInput, moveZ: -1, dash: true }, frame);
+	}
+
+	it('completes all five steps through real movement, collision, dashes and the duel', () => {
+		const state = createInitialGameState();
+		const hud = () => toHudSnapshot(state);
+
+		walkTo(state, { x: elder.position.x + 0.8, z: elder.position.z });
+		stepGame(state, { ...idleInput, interact: true }, frame);
+		expect(state.mode).toEqual({ kind: 'dialogue', villagerId: 'elder_shen', lineIndex: 0 });
+		finishDialogue(state, elder.questLines.length);
+		expect(state.quest).toEqual({ stepIndex: 1, stepProgress: 0 });
+
+		walkTo(state, { x: 0, z: -1.4 });
+		dashNorth(state);
+		expect(state.quest).toEqual({ stepIndex: 1, stepProgress: 1 });
+		walkTo(state, { x: 0, z: -4.9 });
+		dashNorth(state);
+		expect(state.quest).toEqual({ stepIndex: 1, stepProgress: 2 });
+		walkTo(state, { x: 0, z: -8.4 });
+		dashNorth(state);
+		expect(state.quest).toEqual({ stepIndex: 2, stepProgress: 0 });
+
+		walkTo(state, { x: qin.position.x - 0.7, z: qin.position.z });
+		stepGame(state, { ...idleInput, interact: true }, frame);
+		finishDialogue(state, qin.questLines.length);
+		expect(state.quest).toEqual({ stepIndex: 2, stepProgress: 1 });
+		expect(state.items.inventory.lesser_healing_pill).toBe(5);
+		stepGame(state, { ...idleInput, toggleInventory: true }, frame);
+		expect(state.inventoryOpen).toBe(true);
+		stepGame(state, idleInput, 0, [
+			{ type: 'assignQuickSlot', slot: 1, itemId: 'lesser_healing_pill' }
+		]);
+		expect(state.quest).toEqual({ stepIndex: 3, stepProgress: 0 });
+		stepGame(state, { ...idleInput, toggleInventory: true }, frame);
+		expect(state.inventoryOpen).toBe(false);
+
+		for (const waypoint of [
+			{ x: 0, z: 8.5 },
+			{ x: -17, z: 8.5 },
+			{ x: -44, z: 8.5 },
+			{ x: -44, z: -9 },
+			SHRINE_BELL.position
+		]) {
+			walkTo(state, waypoint);
+		}
+		expect(hud().region).toBe('Whispering Bamboo Shrine');
+		expect(hud().interactTarget).toEqual({ id: 'shrine_bell', name: 'Shrine Bell' });
+		expect(state.prompt).toBe('Press E to ring the shrine bell');
+		stepGame(state, { ...idleInput, interact: true }, frame);
+		expect(state.quest).toEqual({ stepIndex: 4, stepProgress: 0 });
+
+		for (const waypoint of [
+			{ x: -44, z: 8.5 },
+			{ x: -17, z: 8.5 },
+			{ x: 0, z: 8.5 },
+			{ x: lu.position.x - 0.4, z: lu.position.z }
+		]) {
+			walkTo(state, waypoint);
+		}
+		stepGame(state, { ...idleInput, interact: true }, frame);
+		expect(state.mode).toEqual({ kind: 'dialogue', villagerId: 'senior_brother_lu', lineIndex: 0 });
+		finishDialogue(state, lu.questLines.length);
+		expect(state.mode).toEqual({ kind: 'duel' });
+
+		for (let i = 0; i < 60 * 120 && state.mode.kind === 'duel'; i++) {
+			const idle = state.player.combatAction.phase === 'idle';
+			const burst = idle && state.player.qiCooldown === 0 && state.player.qi >= QI_BURST_COST;
+			stepGame(state, { ...idleInput, lightAttack: idle && !burst, qiBurst: burst }, frame);
+		}
+		expect(state.mode).toEqual({ kind: 'explore' });
+		expect(state.quest).toEqual({ stepIndex: QUEST_STEPS.length, stepProgress: 0 });
+		expect(state.itemFeedback).toMatch(/^Won: /);
+		expect(state.items.lastReward).not.toBeNull();
+		expect(hud().objective).toContain('free roam');
+		expect(state.rival.position).toEqual(lu.position);
+		expect(state.rival.active).toBe(false);
+
+		const inventoryAfterVictory = { ...state.items.inventory };
+		walkTo(state, { x: 4, z: 4 });
+		stepGame(state, { ...idleInput, toggleInventory: true }, frame);
+		expect(state.inventoryOpen).toBe(true);
+		stepGame(state, { ...idleInput, toggleInventory: true }, frame);
+		expect(state.inventoryOpen).toBe(false);
+
+		walkTo(state, { x: lu.position.x - 0.4, z: lu.position.z });
+		stepGame(state, { ...idleInput, interact: true }, frame);
+		expect(state.mode).toEqual({
+			kind: 'dialogue',
+			villagerId: 'senior_brother_lu',
+			lineIndex: 0
+		});
+		finishDialogue(state, lu.ambientLines.length);
+		expect(state.mode).toEqual({ kind: 'explore' });
+		expect(state.items.inventory).toEqual(inventoryAfterVictory);
+		expect(state.quest).toEqual({ stepIndex: QUEST_STEPS.length, stepProgress: 0 });
 	});
 });

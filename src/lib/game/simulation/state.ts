@@ -18,7 +18,7 @@ import {
 	RIVAL_STRIKE_TIMING,
 	distance
 } from './combat';
-import { moveThroughWorld } from './world';
+import { moveThroughWorld, regionAt } from './world';
 import {
 	assignQuickSlot,
 	cloneItemProgress,
@@ -33,9 +33,9 @@ import {
 	useConsumable
 } from './items';
 import { activeDialogueLine, advanceDialogue } from './dialogue';
-import { nearestVillager } from './interaction';
+import { nearestInteractTarget } from './interaction';
 import { activeQuestStep, advanceQuest, createInitialQuest } from './quest';
-import { DASH_MARKERS, getVillager, PLAYER_SPAWN } from './villageContent';
+import { DASH_MARKERS, getVillager, PLAYER_SPAWN, SHRINE_BELL } from './villageContent';
 import type { AttackTiming } from './combat';
 import type {
 	CombatActionKind,
@@ -205,6 +205,8 @@ export function toHudSnapshot(state: GameState): HudSnapshot {
 				: null,
 		prompt: state.prompt,
 		dialogue: activeDialogueLine(state),
+		interactTarget: hudInteractTarget(state),
+		region: regionAt(state.player.position),
 		playerHealth: Math.round(state.player.health),
 		playerMaxHealth: Math.round(state.player.maxHealth),
 		playerQi: Math.round(state.player.qi),
@@ -216,6 +218,17 @@ export function toHudSnapshot(state: GameState): HudSnapshot {
 		playerActionStatus: getPlayerActionStatus(state.player.combatAction),
 		isPaused: state.paused,
 		inventory: createHudInventorySnapshot(state.items, state.inventoryOpen, state.itemFeedback)
+	};
+}
+
+function hudInteractTarget(state: GameState): HudSnapshot['interactTarget'] {
+	const target = nearestInteractTarget(state, state.player.position);
+	if (!target) {
+		return null;
+	}
+	return {
+		id: target.id,
+		name: target.id === SHRINE_BELL.id ? SHRINE_BELL.name : getVillager(target.id).name
 	};
 }
 
@@ -303,12 +316,17 @@ function handleInteract(state: GameState, input: InputSnapshot): void {
 		return;
 	}
 
-	const villager = nearestVillager(state, state.player.position);
-	if (!villager) {
+	const target = nearestInteractTarget(state, state.player.position);
+	if (!target) {
 		return;
 	}
 
-	state.mode = { kind: 'dialogue', villagerId: villager.id, lineIndex: 0 };
+	if (target.id === SHRINE_BELL.id) {
+		state.quest = advanceQuest(state.quest, { type: 'objectUsed', targetId: target.id });
+		return;
+	}
+
+	state.mode = { kind: 'dialogue', villagerId: target.id, lineIndex: 0 };
 }
 
 function finishDialogue(state: GameState, villagerId: VillagerId): void {
@@ -704,9 +722,12 @@ function updatePrompt(state: GameState): void {
 	}
 
 	const step = activeQuestStep(state.quest);
-	const villager = nearestVillager(state, state.player.position);
-	if (villager) {
-		state.prompt = `Press E to speak with ${villager.name}`;
+	const target = nearestInteractTarget(state, state.player.position);
+	if (target) {
+		state.prompt =
+			target.id === SHRINE_BELL.id
+				? 'Press E to ring the shrine bell'
+				: `Press E to speak with ${getVillager(target.id).name}`;
 		return;
 	}
 

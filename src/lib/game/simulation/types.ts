@@ -1,4 +1,6 @@
-export type VillagerId = 'elder_shen' | 'senior_brother_lu' | 'auntie_qin';
+export type VillagerId = 'elder_shen' | 'senior_brother_lu' | 'auntie_qin' | 'old_zhu';
+
+export type InteractTargetId = VillagerId | 'shrine_bell';
 
 export type GameMode =
 	| { kind: 'explore' }
@@ -207,12 +209,19 @@ export type HudDialogue = {
 	lineCount: number;
 };
 
+export type HudInteractTarget = {
+	id: InteractTargetId;
+	name: string;
+};
+
 export type HudSnapshot = {
 	mode: GameModeKind;
 	objective: string;
 	markerProgress: { current: number; total: number } | null;
 	prompt: string | null;
 	dialogue: HudDialogue | null;
+	interactTarget: HudInteractTarget | null;
+	region: string | null;
 	playerHealth: number;
 	playerMaxHealth: number;
 	playerQi: number;

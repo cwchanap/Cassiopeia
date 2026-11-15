@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'vitest';
 import * as THREE from 'three';
 import type { CombatEffect } from '$lib/game/simulation/types';
-import { DASH_MARKERS, QUEST_STEPS } from '$lib/game/simulation/villageContent';
-import { createDashMarkers, syncEffects, syncMarkers } from './createWuxiaScene';
+import { DASH_MARKERS, QUEST_STEPS, SHRINE_BELL } from '$lib/game/simulation/villageContent';
+import { createDashMarkers, createShrineBell, syncEffects, syncMarkers } from './createWuxiaScene';
 
 describe('syncEffects', () => {
 	test('disposes an expired effect geometry and material immediately', () => {
@@ -86,5 +86,22 @@ describe('dash markers', () => {
 
 		syncMarkers({ stepIndex: QUEST_STEPS.length, stepProgress: 0 }, markers, active, idle);
 		expect(markers.every((marker) => marker.material === idle)).toBe(true);
+	});
+});
+
+describe('shrine bell', () => {
+	test('builds a registered primitive frame at the authored frontage position', () => {
+		const resources = {
+			geometries: [] as THREE.BufferGeometry[],
+			materials: [] as THREE.Material[]
+		};
+
+		const bell = createShrineBell(resources);
+
+		expect(bell.position.x).toBeCloseTo(SHRINE_BELL.position.x);
+		expect(bell.position.z).toBeCloseTo(SHRINE_BELL.position.z);
+		expect(bell.children.length).toBeGreaterThan(0);
+		expect(resources.geometries.length).toBeGreaterThan(0);
+		expect(resources.materials.length).toBeGreaterThan(0);
 	});
 });

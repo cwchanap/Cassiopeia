@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import layout from '../world-layout.json';
-import { canStandAt, moveThroughWorld, WORLD_BOUNDS } from './world';
+import { getVillager, SHRINE_BELL } from './villageContent';
+import { canStandAt, moveThroughWorld, regionAt, WORLD_BOUNDS } from './world';
 
 it('opens the country lanes beyond the old courtyard and stops at world edges', () => {
 	expect(moveThroughWorld({ x: 0, z: 0 }, { x: 14, z: 0 }).x).toBeCloseTo(14);
@@ -70,6 +71,34 @@ it('connects all three outer regions to the village through unobstructed walking
 	]) {
 		expect(canStandAt(position)).toBe(false);
 	}
+});
+
+it('reaches the walkable shrine frontage holding the bell and Old Zhu', () => {
+	const zhu = getVillager('old_zhu');
+	expect(canStandAt(SHRINE_BELL.position)).toBe(true);
+	expect(canStandAt(zhu.position)).toBe(true);
+
+	let position = { x: 0, z: 0 };
+	for (const waypoint of [
+		{ x: 0, z: 8.5 },
+		{ x: -17, z: 8.5 },
+		{ x: -44, z: 8.5 },
+		{ x: -44, z: -9 },
+		SHRINE_BELL.position,
+		zhu.position
+	]) {
+		position = moveThroughWorld(position, waypoint);
+		expect(position.x).toBeCloseTo(waypoint.x);
+		expect(position.z).toBeCloseTo(waypoint.z);
+	}
+});
+
+it('names the authored regions at their posts and stays null in the open village', () => {
+	expect(regionAt({ x: -44, z: -9 })).toBe('Whispering Bamboo Shrine');
+	expect(regionAt(SHRINE_BELL.position)).toBe('Whispering Bamboo Shrine');
+	expect(regionAt({ x: 0, z: -40 })).toBe('Cloudrest Monastery');
+	expect(regionAt({ x: 30, z: 40 })).toBe('Jadebank Market');
+	expect(regionAt({ x: 0, z: 0 })).toBeNull();
 });
 
 it('keeps the village cross-street and bamboo loop on continuous, clear road surfaces', () => {

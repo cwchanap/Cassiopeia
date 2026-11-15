@@ -1,9 +1,10 @@
 import { distance, INTERACT_RANGE } from './combat';
-import { getVillager, VILLAGERS, type VillagerContent } from './villageContent';
-import type { GameState, Vec2, VillagerId } from './types';
+import { activeQuestStep } from './quest';
+import { getVillager, SHRINE_BELL, VILLAGERS, type VillagerContent } from './villageContent';
+import type { GameState, InteractTargetId, Vec2, VillagerId } from './types';
 
 export type InteractTarget = {
-	id: VillagerId;
+	id: InteractTargetId;
 	position: Vec2;
 };
 
@@ -18,17 +19,22 @@ export function villagerPosition(state: GameState, villagerId: VillagerId): Vec2
 }
 
 export function interactTargets(state: GameState): InteractTarget[] {
-	return VILLAGERS.map((villager) => ({
-		id: villager.id,
-		position: villagerPosition(state, villager.id)
-	}));
+	const targets: InteractTarget[] = [];
+	const step = activeQuestStep(state.quest);
+	if (step?.kind === 'object' && step.targetId === SHRINE_BELL.id) {
+		targets.push({ id: SHRINE_BELL.id, position: SHRINE_BELL.position });
+	}
+	for (const villager of VILLAGERS) {
+		targets.push({ id: villager.id, position: villagerPosition(state, villager.id) });
+	}
+	return targets;
 }
 
-export function nearestInteractable(
-	targets: readonly InteractTarget[],
+export function nearestInteractable<T extends InteractTarget>(
+	targets: readonly T[],
 	from: Vec2
-): InteractTarget | null {
-	let nearest: InteractTarget | null = null;
+): T | null {
+	let nearest: T | null = null;
 	let nearestDistance = INTERACT_RANGE;
 	for (const target of targets) {
 		const targetDistance = distance(from, target.position);
@@ -40,7 +46,16 @@ export function nearestInteractable(
 	return nearest;
 }
 
+export function nearestInteractTarget(state: GameState, from: Vec2): InteractTarget | null {
+	return nearestInteractable(interactTargets(state), from);
+}
+
 export function nearestVillager(state: GameState, from: Vec2): VillagerContent | null {
-	const target = nearestInteractable(interactTargets(state), from);
+	const target = nearestInteractable(
+		interactTargets(state).filter(
+			(entry): entry is InteractTarget & { id: VillagerId } => entry.id !== SHRINE_BELL.id
+		),
+		from
+	);
 	return target ? getVillager(target.id) : null;
 }

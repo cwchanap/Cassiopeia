@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { createInitialGameState } from '$lib/game/simulation/state';
 import { activeQuestStep } from '$lib/game/simulation/quest';
-import { DASH_MARKERS, getVillager } from '$lib/game/simulation/villageContent';
+import { DASH_MARKERS, getVillager, SHRINE_BELL } from '$lib/game/simulation/villageContent';
 import type { CombatEffect, GameState, QuestProgress, Vec2 } from '$lib/game/simulation/types';
 import {
 	cameraFollowFactor,
@@ -36,6 +36,7 @@ const playerColor = 0xf4eee4;
 const rivalColor = 0x33413b;
 const mentorColor = 0x6a796c;
 const qinColor = 0x7a5560;
+const zhuColor = 0x6e5f49;
 const SUN_OFFSET = { x: -9, y: 18, z: 6 };
 
 export function createWuxiaScene(host: HTMLElement): WuxiaScene {
@@ -70,10 +71,13 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 	const mentor = createDisciple(mentorColor, resources);
 	const auntieQin = getVillager('auntie_qin');
 	const qin = createDisciple(qinColor, resources);
+	const oldZhu = getVillager('old_zhu');
+	const zhu = createDisciple(zhuColor, resources);
 	// Actors draw after ink so an occluded player's silhouette never paints over them.
 	setMeshRenderOrder(rival, PLAYER_RENDER_ORDER);
 	setMeshRenderOrder(mentor, PLAYER_RENDER_ORDER);
 	setMeshRenderOrder(qin, PLAYER_RENDER_ORDER);
+	setMeshRenderOrder(zhu, PLAYER_RENDER_ORDER);
 	const effects = new Map<number, THREE.Mesh>();
 	let disposed = false;
 
@@ -90,6 +94,8 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 	scene.add(rival);
 	scene.add(mentor);
 	scene.add(qin);
+	scene.add(zhu);
+	scene.add(createShrineBell(resources));
 	const markerIdleMaterial = material(
 		new THREE.MeshStandardMaterial({ color: 0x8fa89b, roughness: 0.7 }),
 		resources
@@ -141,6 +147,7 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 		);
 		applyFighter(mentor, snapshot.mentor.position, Math.PI * 0.25, createIdleRenderAction());
 		applyFighter(qin, auntieQin.position, auntieQin.heading, createIdleRenderAction());
+		applyFighter(zhu, oldZhu.position, oldZhu.heading, createIdleRenderAction());
 		syncEffects(snapshot.effects, effects, resources, scene);
 		syncMarkers(snapshot.quest, dashMarkers, markerActiveMaterial, markerIdleMaterial);
 
@@ -583,6 +590,56 @@ function getActionPose(action: GameState['player']['combatAction']) {
 		heightScale: 0,
 		depthScale: 0
 	};
+}
+
+export function createShrineBell(resources: SceneResources): THREE.Group {
+	const group = new THREE.Group();
+	group.position.set(SHRINE_BELL.position.x, 0, SHRINE_BELL.position.z);
+
+	const wood = material(
+		new THREE.MeshStandardMaterial({ color: 0x4c3b28, roughness: 0.75 }),
+		resources
+	);
+	const bronze = material(
+		new THREE.MeshStandardMaterial({
+			color: 0xa0722f,
+			metalness: 0.4,
+			roughness: 0.45,
+			emissive: 0x2b1c08,
+			emissiveIntensity: 0.4
+		}),
+		resources
+	);
+
+	const postA = new THREE.Mesh(
+		geometry(new THREE.CylinderGeometry(0.06, 0.08, 1.9, 10), resources),
+		wood
+	);
+	postA.position.set(-0.55, 0.95, 0);
+	group.add(postA);
+	const postB = postA.clone();
+	postB.position.x = 0.55;
+	group.add(postB);
+
+	const beam = new THREE.Mesh(geometry(new THREE.BoxGeometry(1.4, 0.12, 0.12), resources), wood);
+	beam.position.set(0, 1.9, 0);
+	group.add(beam);
+
+	const bell = new THREE.Mesh(
+		geometry(new THREE.CylinderGeometry(0.16, 0.3, 0.55, 12), resources),
+		bronze
+	);
+	bell.position.set(0, 1.55, 0);
+	group.add(bell);
+
+	const clapper = new THREE.Mesh(
+		geometry(new THREE.SphereGeometry(0.06, 10, 8), resources),
+		bronze
+	);
+	clapper.position.set(0, 1.22, 0);
+	group.add(clapper);
+
+	return group;
 }
 
 export function createDashMarkers(

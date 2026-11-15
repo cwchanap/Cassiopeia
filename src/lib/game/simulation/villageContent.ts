@@ -1,6 +1,6 @@
 import type { ItemReward, Vec2, VillagerId } from './types';
 
-export type QuestStepKind = 'talk' | 'dashMarkers' | 'receiveItem' | 'duel';
+export type QuestStepKind = 'talk' | 'dashMarkers' | 'receiveItem' | 'object' | 'duel';
 
 export type QuestStep = {
 	id: string;
@@ -27,6 +27,12 @@ export const DASH_MARKERS: Vec2[] = [
 	{ x: 0, z: -6.5 },
 	{ x: 0, z: -10 }
 ];
+
+export const SHRINE_BELL: { id: 'shrine_bell'; name: string; position: Vec2 } = {
+	id: 'shrine_bell',
+	name: 'Shrine Bell',
+	position: { x: -44, z: -14 }
+};
 
 export const VILLAGERS: VillagerContent[] = [
 	{
@@ -63,6 +69,17 @@ export const VILLAGERS: VillagerContent[] = [
 			'Put one where your hand falls — open your bag and set it on a quick slot.'
 		],
 		ambientLines: ['The Herbalist keeps a poultice for every training bruise, little one.']
+	},
+	{
+		id: 'old_zhu',
+		name: 'Old Zhu',
+		position: { x: -48, z: -15 },
+		heading: Math.PI * 0.5,
+		questLines: [],
+		ambientLines: [
+			'That bell has called disciples to dawn practice since before your elder was born.',
+			'Ring it true, little one, and even the bamboo seems to stand a little straighter.'
+		]
 	}
 ];
 
@@ -89,6 +106,13 @@ export const QUEST_STEPS: QuestStep[] = [
 		instruction:
 			'Fetch medicine from Auntie Qin by the Herbalist and assign a pill to a quick slot',
 		grant: { itemId: 'lesser_healing_pill', count: 2 }
+	},
+	{
+		id: 'ring_shrine_bell',
+		kind: 'object',
+		targetId: 'shrine_bell',
+		title: '鸣钟 Ring the Shrine Bell',
+		instruction: 'Ring the shrine bell at the Whispering Bamboo Shrine west of the village'
 	},
 	{
 		id: 'spar',
