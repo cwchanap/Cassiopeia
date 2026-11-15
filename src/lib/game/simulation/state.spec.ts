@@ -424,7 +424,8 @@ describe('wuxia simulation state', () => {
 
 		stepGame(state, idleInput, frame);
 
-		expect(state.player.health).toBe(0);
+		expect(state.player.position).toEqual(PLAYER_SPAWN);
+		expect(state.player.health).toBe(state.player.maxHealth);
 		expect(state.mode).toEqual({ kind: 'explore' });
 		expect(state.quest.stepIndex).toBe(QUEST_STEPS.length);
 		expect(state.itemFeedback).toMatch(/^Won: /);

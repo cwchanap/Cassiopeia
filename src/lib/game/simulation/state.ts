@@ -695,6 +695,9 @@ function resolveEndState(state: GameState): void {
 		state.quest = advanceQuest(state.quest, { type: 'duelWon' });
 		state.player.combatAction = idleCombatAction();
 		resetRivalToPost(state);
+		if (state.player.health <= 0) {
+			respawnPlayer(state);
+		}
 		state.mode = { kind: 'explore' };
 		return;
 	}

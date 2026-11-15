@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
-import { computeWuxiaCameraPose, projectWorldToScreen } from '../lib/game/render/camera';
-import { DASH_MARKERS, getVillager } from '../lib/game/simulation/villageContent';
-import type { Vec2 } from '../lib/game/simulation/types';
+import { computeWuxiaCameraPose, projectWorldToScreen } from '$lib/game/render/camera';
+import { DASH_MARKERS, getVillager } from '$lib/game/simulation/villageContent';
+import type { Vec2 } from '$lib/game/simulation/types';
 
 const VIEWPORT = { width: 960, height: 640 };
 
