@@ -95,7 +95,13 @@ test('plays through the first day quest, duel, reward, and free roam', async ({ 
 	);
 	await expect(page.getByTestId('bag-toggle')).toBeEnabled();
 
-	await walkToPrompt(page, 's', 'Press E to speak with Senior Brother Lu');
+	await page.reload();
+	await expect(page.getByTestId('game-shell')).toBeVisible();
+	await expect(page.getByTestId('objective-chip')).toContainText(
+		'Speak with Senior Brother Lu and win the spar'
+	);
+	await expect(page.getByTestId('quick-slot-3')).toContainText('Qi Pill');
+	await expect(prompt).toHaveText('Press E to speak with Senior Brother Lu');
 
 	await page.keyboard.press('e');
 	await expect(prompt).toContainText('Senior Brother Lu:');
@@ -197,7 +203,32 @@ test('plays through the first day quest, duel, reward, and free roam', async ({ 
 
 	await page.reload();
 	await expect(page.getByTestId('game-shell')).toBeVisible();
+	await expect(page.getByTestId('objective-chip')).toContainText('free roam');
 	await page.getByTestId('bag-toggle').click();
 	await expect(page.getByTestId('bag-panel')).toBeVisible();
 	await expectBagItemCount(page, rewardItem.testId, expectedRewardItemCount);
+	await page.getByTestId('bag-close').click();
+
+	await page.evaluate(() => {
+		localStorage.setItem('cassiopeia.gameProgress.v2', '{');
+		localStorage.setItem(
+			'cassiopeia.itemProgress.v1',
+			JSON.stringify({
+				version: 1,
+				inventory: { lesser_qi_pill: 9 },
+				equipment: { weapon: null, robe: null, accessory: null },
+				quickSlots: { 1: null, 2: 'lesser_qi_pill', 3: null },
+				rewardSeed: 4,
+				lastReward: null
+			})
+		);
+	});
+	await page.reload();
+	await expect(page.getByTestId('game-shell')).toBeVisible();
+	await expect(page.getByTestId('objective-chip')).toContainText(
+		'Pay respects to Elder Shen in the courtyard'
+	);
+	await page.getByTestId('bag-toggle').click();
+	await expect(page.getByTestId('bag-panel')).toBeVisible();
+	await expectBagItemCount(page, 'bag-item-lesser_qi_pill', 2);
 });

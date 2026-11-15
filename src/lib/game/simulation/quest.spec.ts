@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { QUEST_STEPS } from './villageContent';
-import { activeQuestStep, advanceQuest, createInitialQuest } from './quest';
+import { activeQuestStep, advanceQuest, createInitialQuest, normalizeQuestProgress } from './quest';
 
 describe('quest progress', () => {
 	it('starts on the first authored step', () => {
@@ -48,5 +48,47 @@ describe('quest progress', () => {
 
 		const stillDone = advanceQuest(done, { type: 'duelWon' });
 		expect(stillDone.stepIndex).toBe(QUEST_STEPS.length);
+	});
+});
+
+describe('normalizeQuestProgress', () => {
+	it('accepts in-bounds progress for the authored steps', () => {
+		expect(normalizeQuestProgress({ stepIndex: 0, stepProgress: 0 })).toEqual({
+			stepIndex: 0,
+			stepProgress: 0
+		});
+		expect(normalizeQuestProgress({ stepIndex: 1, stepProgress: 0 })).toEqual({
+			stepIndex: 1,
+			stepProgress: 0
+		});
+	});
+
+	it('accepts quest completion only with zero step progress', () => {
+		expect(normalizeQuestProgress({ stepIndex: QUEST_STEPS.length, stepProgress: 0 })).toEqual({
+			stepIndex: QUEST_STEPS.length,
+			stepProgress: 0
+		});
+		expect(normalizeQuestProgress({ stepIndex: QUEST_STEPS.length, stepProgress: 1 })).toBeNull();
+	});
+
+	it('rejects progress the active step cannot produce', () => {
+		expect(normalizeQuestProgress({ stepIndex: 0, stepProgress: 1 })).toBeNull();
+		expect(normalizeQuestProgress({ stepIndex: 1, stepProgress: 2 })).toBeNull();
+		expect(normalizeQuestProgress({ stepIndex: 0, stepProgress: -1 })).toBeNull();
+	});
+
+	it('rejects malformed and out-of-bounds data', () => {
+		expect(normalizeQuestProgress(null)).toBeNull();
+		expect(normalizeQuestProgress('{"stepIndex":0,"stepProgress":0}')).toBeNull();
+		expect(normalizeQuestProgress([0, 0])).toBeNull();
+		expect(normalizeQuestProgress({})).toBeNull();
+		expect(normalizeQuestProgress({ stepIndex: 0 })).toBeNull();
+		expect(normalizeQuestProgress({ stepProgress: 0 })).toBeNull();
+		expect(normalizeQuestProgress({ stepIndex: '1', stepProgress: 0 })).toBeNull();
+		expect(normalizeQuestProgress({ stepIndex: 0.5, stepProgress: 0 })).toBeNull();
+		expect(normalizeQuestProgress({ stepIndex: -1, stepProgress: 0 })).toBeNull();
+		expect(
+			normalizeQuestProgress({ stepIndex: QUEST_STEPS.length + 1, stepProgress: 0 })
+		).toBeNull();
 	});
 });
