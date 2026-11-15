@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { createInitialGameState } from '$lib/game/simulation/state';
 import { activeQuestStep } from '$lib/game/simulation/quest';
-import { DASH_MARKERS, getVillager, SHRINE_BELL } from '$lib/game/simulation/villageContent';
+import {
+	DASH_MARKERS,
+	getVillager,
+	SHRINE_BELL,
+	type VillagerContent
+} from '$lib/game/simulation/villageContent';
 import type { CombatEffect, GameState, QuestProgress, Vec2 } from '$lib/game/simulation/types';
 import {
 	cameraFollowFactor,
@@ -37,6 +42,7 @@ const rivalColor = 0x33413b;
 const mentorColor = 0x6a796c;
 const qinColor = 0x7a5560;
 const zhuColor = 0x6e5f49;
+const weiColor = 0x54617a;
 const SUN_OFFSET = { x: -9, y: 18, z: 6 };
 
 export function createWuxiaScene(host: HTMLElement): WuxiaScene {
@@ -67,17 +73,16 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 	const player = createDisciple(playerColor, resources);
 	const inkMaterial = material(createInkMaterial(), resources);
 	addInkSilhouette(player, inkMaterial);
-	const rival = createDisciple(rivalColor, resources);
-	const mentor = createDisciple(mentorColor, resources);
-	const auntieQin = getVillager('auntie_qin');
-	const qin = createDisciple(qinColor, resources);
-	const oldZhu = getVillager('old_zhu');
-	const zhu = createDisciple(zhuColor, resources);
 	// Actors draw after ink so an occluded player's silhouette never paints over them.
-	setMeshRenderOrder(rival, PLAYER_RENDER_ORDER);
-	setMeshRenderOrder(mentor, PLAYER_RENDER_ORDER);
-	setMeshRenderOrder(qin, PLAYER_RENDER_ORDER);
-	setMeshRenderOrder(zhu, PLAYER_RENDER_ORDER);
+	const rival = createVillagerActor(getVillager('senior_brother_lu'), rivalColor, resources);
+	const elderShen = getVillager('elder_shen');
+	const mentor = createVillagerActor(elderShen, mentorColor, resources);
+	const auntieQin = getVillager('auntie_qin');
+	const qin = createVillagerActor(auntieQin, qinColor, resources);
+	const oldZhu = getVillager('old_zhu');
+	const zhu = createVillagerActor(oldZhu, zhuColor, resources);
+	const peddlerWei = getVillager('peddler_wei');
+	const wei = createVillagerActor(peddlerWei, weiColor, resources);
 	const effects = new Map<number, THREE.Mesh>();
 	let disposed = false;
 
@@ -95,6 +100,7 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 	scene.add(mentor);
 	scene.add(qin);
 	scene.add(zhu);
+	scene.add(wei);
 	scene.add(createShrineBell(resources));
 	const markerIdleMaterial = material(
 		new THREE.MeshStandardMaterial({ color: 0x8fa89b, roughness: 0.7 }),
@@ -121,11 +127,26 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 			// Newly attached GLB meshes need their own ink; already-inked procedural meshes are skipped.
 			if (status === 'ready') {
 				addInkSilhouette(player, inkMaterial);
-				setMeshRenderOrder(rival, PLAYER_RENDER_ORDER);
-				setMeshRenderOrder(mentor, PLAYER_RENDER_ORDER);
+				attachGlbVillagers();
+				for (const actor of [rival, mentor, qin, zhu, wei]) {
+					setMeshRenderOrder(actor, PLAYER_RENDER_ORDER);
+				}
 			}
 		}
 	);
+
+	function attachGlbVillagers(): void {
+		const mentorModel = mentor.getObjectByName('Mentor');
+		if (!mentorModel) return;
+		for (const { group, color } of [
+			{ group: qin, color: qinColor },
+			{ group: zhu, color: zhuColor },
+			{ group: wei, color: weiColor }
+		]) {
+			for (const child of group.children) child.visible = false;
+			group.add(cloneVillagerModel(mentorModel, color, resources));
+		}
+	}
 
 	function render(snapshot: GameState, deltaTime: number): void {
 		if (disposed) return;
@@ -145,9 +166,10 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 			snapshot.rival.combatAction,
 			snapshot.elapsed
 		);
-		applyFighter(mentor, snapshot.mentor.position, Math.PI * 0.25, createIdleRenderAction());
+		applyFighter(mentor, snapshot.mentor.position, elderShen.heading, createIdleRenderAction());
 		applyFighter(qin, auntieQin.position, auntieQin.heading, createIdleRenderAction());
 		applyFighter(zhu, oldZhu.position, oldZhu.heading, createIdleRenderAction());
+		applyFighter(wei, peddlerWei.position, peddlerWei.heading, createIdleRenderAction());
 		syncEffects(snapshot.effects, effects, resources, scene);
 		syncMarkers(snapshot.quest, dashMarkers, markerActiveMaterial, markerIdleMaterial);
 
@@ -504,6 +526,45 @@ function createDisciple(color: number, resources: SceneResources): THREE.Group {
 	group.add(blade);
 
 	return group;
+}
+
+export function createVillagerActor(
+	villager: VillagerContent,
+	color: number,
+	resources: SceneResources
+): THREE.Group {
+	const group = createDisciple(color, resources);
+	group.position.set(villager.position.x, 0, villager.position.z);
+	group.rotation.y = villager.heading;
+	setMeshRenderOrder(group, PLAYER_RENDER_ORDER);
+	return group;
+}
+
+export function cloneVillagerModel(
+	source: THREE.Object3D,
+	color: number,
+	resources: SceneResources
+): THREE.Object3D {
+	const clone = source.clone();
+	const tinted = new Map<THREE.Material, THREE.Material>();
+	const swap = (entry: THREE.Material): THREE.Material => {
+		if (entry.name !== 'Handpainted_Wuxia_Atlas') return entry;
+		let copy = tinted.get(entry);
+		if (!copy) {
+			copy = entry.clone();
+			if (copy instanceof THREE.MeshStandardMaterial) copy.color.setHex(color);
+			material(copy, resources);
+			tinted.set(entry, copy);
+		}
+		return copy;
+	};
+	clone.traverse((object) => {
+		if (!(object instanceof THREE.Mesh)) return;
+		object.material = Array.isArray(object.material)
+			? object.material.map(swap)
+			: swap(object.material);
+	});
+	return clone;
 }
 
 function applyFighter(

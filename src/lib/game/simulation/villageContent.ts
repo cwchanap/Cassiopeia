@@ -80,6 +80,17 @@ export const VILLAGERS: VillagerContent[] = [
 			'That bell has called disciples to dawn practice since before your elder was born.',
 			'Ring it true, little one, and even the bamboo seems to stand a little straighter.'
 		]
+	},
+	{
+		id: 'peddler_wei',
+		name: 'Peddler Wei',
+		position: { x: 30, z: 38 },
+		heading: -Math.PI * 0.5,
+		questLines: [],
+		ambientLines: [
+			'Charms, tonics, fresh river pears — Jadebank Market stocks whatever the mountain forgets.',
+			'Cross the last bridge before dusk, disciple. The boardwalk lamps are kind, but the river mist is not.'
+		]
 	}
 ];
 

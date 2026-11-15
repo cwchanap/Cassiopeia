@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialGameState } from './state';
 import { activeDialogueLine, advanceDialogue, dialogueLinesFor } from './dialogue';
-import { getVillager } from './villageContent';
+import { getVillager, QUEST_STEPS } from './villageContent';
 import type { GameMode } from './types';
 
 describe('dialogueLinesFor', () => {
@@ -28,6 +28,16 @@ describe('dialogueLinesFor', () => {
 		expect(dialogueLinesFor({ stepIndex: 2, stepProgress: 0 }, qin)).toBe(qin.questLines);
 		expect(dialogueLinesFor({ stepIndex: 2, stepProgress: 1 }, qin)).toBe(qin.ambientLines);
 		expect(dialogueLinesFor({ stepIndex: 3, stepProgress: 0 }, qin)).toBe(qin.ambientLines);
+	});
+
+	it('offers Peddler Wei ambient lines at every step because no step targets him', () => {
+		const wei = getVillager('peddler_wei');
+
+		for (let stepIndex = 0; stepIndex <= QUEST_STEPS.length; stepIndex += 1) {
+			expect(dialogueLinesFor({ stepIndex, stepProgress: 0 }, wei)).toBe(wei.ambientLines);
+			expect(dialogueLinesFor({ stepIndex, stepProgress: 1 }, wei)).toBe(wei.ambientLines);
+		}
+		expect(wei.ambientLines.length).toBeGreaterThan(0);
 	});
 });
 

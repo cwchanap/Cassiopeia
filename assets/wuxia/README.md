@@ -58,10 +58,17 @@ while editing an individual model.
 fallback if loading fails, and releases shared geometries, materials, textures, and image
 bitmaps on teardown, including loads that finish after disposal. The renderer poses the
 limbs from movement and existing combat state. These are articulated low-poly meshes,
-not skinned characters with baked animation clips. `src/lib/game/world-layout.json` is shared
+not skinned characters with baked animation clips. On the ready path, Auntie Qin, Old Zhu,
+and Peddler Wei hide their procedural models and attach clones of the `Mentor` group instead:
+each clone shares the GLB geometry and textures, swaps only the `Handpainted_Wuxia_Atlas`
+material for a per-villager tinted copy, and registers that copy in the scene resource
+registry so it is disposed deterministically on unmount while the source atlas is not.
+Every villager renders at the player's render order so an occluded player's ink silhouette
+never paints over an NPC. `src/lib/game/world-layout.json` is shared
 by Blender and the simulation: building footprints, trees, garden walls, lanterns, banner poles,
-water, and map bounds constrain walking and dashes. Four bridge openings allow crossing the stream. The starting
-courtyard, mentor, and duel loop remain intact. The camera and sunlight follow exploration.
+water, and map bounds constrain walking and dashes. Four bridge openings allow crossing the stream. The first-day
+quest leads the disciple from the courtyard to Elder Shen, the ordered gate markers, Auntie
+Qin, the shrine bell, and Senior Brother Lu's spar, then opens free roam. The camera and sunlight follow exploration.
 The exported Village root embeds its layout for the asset test to detect stale exports.
 
 The scene uses one fixed 2.5D isometric view: a single orthographic camera at 45° azimuth and
@@ -78,11 +85,12 @@ or keep the procedural ink when loading fails.
 
 Explore with WASD or the arrow keys (both screen-aligned): north through the gate for the
 village street, east across the bridge for rice fields, or south/west along the lanes for tea
-gardens and the orchard. Interiors and new quests are outside this map expansion. The enlarged
+gardens and the orchard. Interiors and further quests are outside this map expansion. The enlarged
 self-contained pack has a 20 MiB budget.
-For the new regions, follow the western lane past the hamlet to the bamboo shrine, take the
-eastern bypass around the ancestral hall to the monastery, or follow the west riverbank south
-and cross the final bridge to the market. The far northern bridge loops back to the rice farms.
+For the new regions, follow the western lane past the hamlet to the bamboo shrine where Old Zhu
+tends the bell, take the eastern bypass around the ancestral hall to the monastery, or follow
+the west riverbank south and cross the final bridge to Jadebank Market where Peddler Wei works
+the boardwalk. The far northern bridge loops back to the rice farms.
 
 Check the bundle contract and loader lifecycle with:
 

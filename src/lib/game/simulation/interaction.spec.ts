@@ -8,7 +8,7 @@ import {
 	nearestVillager,
 	type InteractTarget
 } from './interaction';
-import { getVillager, SHRINE_BELL } from './villageContent';
+import { getVillager, SHRINE_BELL, VILLAGERS } from './villageContent';
 
 const elder = getVillager('elder_shen');
 const lu = getVillager('senior_brother_lu');
@@ -67,6 +67,19 @@ describe('nearestVillager', () => {
 		const beside = { x: qin.position.x - 0.5, z: qin.position.z };
 
 		expect(nearestVillager(state, beside)?.id).toBe('auntie_qin');
+	});
+});
+
+describe('interactTargets', () => {
+	it('lists all five stationary villagers at their authored posts', () => {
+		const state = createInitialGameState();
+		const targets = interactTargets(state);
+
+		expect(VILLAGERS).toHaveLength(5);
+		for (const villager of VILLAGERS) {
+			const target = targets.find((entry) => entry.id === villager.id);
+			expect(target?.position).toEqual(villager.position);
+		}
 	});
 });
 

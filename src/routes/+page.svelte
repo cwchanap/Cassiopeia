@@ -208,7 +208,7 @@
 		<section class="objective-chip" data-testid="objective-chip" aria-label="Current objective">
 			<span class="objective-mark" aria-hidden="true">!</span>
 			<div aria-live="polite">
-				<span class="eyebrow">{modeLabel}</span><strong
+				<span class="eyebrow">{modeLabel}{hud.region ? ` · ${hud.region}` : ''}</span><strong
 					>{hud.objective}{hud.markerProgress
 						? ` · ${hud.markerProgress.current}/${hud.markerProgress.total}`
 						: ''}</strong
