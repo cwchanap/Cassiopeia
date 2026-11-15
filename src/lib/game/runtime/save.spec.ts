@@ -144,6 +144,24 @@ describe('game progress save adapter', () => {
 		expectFreshStart(loadGameProgress(storage));
 	});
 
+	it('discards the whole save when item data fails structural validation', () => {
+		const validQuest = { stepIndex: 1, stepProgress: 0 };
+
+		const wrongVersion = starterItemsJson();
+		wrongVersion.version = 2;
+		const badVersion = createMemoryStorage({
+			[GAME_SAVE_KEY]: JSON.stringify({ items: wrongVersion, quest: validQuest })
+		});
+		expectFreshStart(loadGameProgress(badVersion));
+
+		const missingSections = starterItemsJson();
+		delete missingSections.quickSlots;
+		const badSections = createMemoryStorage({
+			[GAME_SAVE_KEY]: JSON.stringify({ items: missingSections, quest: validQuest })
+		});
+		expectFreshStart(loadGameProgress(badSections));
+	});
+
 	it('returns false when storage writes fail', () => {
 		const storage = createMemoryStorage();
 		storage.setItem = () => {

@@ -6,6 +6,7 @@ import {
 	equipItem,
 	formatReward,
 	grantVictoryReward,
+	isItemProgressSave,
 	normalizeItemProgress,
 	useConsumable
 } from './items';
@@ -91,6 +92,22 @@ describe('item system rules', () => {
 		const normalized = normalizeItemProgress({ version: 1 });
 
 		expect(normalized).toEqual(createStarterItemProgress());
+	});
+
+	it('marks only structurally complete v1 saves as restorable item progress', () => {
+		expect(isItemProgressSave(createStarterItemProgress())).toBe(true);
+		expect(
+			isItemProgressSave({
+				version: 1,
+				inventory: { not_real: 9 },
+				equipment: { weapon: 'not_real' },
+				quickSlots: {},
+				rewardSeed: 0
+			})
+		).toBe(true);
+		expect(isItemProgressSave({ ...createStarterItemProgress(), version: 2 })).toBe(false);
+		expect(isItemProgressSave({ version: 1 })).toBe(false);
+		expect(isItemProgressSave('starter')).toBe(false);
 	});
 
 	it('uses healing and qi consumables only when they apply a benefit', () => {
