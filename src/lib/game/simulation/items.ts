@@ -145,8 +145,12 @@ export function createStarterItemProgress(): ItemProgress {
 	};
 }
 
+export function isItemProgressSave(raw: unknown): raw is Record<string, unknown> {
+	return isRecord(raw) && raw.version === SAVE_VERSION && hasRequiredSaveSections(raw);
+}
+
 export function normalizeItemProgress(raw: unknown): ItemProgress {
-	if (!isRecord(raw) || raw.version !== SAVE_VERSION || !hasRequiredSaveSections(raw)) {
+	if (!isItemProgressSave(raw)) {
 		return createStarterItemProgress();
 	}
 

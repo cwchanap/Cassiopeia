@@ -1,6 +1,7 @@
 import {
 	cloneItemProgress,
 	createStarterItemProgress,
+	isItemProgressSave,
 	normalizeItemProgress
 } from '$lib/game/simulation/items';
 import { createInitialQuest, normalizeQuestProgress } from '$lib/game/simulation/quest';
@@ -29,7 +30,7 @@ export function loadGameProgress(storage?: Storage): GameProgress {
 		}
 
 		const parsed: unknown = JSON.parse(raw);
-		if (!isRecord(parsed) || !isRecord(parsed.items)) {
+		if (!isRecord(parsed) || !isItemProgressSave(parsed.items)) {
 			return createFreshGameProgress();
 		}
 
