@@ -14,7 +14,6 @@ export function activeQuestStep(progress: QuestProgress): QuestStep | null {
 	return QUEST_STEPS[progress.stepIndex] ?? null;
 }
 
-/** Applies a completion event to the active step; wrong-step events are ignored. */
 export function advanceQuest(progress: QuestProgress, event: QuestEvent): QuestProgress {
 	const step = activeQuestStep(progress);
 	if (!step) {

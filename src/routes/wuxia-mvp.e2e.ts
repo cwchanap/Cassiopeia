@@ -18,8 +18,6 @@ async function expectBagItemCount(page: Page, testId: string, count: number): Pr
 	await expect(bagItem).toContainText(new RegExp(`x${count}(?!\\d)`), { timeout: 15000 });
 }
 
-// Holding a direction overshoots the 1.5 m talk window long before a poll sees the prompt,
-// so tap the key and only assert while the player is standing still inside the window.
 async function walkToPrompt(page: Page, keys: string[], text: string, holdMs = 120): Promise<void> {
 	const prompt = page.getByTestId('game-prompt');
 	await expect(async () => {
@@ -84,7 +82,6 @@ test('plays through the first day quest, duel, reward, and free roam', async ({ 
 	await page.keyboard.press('e');
 	const prompt = page.getByTestId('game-prompt');
 	await expect(prompt).toContainText('Elder Shen:');
-	// The bag cannot be opened while a villager is talking; keyboard and button agree.
 	await expect(page.getByTestId('bag-toggle')).toBeDisabled();
 	await page.keyboard.press('i');
 	await expect(page.getByTestId('bag-panel')).toBeHidden();
@@ -106,35 +103,43 @@ test('plays through the first day quest, duel, reward, and free roam', async ({ 
 	await expect(page.getByTestId('quick-slot-3')).toContainText('Qi Pill');
 	await expect(prompt).toHaveText('Press E to speak with Senior Brother Lu');
 
-	// Space must land while W+D is still held so the dash runs along the live
-	// northward move — at these frame rates a frame reliably lands between the two
-	// key releases and leaves the last heading aimed northeast. Releasing both keys
-	// before the long cooldown wait keeps the player from walking past the next
-	// marker, which a northward dash could then never cross. Alternating the key
-	// order each poll cancels the stray single-key frames, keeping the dash line on
-	// the marker column while retried polls continue from wherever the last dash
-	// ended and the marker stays inside its window.
+	const renderedFrames = (count: number) =>
+		page.evaluate(
+			(ticks) =>
+				new Promise<void>((resolve) => {
+					let remaining = ticks;
+					const tick = () => {
+						remaining -= 1;
+						if (remaining <= 0) {
+							resolve();
+						} else {
+							requestAnimationFrame(tick);
+						}
+					};
+					requestAnimationFrame(tick);
+				}),
+			count
+		);
+	const qinggongReady = page.locator('.technique', { hasText: 'Qinggong' }).locator('small');
 	let markerTaps = 0;
 	const dashThroughNextMarker = async (expected: RegExp) => {
 		await expect(async () => {
 			const [first, second] = markerTaps++ % 2 ? ['w', 'd'] : ['d', 'w'];
 			await page.keyboard.down(first);
 			await page.keyboard.down(second);
-			await page.waitForTimeout(900);
+			await renderedFrames(2);
 			await page.keyboard.press('Space');
-			await page.waitForTimeout(500);
+			await renderedFrames(3);
 			await page.keyboard.up(first);
 			await page.keyboard.up(second);
-			await page.waitForTimeout(14000);
+			await expect(qinggongReady).toHaveText('Ready', { timeout: 90000 });
 			expect(await objectiveChip.innerText()).toMatch(expected);
-		}).toPass({ timeout: 90000 });
+		}).toPass({ timeout: 150000 });
 	};
 	await dashThroughNextMarker(/1\/3/);
 	await dashThroughNextMarker(/2\/3/);
 	await dashThroughNextMarker(/Speak with Senior Brother Lu and win the spar/);
 
-	// The spar objective persists through a reload, which restores the player to
-	// the spawn beside Lu instead of leaving them at the far end of the corridor.
 	await page.reload();
 	await expect(page.getByTestId('game-shell')).toBeVisible();
 	await expect(prompt).toHaveText('Press E to speak with Senior Brother Lu');
@@ -143,7 +148,6 @@ test('plays through the first day quest, duel, reward, and free roam', async ({ 
 	await expect(prompt).toContainText('Senior Brother Lu:');
 	await expect(prompt).toContainText('Elder Shen sent you?');
 
-	// Esc pauses inside a dialogue without losing the conversation.
 	await page.keyboard.press('Escape');
 	await expect(page.getByTestId('pause-panel')).toBeVisible();
 	await page.keyboard.press('Escape');
@@ -153,11 +157,9 @@ test('plays through the first day quest, duel, reward, and free roam', async ({ 
 	await page.keyboard.press('e');
 	await expect(prompt).toContainText('Enough talk');
 	await page.keyboard.press('e');
-	// The last line starts the duel; the rival meter and duel prompt appear together.
 	await expect(prompt).toHaveText('J: strike  K: qi burst  Space: dash');
 	await expect(page.getByRole('meter', { name: 'Rival health' })).toBeVisible();
 
-	// Pausing mid-duel keeps the duel framing: rival meter stays under the pause overlay.
 	await page.keyboard.press('Escape');
 	await expect(page.getByTestId('pause-panel')).toBeVisible();
 	await expect(page.getByRole('meter', { name: 'Rival health' })).toBeVisible();
@@ -185,7 +187,7 @@ test('plays through the first day quest, duel, reward, and free roam', async ({ 
 	// the duel can lag wall time several-fold. Keep attacking while the rival's health
 	// keeps dropping; only a sustained stall or the overall deadline fails the journey.
 	const rivalMeter = page.getByRole('meter', { name: 'Rival health' });
-	// The meter only exists during the duel; once it is gone the spar is decided.
+	// The meter only exists during the duel; once it is gone the end state is showing.
 	const readRivalHealth = () =>
 		rivalMeter
 			.getAttribute('value', { timeout: 2000 })

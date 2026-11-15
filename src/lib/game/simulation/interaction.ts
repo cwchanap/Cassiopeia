@@ -7,7 +7,6 @@ export type InteractTarget = {
 	position: Vec2;
 };
 
-/** The rival fighter and Lu are the same person; Elder Shen stands at the mentor mesh. */
 export function villagerPosition(state: GameState, villagerId: VillagerId): Vec2 {
 	return villagerId === 'senior_brother_lu' ? state.rival.position : state.mentor.position;
 }
@@ -19,7 +18,6 @@ export function interactTargets(state: GameState): InteractTarget[] {
 	}));
 }
 
-/** Nearest target within INTERACT_RANGE; equal distances keep content order. */
 export function nearestInteractable(
 	targets: readonly InteractTarget[],
 	from: Vec2
