@@ -3,6 +3,8 @@ import {
 	cooldown,
 	DASH_COOLDOWN,
 	DASH_DISTANCE,
+	DASH_MARKER_RADIUS,
+	distanceToSegment,
 	LIGHT_ATTACK_TIMING,
 	normaliseMove,
 	PLAYER_BASE_HEALTH,
@@ -32,7 +34,7 @@ import {
 import { activeDialogueLine, advanceDialogue } from './dialogue';
 import { nearestVillager } from './interaction';
 import { activeQuestStep, advanceQuest, createInitialQuest } from './quest';
-import { getVillager, PLAYER_SPAWN } from './villageContent';
+import { DASH_MARKERS, getVillager, PLAYER_SPAWN } from './villageContent';
 import type { AttackTiming } from './combat';
 import type {
 	CombatActionKind,
@@ -168,7 +170,7 @@ export function stepGame(
 	state.elapsed += dt;
 	updateCooldowns(state, dt);
 	updateEffects(state, dt);
-	movePlayer(state, input, dt);
+	handleDashMarkers(state, movePlayer(state, input, dt));
 
 	if (state.mode.kind === 'explore') {
 		handleInteract(state, input);
@@ -192,9 +194,14 @@ export function stepGame(
 }
 
 export function toHudSnapshot(state: GameState): HudSnapshot {
+	const step = activeQuestStep(state.quest);
 	return {
 		mode: state.mode.kind,
-		objective: activeQuestStep(state.quest)?.instruction ?? QUEST_COMPLETE_OBJECTIVE,
+		objective: step?.instruction ?? QUEST_COMPLETE_OBJECTIVE,
+		markerProgress:
+			step?.kind === 'dashMarkers'
+				? { current: state.quest.stepProgress, total: DASH_MARKERS.length }
+				: null,
 		prompt: state.prompt,
 		dialogue: activeDialogueLine(state),
 		playerHealth: Math.round(state.player.health),
@@ -242,7 +249,11 @@ function updateEffects(state: GameState, deltaTime: number): void {
 	state.effects = state.effects.filter((effect) => effect.age < 0.65);
 }
 
-function movePlayer(state: GameState, input: InputSnapshot, deltaTime: number): void {
+function movePlayer(
+	state: GameState,
+	input: InputSnapshot,
+	deltaTime: number
+): { from: Vec2; to: Vec2 } | null {
 	const move = normaliseMove(input.moveX, input.moveZ);
 	const hasMove = Math.abs(move.x) > 0.01 || Math.abs(move.z) > 0.01;
 
@@ -254,16 +265,35 @@ function movePlayer(state: GameState, input: InputSnapshot, deltaTime: number): 
 		state.player.heading = Math.atan2(move.x, move.z);
 	}
 
-	if (input.dash && state.player.dashCooldown === 0) {
-		const forward = hasMove
-			? move
-			: { x: Math.sin(state.player.heading), z: Math.cos(state.player.heading) };
-		state.player.position = moveThroughWorld(state.player.position, {
-			x: state.player.position.x + forward.x * DASH_DISTANCE,
-			z: state.player.position.z + forward.z * DASH_DISTANCE
-		});
-		state.player.dashCooldown = DASH_COOLDOWN;
-		addEffect(state, 'dash', state.player.position);
+	if (!input.dash || state.player.dashCooldown !== 0) {
+		return null;
+	}
+
+	const forward = hasMove
+		? move
+		: { x: Math.sin(state.player.heading), z: Math.cos(state.player.heading) };
+	const from = state.player.position;
+	const to = moveThroughWorld(from, {
+		x: from.x + forward.x * DASH_DISTANCE,
+		z: from.z + forward.z * DASH_DISTANCE
+	});
+	state.player.position = to;
+	state.player.dashCooldown = DASH_COOLDOWN;
+	addEffect(state, 'dash', to);
+	return from.x === to.x && from.z === to.z ? null : { from, to };
+}
+
+function handleDashMarkers(state: GameState, dashSegment: { from: Vec2; to: Vec2 } | null): void {
+	if (!dashSegment || state.mode.kind !== 'explore') {
+		return;
+	}
+	const step = activeQuestStep(state.quest);
+	if (step?.kind !== 'dashMarkers') {
+		return;
+	}
+	const marker = DASH_MARKERS[state.quest.stepProgress];
+	if (marker && distanceToSegment(marker, dashSegment.from, dashSegment.to) <= DASH_MARKER_RADIUS) {
+		state.quest = advanceQuest(state.quest, { type: 'markerCrossed' });
 	}
 }
 

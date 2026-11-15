@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'vitest';
 import * as THREE from 'three';
 import type { CombatEffect } from '$lib/game/simulation/types';
-import { syncEffects } from './createWuxiaScene';
+import { DASH_MARKERS, QUEST_STEPS } from '$lib/game/simulation/villageContent';
+import { createDashMarkers, syncEffects, syncMarkers } from './createWuxiaScene';
 
 describe('syncEffects', () => {
 	test('disposes an expired effect geometry and material immediately', () => {
@@ -42,5 +43,48 @@ describe('syncEffects', () => {
 		expect(scene.children).not.toContain(mesh);
 		expect(geometryDisposed).toBe(true);
 		expect(materialDisposed).toBe(true);
+	});
+});
+
+describe('dash markers', () => {
+	test('creates one registered mesh at each content marker position', () => {
+		const resources = {
+			geometries: [] as THREE.BufferGeometry[],
+			materials: [] as THREE.Material[]
+		};
+		const idle = new THREE.MeshStandardMaterial();
+
+		const markers = createDashMarkers(resources, idle);
+
+		expect(markers).toHaveLength(DASH_MARKERS.length);
+		for (const [index, marker] of markers.entries()) {
+			expect(marker.position.x).toBeCloseTo(DASH_MARKERS[index].x);
+			expect(marker.position.z).toBeCloseTo(DASH_MARKERS[index].z);
+			expect(marker.material).toBe(idle);
+		}
+		expect(resources.geometries).toHaveLength(1);
+	});
+
+	test('highlights only the next marker while the step is active', () => {
+		const resources = {
+			geometries: [] as THREE.BufferGeometry[],
+			materials: [] as THREE.Material[]
+		};
+		const idle = new THREE.MeshStandardMaterial();
+		const active = new THREE.MeshStandardMaterial();
+		const markers = createDashMarkers(resources, idle);
+		const markerStepIndex = QUEST_STEPS.findIndex((step) => step.kind === 'dashMarkers');
+		expect(markerStepIndex).toBeGreaterThan(0);
+
+		syncMarkers({ stepIndex: markerStepIndex, stepProgress: 1 }, markers, active, idle);
+		expect(markers[0].material).toBe(idle);
+		expect(markers[1].material).toBe(active);
+		expect(markers[2].material).toBe(idle);
+
+		syncMarkers({ stepIndex: 0, stepProgress: 0 }, markers, active, idle);
+		expect(markers.every((marker) => marker.material === idle)).toBe(true);
+
+		syncMarkers({ stepIndex: QUEST_STEPS.length, stepProgress: 0 }, markers, active, idle);
+		expect(markers.every((marker) => marker.material === idle)).toBe(true);
 	});
 });

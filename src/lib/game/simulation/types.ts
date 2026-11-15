@@ -210,6 +210,7 @@ export type HudDialogue = {
 export type HudSnapshot = {
 	mode: GameModeKind;
 	objective: string;
+	markerProgress: { current: number; total: number } | null;
 	prompt: string | null;
 	dialogue: HudDialogue | null;
 	playerHealth: number;

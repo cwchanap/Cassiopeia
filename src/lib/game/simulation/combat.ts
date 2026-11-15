@@ -17,6 +17,7 @@ export const RIVAL_ATTACK_DAMAGE = 6;
 export const RIVAL_ATTACK_COOLDOWN = 0.75;
 export const PLAYER_BASE_HEALTH = 100;
 export const MAX_QI = 100;
+export const DASH_MARKER_RADIUS = 1;
 
 export type AttackTiming = {
 	startup: number;
@@ -58,6 +59,20 @@ export function distance(a: Vec2, b: Vec2): number {
 	const dx = a.x - b.x;
 	const dz = a.z - b.z;
 	return Math.hypot(dx, dz);
+}
+
+export function distanceToSegment(point: Vec2, from: Vec2, to: Vec2): number {
+	const dx = to.x - from.x;
+	const dz = to.z - from.z;
+	const lengthSquared = dx * dx + dz * dz;
+	if (lengthSquared === 0) {
+		return distance(point, from);
+	}
+	const t = Math.max(
+		0,
+		Math.min(1, ((point.x - from.x) * dx + (point.z - from.z) * dz) / lengthSquared)
+	);
+	return distance(point, { x: from.x + t * dx, z: from.z + t * dz });
 }
 
 export function canHit(attacker: FighterState, target: FighterState, range: number): boolean {

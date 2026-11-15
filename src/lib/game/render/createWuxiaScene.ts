@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { createInitialGameState } from '$lib/game/simulation/state';
-import type { CombatEffect, GameState, Vec2 } from '$lib/game/simulation/types';
+import { activeQuestStep } from '$lib/game/simulation/quest';
+import { DASH_MARKERS } from '$lib/game/simulation/villageContent';
+import type { CombatEffect, GameState, QuestProgress, Vec2 } from '$lib/game/simulation/types';
 import {
 	cameraFollowFactor,
 	computeWuxiaCameraPose,
@@ -83,6 +85,23 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 	scene.add(player);
 	scene.add(rival);
 	scene.add(mentor);
+	const markerIdleMaterial = material(
+		new THREE.MeshStandardMaterial({ color: 0x8fa89b, roughness: 0.7 }),
+		resources
+	);
+	const markerActiveMaterial = material(
+		new THREE.MeshStandardMaterial({
+			color: 0xf2dfad,
+			emissive: 0xb9822e,
+			emissiveIntensity: 0.8,
+			roughness: 0.5
+		}),
+		resources
+	);
+	const dashMarkers = createDashMarkers(resources, markerIdleMaterial);
+	for (const markerMesh of dashMarkers) {
+		scene.add(markerMesh);
+	}
 	renderer.domElement.dataset.assets = 'loading';
 	const disposeAssets = loadWuxiaAssets(
 		{ Player: player, Rival: rival, Mentor: mentor, Village: village },
@@ -117,6 +136,7 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 		);
 		applyFighter(mentor, snapshot.mentor.position, Math.PI * 0.25, createIdleRenderAction());
 		syncEffects(snapshot.effects, effects, resources, scene);
+		syncMarkers(snapshot.quest, dashMarkers, markerActiveMaterial, markerIdleMaterial);
 
 		const desiredPose = computeWuxiaCameraPose({
 			mode: snapshot.mode.kind,
@@ -557,6 +577,32 @@ function getActionPose(action: GameState['player']['combatAction']) {
 		heightScale: 0,
 		depthScale: 0
 	};
+}
+
+export function createDashMarkers(
+	resources: SceneResources,
+	idleMaterial: THREE.Material
+): THREE.Mesh[] {
+	const ringGeometry = geometry(new THREE.TorusGeometry(0.5, 0.05, 8, 48), resources);
+	return DASH_MARKERS.map((marker) => {
+		const mesh = new THREE.Mesh(ringGeometry, idleMaterial);
+		mesh.rotation.x = Math.PI / 2;
+		mesh.position.set(marker.x, 0.08, marker.z);
+		return mesh;
+	});
+}
+
+export function syncMarkers(
+	quest: QuestProgress,
+	markers: THREE.Mesh[],
+	activeMaterial: THREE.Material,
+	idleMaterial: THREE.Material
+): void {
+	const step = activeQuestStep(quest);
+	const activeIndex = step?.kind === 'dashMarkers' ? quest.stepProgress : -1;
+	for (const [index, marker] of markers.entries()) {
+		marker.material = index === activeIndex ? activeMaterial : idleMaterial;
+	}
 }
 
 export function syncEffects(

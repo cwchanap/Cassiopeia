@@ -8,9 +8,9 @@ import {
 	RIVAL_ATTACK_COOLDOWN,
 	RIVAL_STRIKE_TIMING
 } from './combat';
-import { getVillager, PLAYER_SPAWN, QUEST_STEPS } from './villageContent';
+import { getVillager, DASH_MARKERS, PLAYER_SPAWN, QUEST_STEPS } from './villageContent';
 import type { GameState, InputSnapshot } from './types';
-import { canStandAt } from './world';
+import { canStandAt, moveThroughWorld } from './world';
 
 const elder = getVillager('elder_shen');
 const lu = getVillager('senior_brother_lu');
@@ -31,7 +31,7 @@ const frame = 1 / 60;
 
 function setupDuel(): GameState {
 	const state = createInitialGameState();
-	state.quest = { stepIndex: 1, stepProgress: 0 };
+	state.quest = { stepIndex: 2, stepProgress: 0 };
 	state.mode = { kind: 'duel' };
 	state.rival.active = true;
 	state.player.position = { x: 0, z: 0 };
@@ -70,7 +70,7 @@ describe('wuxia simulation state', () => {
 
 	it('keeps the duel rival spawn out of the water near the river', () => {
 		const state = createInitialGameState();
-		state.quest = { stepIndex: 1, stepProgress: 0 };
+		state.quest = { stepIndex: 2, stepProgress: 0 };
 		state.player.position = { x: 17, z: 8 };
 		state.player.heading = Math.PI / 2;
 		state.mode = {
@@ -209,7 +209,7 @@ describe('wuxia simulation state', () => {
 
 	it('starts the spar on the last line of Lu’s dialogue and refills the duel', () => {
 		const state = createInitialGameState();
-		state.quest = { stepIndex: 1, stepProgress: 0 };
+		state.quest = { stepIndex: 2, stepProgress: 0 };
 		state.player.position = { x: lu.position.x + 0.5, z: lu.position.z };
 		state.player.health = 40;
 		state.player.qi = 10;
@@ -620,7 +620,7 @@ describe('wuxia simulation state', () => {
 		advance(state, RIVAL_STRIKE_TIMING.startup + RIVAL_STRIKE_TIMING.active + frame);
 
 		expect(state.mode).toEqual({ kind: 'explore' });
-		expect(state.quest.stepIndex).toBe(1);
+		expect(state.quest.stepIndex).toBe(2);
 		expect(state.player.position).toEqual(PLAYER_SPAWN);
 		expect(state.player.health).toBe(state.player.maxHealth);
 		expect(state.player.qi).toBe(state.player.maxQi);
@@ -648,5 +648,84 @@ describe('wuxia simulation state', () => {
 		expect(state.mode).toEqual({ kind: 'explore' });
 		expect(state.rival.active).toBe(false);
 		expect(state.items.lastReward).toBeNull();
+	});
+});
+
+describe('qinggong dash markers', () => {
+	function setupMarkers(stepProgress = 0): GameState {
+		const state = createInitialGameState();
+		state.quest = { stepIndex: 1, stepProgress };
+		state.player.position = { x: 0, z: 0 };
+		state.player.heading = Math.PI;
+		return state;
+	}
+
+	it('seeds three standable markers on the northbound gate corridor', () => {
+		expect(DASH_MARKERS).toHaveLength(3);
+		let position = { x: 0, z: 0 };
+		for (const marker of DASH_MARKERS) {
+			expect(canStandAt(marker), JSON.stringify(marker)).toBe(true);
+			expect(marker.z).toBeLessThan(0);
+			position = moveThroughWorld(position, marker);
+			expect(position.x).toBeCloseTo(marker.x);
+			expect(position.z).toBeCloseTo(marker.z);
+		}
+	});
+
+	it('advances stepProgress once when a real dash crosses the next marker', () => {
+		const state = setupMarkers();
+		state.player.position = { x: 0, z: -1 };
+		expect(toHudSnapshot(state).markerProgress).toEqual({ current: 0, total: 3 });
+
+		stepGame(state, { ...idleInput, dash: true }, frame);
+
+		expect(state.quest).toEqual({ stepIndex: 1, stepProgress: 1 });
+		expect(toHudSnapshot(state).markerProgress).toEqual({ current: 1, total: 3 });
+
+		advance(state, 1);
+		expect(state.quest).toEqual({ stepIndex: 1, stepProgress: 1 });
+	});
+
+	it('completes the step only after three ordered dash crossings', () => {
+		const state = setupMarkers();
+
+		for (let i = 0; i < 600 && state.quest.stepIndex === 1; i++) {
+			stepGame(state, { ...idleInput, dash: true }, frame);
+		}
+
+		expect(state.quest).toEqual({ stepIndex: 2, stepProgress: 0 });
+		expect(toHudSnapshot(state).markerProgress).toBeNull();
+		expect(toHudSnapshot(state).objective).toBe(QUEST_STEPS[2].instruction);
+	});
+
+	it('ignores walking, cooling, blocked and out-of-order segments', () => {
+		const state = setupMarkers();
+		state.player.position = { x: 0, z: -1 };
+
+		for (let i = 0; i < 60; i++) {
+			stepGame(state, { ...idleInput, moveZ: -1 }, frame);
+		}
+		expect(state.player.position.z).toBeLessThan(-4);
+		expect(state.quest.stepProgress).toBe(0);
+
+		state.player.position = { x: 0, z: -4.5 };
+		state.player.dashCooldown = 0.5;
+		stepGame(state, { ...idleInput, moveZ: -1, dash: true }, frame);
+		expect(state.quest.stepProgress).toBe(0);
+
+		state.player.dashCooldown = 0;
+		stepGame(state, { ...idleInput, dash: true }, frame);
+		expect(state.quest.stepProgress).toBe(0);
+
+		state.player.dashCooldown = 0;
+		state.player.position = { x: 0, z: -5 };
+		stepGame(state, { ...idleInput, dash: true }, frame);
+		expect(state.quest.stepProgress).toBe(0);
+
+		state.player.dashCooldown = 0;
+		state.player.position = { x: 5, z: -6.5 };
+		stepGame(state, { ...idleInput, dash: true }, frame);
+		expect(state.player.position).toEqual({ x: 5, z: -6.5 });
+		expect(state.quest.stepProgress).toBe(0);
 	});
 });

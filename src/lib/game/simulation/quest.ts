@@ -1,7 +1,10 @@
-import { QUEST_STEPS, type QuestStep } from './villageContent';
+import { DASH_MARKERS, QUEST_STEPS, type QuestStep } from './villageContent';
 import type { QuestProgress, VillagerId } from './types';
 
-export type QuestEvent = { type: 'dialogueComplete'; villagerId: VillagerId } | { type: 'duelWon' };
+export type QuestEvent =
+	| { type: 'dialogueComplete'; villagerId: VillagerId }
+	| { type: 'duelWon' }
+	| { type: 'markerCrossed' };
 
 export function createInitialQuest(): QuestProgress {
 	return { stepIndex: 0, stepProgress: 0 };
@@ -19,6 +22,7 @@ export function advanceQuest(progress: QuestProgress, event: QuestEvent): QuestP
 	}
 
 	let completed = false;
+	let stepProgress = progress.stepProgress;
 	switch (step.kind) {
 		case 'talk':
 			completed = event.type === 'dialogueComplete' && event.villagerId === step.targetId;
@@ -26,9 +30,20 @@ export function advanceQuest(progress: QuestProgress, event: QuestEvent): QuestP
 		case 'duel':
 			completed = event.type === 'duelWon';
 			break;
+		case 'dashMarkers':
+			if (event.type === 'markerCrossed') {
+				stepProgress += 1;
+				completed = stepProgress >= requiredStepEvents(step);
+			}
+			break;
 	}
 
-	return completed ? { stepIndex: progress.stepIndex + 1, stepProgress: 0 } : progress;
+	if (completed) {
+		return { stepIndex: progress.stepIndex + 1, stepProgress: 0 };
+	}
+	return stepProgress === progress.stepProgress
+		? progress
+		: { stepIndex: progress.stepIndex, stepProgress };
 }
 
 export function normalizeQuestProgress(raw: unknown): QuestProgress | null {
@@ -63,6 +78,8 @@ function requiredStepEvents(step: QuestStep): number {
 		case 'talk':
 		case 'duel':
 			return 1;
+		case 'dashMarkers':
+			return DASH_MARKERS.length;
 	}
 }
 

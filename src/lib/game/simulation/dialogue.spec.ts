@@ -13,8 +13,9 @@ describe('dialogueLinesFor', () => {
 		expect(dialogueLinesFor(quest, elder)).toBe(elder.questLines);
 		expect(dialogueLinesFor(quest, lu)).toBe(lu.ambientLines);
 		expect(dialogueLinesFor({ stepIndex: 1, stepProgress: 0 }, elder)).toBe(elder.ambientLines);
-		expect(dialogueLinesFor({ stepIndex: 1, stepProgress: 0 }, lu)).toBe(lu.questLines);
-		expect(dialogueLinesFor({ stepIndex: 2, stepProgress: 0 }, lu)).toBe(lu.ambientLines);
+		expect(dialogueLinesFor({ stepIndex: 1, stepProgress: 0 }, lu)).toBe(lu.ambientLines);
+		expect(dialogueLinesFor({ stepIndex: 2, stepProgress: 0 }, lu)).toBe(lu.questLines);
+		expect(dialogueLinesFor({ stepIndex: 3, stepProgress: 0 }, lu)).toBe(lu.ambientLines);
 	});
 });
 

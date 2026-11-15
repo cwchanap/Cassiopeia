@@ -1,11 +1,11 @@
 import type { Vec2, VillagerId } from './types';
 
-export type QuestStepKind = 'talk' | 'duel';
+export type QuestStepKind = 'talk' | 'dashMarkers' | 'duel';
 
 export type QuestStep = {
 	id: string;
 	kind: QuestStepKind;
-	targetId: VillagerId;
+	targetId: string;
 	title: string;
 	instruction: string;
 };
@@ -20,6 +20,12 @@ export type VillagerContent = {
 };
 
 export const PLAYER_SPAWN: Vec2 = { x: 0, z: 0 };
+
+export const DASH_MARKERS: Vec2[] = [
+	{ x: 0, z: -3 },
+	{ x: 0, z: -6.5 },
+	{ x: 0, z: -10 }
+];
 
 export const VILLAGERS: VillagerContent[] = [
 	{
@@ -54,6 +60,13 @@ export const QUEST_STEPS: QuestStep[] = [
 		targetId: 'elder_shen',
 		title: '拜师 Pay Respects',
 		instruction: 'Pay respects to Elder Shen in the courtyard'
+	},
+	{
+		id: 'lightness_training',
+		kind: 'dashMarkers',
+		targetId: 'gate_markers',
+		title: '轻功 Lightness Training',
+		instruction: 'Dash through the three gate markers in order'
 	},
 	{
 		id: 'spar',
