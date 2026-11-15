@@ -1,6 +1,6 @@
 import { getVillager, type VillagerContent } from './villageContent';
 import { activeQuestStep } from './quest';
-import type { GameState, HudDialogue, QuestProgress, VillagerId } from './types';
+import type { GameMode, GameState, HudDialogue, QuestProgress, VillagerId } from './types';
 
 /** The active step target speaks its quest lines; everyone else is ambient. */
 export function dialogueLinesFor(progress: QuestProgress, villager: VillagerContent): string[] {
@@ -22,20 +22,25 @@ export function activeDialogueLine(state: GameState): HudDialogue | null {
 	};
 }
 
+export type DialogueAdvance = {
+	mode: GameMode;
+	finishedVillagerId: VillagerId | null;
+};
+
 /**
- * Advances one E edge within the open dialogue. On the last line the dialogue closes and the
- * finished villager id is returned so stepGame can resolve the active quest step.
+ * Computes the next dialogue mode for one E edge without mutating; stepGame applies the
+ * returned mode and resolves the finished villager against the active quest step.
  */
-export function advanceDialogue(state: GameState): VillagerId | null {
-	if (state.mode.kind !== 'dialogue') {
+export function advanceDialogue(mode: GameMode, progress: QuestProgress): DialogueAdvance | null {
+	if (mode.kind !== 'dialogue') {
 		return null;
 	}
-	const villagerId = state.mode.villagerId;
-	const lines = dialogueLinesFor(state.quest, getVillager(villagerId));
-	if (state.mode.lineIndex + 1 < lines.length) {
-		state.mode.lineIndex += 1;
-		return null;
+	const lines = dialogueLinesFor(progress, getVillager(mode.villagerId));
+	if (mode.lineIndex + 1 < lines.length) {
+		return {
+			mode: { kind: 'dialogue', villagerId: mode.villagerId, lineIndex: mode.lineIndex + 1 },
+			finishedVillagerId: null
+		};
 	}
-	state.mode = { kind: 'explore' };
-	return villagerId;
+	return { mode: { kind: 'explore' }, finishedVillagerId: mode.villagerId };
 }

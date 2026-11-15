@@ -578,6 +578,25 @@ describe('wuxia simulation state', () => {
 		expect(toHudSnapshot(state).inventory.lastRewardText).toContain('x');
 	});
 
+	it('returns the player to Ready during free roam after a mid-swing victory', () => {
+		const state = setupDuel();
+		state.rival.health = 1;
+		state.player.combatAction = {
+			kind: 'qiBurst',
+			phase: 'active',
+			elapsed: 0,
+			duration: QI_BURST_TIMING.active,
+			hasHit: false
+		};
+
+		stepGame(state, idleInput, frame);
+		expect(state.mode).toEqual({ kind: 'explore' });
+
+		advance(state, 3);
+		expect(state.player.combatAction.phase).toBe('idle');
+		expect(toHudSnapshot(state).playerActionStatus).toBe('Ready');
+	});
+
 	it('respawns the player on defeat and offers the rematch through Lu’s dialogue', () => {
 		const state = setupDuel();
 		state.player.health = 1;
