@@ -1,21 +1,87 @@
-import { describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import * as THREE from 'three';
 import type { CombatEffect } from '$lib/game/simulation/types';
 import {
 	DASH_MARKERS,
 	getVillager,
 	QUEST_STEPS,
-	SHRINE_BELL
+	SHRINE_BELL,
+	VILLAGERS
 } from '$lib/game/simulation/villageContent';
-import { PLAYER_RENDER_ORDER, setMeshRenderOrder } from './inkSilhouette';
+import { IS_INK, PLAYER_RENDER_ORDER } from './inkSilhouette';
+import type { AssetTargets } from './wuxiaAssets';
 import {
 	cloneVillagerModel,
 	createDashMarkers,
 	createShrineBell,
 	createVillagerActor,
+	createWuxiaScene,
 	syncEffects,
 	syncMarkers
 } from './createWuxiaScene';
+
+const rendererMocks = vi.hoisted(() => {
+	class FakeCanvas {
+		width = 0;
+		height = 0;
+		clientWidth = 0;
+		clientHeight = 0;
+		className = '';
+		dataset: Record<string, string> = {};
+		removed = false;
+		remove() {
+			this.removed = true;
+		}
+	}
+	class FakeWebGLRenderer {
+		domElement = new FakeCanvas();
+		shadowMap = { enabled: false, type: 0 };
+		outputColorSpace = '';
+		toneMapping = 0;
+		toneMappingExposure = 1;
+		renderCalls: Array<{ scene: object; camera: object }> = [];
+		disposed = false;
+		contextLost = false;
+		private pixelRatio = 1;
+		setPixelRatio(value: number) {
+			this.pixelRatio = value;
+		}
+		getPixelRatio() {
+			return this.pixelRatio;
+		}
+		setSize(width: number, height: number) {
+			this.domElement.width = Math.floor(width * this.pixelRatio);
+			this.domElement.height = Math.floor(height * this.pixelRatio);
+			this.domElement.clientWidth = width;
+			this.domElement.clientHeight = height;
+		}
+		render(scene: object, camera: object) {
+			this.renderCalls.push({ scene, camera });
+		}
+		dispose() {
+			this.disposed = true;
+		}
+		forceContextLoss() {
+			this.contextLost = true;
+		}
+	}
+	const instances: FakeWebGLRenderer[] = [];
+	class RegisteredFakeWebGLRenderer extends FakeWebGLRenderer {
+		constructor() {
+			super();
+			instances.push(this);
+		}
+	}
+	return { FakeWebGLRenderer: RegisteredFakeWebGLRenderer, instances };
+});
+
+vi.mock('three', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('three')>();
+	return { ...actual, WebGLRenderer: rendererMocks.FakeWebGLRenderer };
+});
+
+const loaderMock = vi.hoisted(() => ({ loadWuxiaAssets: vi.fn() }));
+vi.mock('./wuxiaAssets', () => loaderMock);
 
 describe('syncEffects', () => {
 	test('disposes an expired effect geometry and material immediately', () => {
@@ -196,40 +262,6 @@ describe('villager actors', () => {
 		expect(resources.materials).toHaveLength(2);
 	});
 
-	test('swaps procedural children for the tinted clone on the GLB-ready path and disposes it via the registry', () => {
-		const resources = {
-			geometries: [] as THREE.BufferGeometry[],
-			materials: [] as THREE.Material[]
-		};
-		const villager = getVillager('peddler_wei');
-		const actor = createVillagerActor(villager, 0x112233, resources);
-		const proceduralMeshes = meshesOf(actor);
-		const { model, atlas } = createFakeMentorModel();
-
-		for (const child of actor.children) child.visible = false;
-		actor.add(cloneVillagerModel(model, 0x112233, resources));
-		setMeshRenderOrder(actor, PLAYER_RENDER_ORDER);
-
-		const visible = meshesOf(actor).filter((mesh) => mesh.visible);
-		expect(visible.length).toBeGreaterThan(0);
-		for (const mesh of visible) {
-			expect(proceduralMeshes).not.toContain(mesh);
-			expect(mesh.renderOrder).toBe(PLAYER_RENDER_ORDER);
-		}
-		const tinted = resources.materials.find(
-			(entry) => entry.name === 'Handpainted_Wuxia_Atlas'
-		) as THREE.MeshStandardMaterial;
-		expect(tinted).toBeDefined();
-		expect(tinted.color.getHex()).toBe(0x112233);
-
-		const releaseTinted = vi.spyOn(tinted, 'dispose');
-		const releaseAtlas = vi.spyOn(atlas, 'dispose');
-		for (const entry of resources.materials) entry.dispose();
-
-		expect(releaseTinted).toHaveBeenCalledOnce();
-		expect(releaseAtlas).not.toHaveBeenCalled();
-	});
-
 	test('keeps the procedural villager untouched when the pack never arrives', () => {
 		const resources = {
 			geometries: [] as THREE.BufferGeometry[],
@@ -241,5 +273,174 @@ describe('villager actors', () => {
 			expect(mesh.visible).toBe(true);
 			expect(mesh.renderOrder).toBe(PLAYER_RENDER_ORDER);
 		}
+	});
+});
+
+function actorAt(scene: THREE.Scene, position: { x: number; z: number }): THREE.Group | undefined {
+	return scene.children.find(
+		(child): child is THREE.Group =>
+			child instanceof THREE.Group &&
+			Math.abs(child.position.x - position.x) < 1e-6 &&
+			Math.abs(child.position.z - position.z) < 1e-6
+	);
+}
+
+describe('scene lifecycle', () => {
+	const host = { clientWidth: 960, clientHeight: 640, appendChild: vi.fn() };
+
+	function createScene() {
+		const handle = createWuxiaScene(host as unknown as HTMLElement);
+		const renderer = rendererMocks.instances.at(-1)!;
+		const scene = renderer.renderCalls.at(-1)!.scene as THREE.Scene;
+		return { handle, renderer, scene };
+	}
+
+	beforeEach(() => {
+		vi.stubGlobal('window', { devicePixelRatio: 1 });
+		loaderMock.loadWuxiaAssets.mockReset();
+		rendererMocks.instances.length = 0;
+	});
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	test('requests the unchanged loader roots for every actor target', () => {
+		loaderMock.loadWuxiaAssets.mockImplementation(() => () => {});
+		const { handle } = createScene();
+
+		expect(loaderMock.loadWuxiaAssets).toHaveBeenCalledOnce();
+		const targets = loaderMock.loadWuxiaAssets.mock.calls[0][0] as AssetTargets;
+		expect(Object.keys(targets).sort()).toEqual(['Mentor', 'Player', 'Rival', 'Village']);
+
+		handle.dispose();
+	});
+
+	test('attaches tinted Mentor clones to every extra villager on ready and disposes each resource exactly once', () => {
+		const sharedGeometry = new THREE.BoxGeometry();
+		const sharedTexture = new THREE.Texture();
+		const atlas = new THREE.MeshStandardMaterial({
+			name: 'Handpainted_Wuxia_Atlas',
+			map: sharedTexture
+		});
+		const accent = new THREE.MeshStandardMaterial({ name: 'Leather_Accent' });
+		loaderMock.loadWuxiaAssets.mockImplementation(
+			(targets: AssetTargets, onStatus: (status: 'ready' | 'fallback') => void): (() => void) => {
+				const attached: THREE.Object3D[] = [];
+				for (const [name, target] of Object.entries(targets)) {
+					for (const child of target.children) child.visible = false;
+					const model = new THREE.Group();
+					model.name = name;
+					model.add(new THREE.Mesh(sharedGeometry, atlas));
+					model.add(new THREE.Mesh(sharedGeometry, accent));
+					target.add(model);
+					attached.push(model);
+				}
+				onStatus('ready');
+				let released = false;
+				return () => {
+					if (released) return;
+					released = true;
+					for (const model of attached) model.removeFromParent();
+					sharedGeometry.dispose();
+					atlas.dispose();
+					accent.dispose();
+					sharedTexture.dispose();
+				};
+			}
+		);
+
+		const { handle, renderer, scene } = createScene();
+		expect(renderer.domElement.dataset.assets).toBe('ready');
+
+		for (const villager of VILLAGERS) {
+			const actor = actorAt(scene, villager.position);
+			expect(actor).toBeDefined();
+			for (const mesh of meshesOf(actor!)) {
+				if (mesh.visible) expect(mesh.renderOrder).toBe(PLAYER_RENDER_ORDER);
+			}
+		}
+		const bell = actorAt(scene, SHRINE_BELL.position);
+		expect(bell?.children.length).toBeGreaterThan(0);
+
+		const tints: THREE.MeshStandardMaterial[] = [];
+		for (const id of ['auntie_qin', 'old_zhu', 'peddler_wei'] as const) {
+			const actor = actorAt(scene, getVillager(id).position)!;
+			const clone = actor.getObjectByName('Mentor');
+			expect(clone).toBeDefined();
+			for (const mesh of meshesOf(clone!)) {
+				expect(mesh.visible).toBe(true);
+				for (const entry of [mesh.material].flat()) {
+					if (entry.name === 'Handpainted_Wuxia_Atlas') {
+						expect(entry).not.toBe(atlas);
+						expect(mesh.geometry).toBe(sharedGeometry);
+						tints.push(entry as THREE.MeshStandardMaterial);
+					}
+				}
+			}
+			const procedural = actor.children.filter((child) => child !== clone);
+			expect(procedural.length).toBeGreaterThan(0);
+			expect(procedural.every((child) => !child.visible)).toBe(true);
+		}
+		for (const tint of tints) expect(tint.color.getHex()).not.toBe(atlas.color.getHex());
+		expect(new Set(tints.map((tint) => tint.color.getHex())).size).toBe(tints.length);
+
+		const inkOrders: number[] = [];
+		scene.traverse((object) => {
+			if (object instanceof THREE.Mesh && object.userData[IS_INK])
+				inkOrders.push(object.renderOrder);
+		});
+		expect(inkOrders.length).toBeGreaterThan(0);
+		for (const order of inkOrders) expect(order).toBeLessThan(PLAYER_RENDER_ORDER);
+
+		const releaseGeometry = vi.spyOn(sharedGeometry, 'dispose');
+		const releaseAtlas = vi.spyOn(atlas, 'dispose');
+		const releaseAccent = vi.spyOn(accent, 'dispose');
+		const releaseTexture = vi.spyOn(sharedTexture, 'dispose');
+		const releaseTints = tints.map((tint) => vi.spyOn(tint, 'dispose'));
+
+		handle.dispose();
+
+		expect(releaseGeometry).toHaveBeenCalledTimes(1);
+		expect(releaseAtlas).toHaveBeenCalledTimes(1);
+		expect(releaseAccent).toHaveBeenCalledTimes(1);
+		expect(releaseTexture).toHaveBeenCalledTimes(1);
+		for (const releaseTint of releaseTints) expect(releaseTint).toHaveBeenCalledTimes(1);
+		expect(renderer.disposed).toBe(true);
+		expect(renderer.contextLost).toBe(true);
+		expect(renderer.domElement.removed).toBe(true);
+	});
+
+	test('keeps every procedural actor visible and ordered when the load reports fallback', () => {
+		loaderMock.loadWuxiaAssets.mockImplementation(
+			(_targets: AssetTargets, onStatus: (status: 'ready' | 'fallback') => void) => {
+				onStatus('fallback');
+				return () => {};
+			}
+		);
+
+		const { handle, renderer, scene } = createScene();
+		expect(renderer.domElement.dataset.assets).toBe('fallback');
+
+		for (const villager of VILLAGERS) {
+			const actor = actorAt(scene, villager.position);
+			expect(actor).toBeDefined();
+			const meshes = meshesOf(actor!);
+			expect(meshes.length).toBeGreaterThan(0);
+			for (const mesh of meshes) {
+				expect(mesh.visible).toBe(true);
+				expect(mesh.renderOrder).toBe(PLAYER_RENDER_ORDER);
+				for (const entry of [mesh.material].flat()) {
+					expect(entry.name).not.toBe('Handpainted_Wuxia_Atlas');
+				}
+			}
+			expect(actor!.getObjectByName('Mentor')).toBeUndefined();
+		}
+		const bell = actorAt(scene, SHRINE_BELL.position);
+		expect(bell?.children.length).toBeGreaterThan(0);
+
+		handle.dispose();
+		expect(renderer.disposed).toBe(true);
+		expect(renderer.domElement.removed).toBe(true);
 	});
 });

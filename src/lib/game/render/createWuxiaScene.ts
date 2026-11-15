@@ -83,6 +83,7 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 	const zhu = createVillagerActor(oldZhu, zhuColor, resources);
 	const peddlerWei = getVillager('peddler_wei');
 	const wei = createVillagerActor(peddlerWei, weiColor, resources);
+	const glbVillagers: THREE.Object3D[] = [];
 	const effects = new Map<number, THREE.Mesh>();
 	let disposed = false;
 
@@ -144,7 +145,9 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 			{ group: wei, color: weiColor }
 		]) {
 			for (const child of group.children) child.visible = false;
-			group.add(cloneVillagerModel(mentorModel, color, resources));
+			const clone = cloneVillagerModel(mentorModel, color, resources);
+			group.add(clone);
+			glbVillagers.push(clone);
 		}
 	}
 
@@ -223,6 +226,7 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 	function dispose(): void {
 		if (disposed) return;
 		disposed = true;
+		for (const clone of glbVillagers) clone.removeFromParent();
 		disposeAssets();
 		for (const mesh of effects.values()) {
 			scene.remove(mesh);
