@@ -1,6 +1,16 @@
-export type GamePhase = 'seekMentor' | 'trainDash' | 'duel' | 'victory' | 'defeat' | 'paused';
+export type VillagerId = 'elder_shen' | 'senior_brother_lu';
 
-export type ActiveGamePhase = Exclude<GamePhase, 'paused'>;
+export type GameMode =
+	| { kind: 'explore' }
+	| { kind: 'dialogue'; villagerId: VillagerId; lineIndex: number }
+	| { kind: 'duel' };
+
+export type GameModeKind = GameMode['kind'];
+
+export type QuestProgress = {
+	stepIndex: number;
+	stepProgress: number;
+};
 
 export type Vec2 = {
 	x: number;
@@ -175,9 +185,9 @@ export type HudInventorySnapshot = {
 };
 
 export type GameState = {
-	phase: GamePhase;
-	previousPhase: ActiveGamePhase;
-	objective: string;
+	mode: GameMode;
+	paused: boolean;
+	quest: QuestProgress;
 	prompt: string | null;
 	player: FighterState;
 	rival: FighterState;
@@ -190,10 +200,18 @@ export type GameState = {
 	itemFeedback: string | null;
 };
 
+export type HudDialogue = {
+	speaker: string;
+	line: string;
+	lineIndex: number;
+	lineCount: number;
+};
+
 export type HudSnapshot = {
-	phase: GamePhase;
+	mode: GameModeKind;
 	objective: string;
 	prompt: string | null;
+	dialogue: HudDialogue | null;
 	playerHealth: number;
 	playerMaxHealth: number;
 	playerQi: number;
@@ -203,7 +221,6 @@ export type HudSnapshot = {
 	attackCooldown: number;
 	qiCooldown: number;
 	playerActionStatus: PlayerActionStatus;
-	showRestart: boolean;
 	isPaused: boolean;
 	inventory: HudInventorySnapshot;
 };

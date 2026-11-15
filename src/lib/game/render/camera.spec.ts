@@ -17,7 +17,7 @@ const CAMERA_PITCH = (35 * Math.PI) / 180;
 
 function explorationPose(x = 0, z = 0): WuxiaCameraPose {
 	return computeWuxiaCameraPose({
-		phase: 'seekMentor',
+		mode: 'explore',
 		playerPosition: { x, z },
 		rival: null
 	});
@@ -30,7 +30,7 @@ function duelPose(
 	rivalZ: number
 ): WuxiaCameraPose {
 	return computeWuxiaCameraPose({
-		phase: 'duel',
+		mode: 'duel',
 		playerPosition: { x: playerX, z: playerZ },
 		rival: { active: true, position: { x: rivalX, z: rivalZ } }
 	});
@@ -140,7 +140,7 @@ describe('followCameraPose', () => {
 
 	test('smooths focus and view height by the same follow factor', () => {
 		const current = computeWuxiaCameraPose({
-			phase: 'duel',
+			mode: 'duel',
 			playerPosition: { x: 0, z: 0 },
 			rival: { active: true, position: { x: 6, z: 0 } }
 		});

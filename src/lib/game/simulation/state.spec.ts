@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createInitialGameState, restartGame, stepGame, toHudSnapshot } from './state';
+import { createInitialGameState, stepGame, toHudSnapshot } from './state';
 import {
 	DASH_DISTANCE,
 	LIGHT_ATTACK_TIMING,
@@ -8,8 +8,12 @@ import {
 	RIVAL_ATTACK_COOLDOWN,
 	RIVAL_STRIKE_TIMING
 } from './combat';
+import { getVillager, PLAYER_SPAWN, QUEST_STEPS } from './villageContent';
 import type { GameState, InputSnapshot } from './types';
 import { canStandAt } from './world';
+
+const elder = getVillager('elder_shen');
+const lu = getVillager('senior_brother_lu');
 
 const idleInput: InputSnapshot = {
 	moveX: 0,
@@ -27,9 +31,8 @@ const frame = 1 / 60;
 
 function setupDuel(): GameState {
 	const state = createInitialGameState();
-	state.phase = 'duel';
-	state.previousPhase = 'duel';
-	state.objective = 'Defeat the rival disciple';
+	state.quest = { stepIndex: 1, stepProgress: 0 };
+	state.mode = { kind: 'duel' };
 	state.rival.active = true;
 	state.player.position = { x: 0, z: 0 };
 	state.rival.position = { x: 0.8, z: 0 };
@@ -42,6 +45,13 @@ function advance(state: GameState, seconds: number): void {
 		const dt = Math.min(frame, remaining);
 		stepGame(state, idleInput, dt);
 		remaining -= dt;
+	}
+}
+
+/** Walks every E edge of the dialogue against `villagerId`; assumes it already started. */
+function finishDialogue(state: GameState, lineCount: number): void {
+	for (let i = 0; i < lineCount; i++) {
+		stepGame(state, { ...idleInput, interact: true }, frame);
 	}
 }
 
@@ -58,16 +68,20 @@ describe('wuxia simulation state', () => {
 		expect(state.player.position.z).toBeCloseTo(beforeDash.z);
 	});
 
-	it('explores beyond the courtyard and keeps a dash and rival spawn out of water', () => {
+	it('keeps the duel rival spawn out of the water near the river', () => {
 		const state = createInitialGameState();
-		for (let i = 0; i < 180; i++) stepGame(state, { ...idleInput, moveX: 1 }, frame);
-		expect(state.player.position.x).toBeGreaterThan(10);
+		state.quest = { stepIndex: 1, stepProgress: 0 };
 		state.player.position = { x: 17, z: 8 };
 		state.player.heading = Math.PI / 2;
-		state.phase = 'trainDash';
-		stepGame(state, { ...idleInput, dash: true }, frame);
-		expect(state.phase).toBe('duel');
-		expect(state.player.position.x).toBeLessThan(18);
+		state.mode = {
+			kind: 'dialogue',
+			villagerId: 'senior_brother_lu',
+			lineIndex: lu.questLines.length - 1
+		};
+
+		stepGame(state, { ...idleInput, interact: true }, frame);
+
+		expect(state.mode).toEqual({ kind: 'duel' });
 		expect(canStandAt(state.player.position)).toBe(true);
 		expect(canStandAt(state.rival.position)).toBe(true);
 		expect(
@@ -77,39 +91,151 @@ describe('wuxia simulation state', () => {
 			)
 		).toBeGreaterThan(0.75);
 	});
-	it('starts with the mentor objective active', () => {
-		const state = createInitialGameState();
 
-		expect(state.phase).toBe('seekMentor');
-		expect(state.objective).toBe('Meet the mentor');
+	it('starts exploring the first quest step with villagers at their content posts', () => {
+		const state = createInitialGameState();
+		const hud = toHudSnapshot(state);
+
+		expect(state.mode).toEqual({ kind: 'explore' });
+		expect(state.paused).toBe(false);
+		expect(state.quest).toEqual({ stepIndex: 0, stepProgress: 0 });
+		expect(hud.objective).toBe(QUEST_STEPS[0].instruction);
 		expect(state.player.health).toBe(110);
 		expect(state.rival.health).toBe(100);
+		expect(state.rival.active).toBe(false);
+		expect(state.rival.position).toEqual(lu.position);
+		expect(state.mentor.position).toEqual(elder.position);
 		expect(state.player.combatAction.phase).toBe('idle');
 		expect(state.rival.combatAction.phase).toBe('idle');
 	});
 
-	it('moves from mentor objective to dash training when interacting near the mentor', () => {
+	it('runs the Elder dialogue one E edge per line and completes the step on the last line', () => {
 		const state = createInitialGameState();
-		state.player.position.x = -4;
-		state.player.position.z = -3;
+		state.player.position = { x: elder.position.x + 0.5, z: elder.position.z };
+
+		stepGame(state, { ...idleInput, interact: true }, frame);
+		expect(state.mode).toEqual({ kind: 'dialogue', villagerId: 'elder_shen', lineIndex: 0 });
+		expect(state.prompt).toBe(`${elder.name}: ${elder.questLines[0]} (E)`);
+		expect(state.quest.stepIndex).toBe(0);
+
+		for (let index = 1; index < elder.questLines.length; index++) {
+			stepGame(state, { ...idleInput, interact: true }, frame);
+			expect(state.mode).toEqual({
+				kind: 'dialogue',
+				villagerId: 'elder_shen',
+				lineIndex: index
+			});
+			expect(state.prompt).toBe(`${elder.name}: ${elder.questLines[index]} (E)`);
+			expect(state.quest.stepIndex).toBe(0);
+		}
+
+		stepGame(state, { ...idleInput, interact: true }, frame);
+		expect(state.mode).toEqual({ kind: 'explore' });
+		expect(state.quest.stepIndex).toBe(1);
+		expect(toHudSnapshot(state).objective).toBe(QUEST_STEPS[1].instruction);
+	});
+
+	it('offers only ambient lines outside the active step and never advances the quest', () => {
+		const state = createInitialGameState();
+		state.player.position = { x: lu.position.x + 0.5, z: lu.position.z };
+
+		stepGame(state, { ...idleInput, interact: true }, frame);
+		expect(state.mode).toEqual({ kind: 'dialogue', villagerId: 'senior_brother_lu', lineIndex: 0 });
+		expect(state.prompt).toBe(`${lu.name}: ${lu.ambientLines[0]} (E)`);
+
+		finishDialogue(state, lu.ambientLines.length);
+		expect(state.mode).toEqual({ kind: 'explore' });
+		expect(state.quest.stepIndex).toBe(0);
+	});
+
+	it('ignores interact presses with no villager in range', () => {
+		const state = createInitialGameState();
+		state.player.position = { x: 20, z: 20 };
 
 		stepGame(state, { ...idleInput, interact: true }, frame);
 
-		expect(state.phase).toBe('trainDash');
-		expect(state.objective).toBe('Practice qinggong dash');
-		expect(state.prompt).toContain('dash');
+		expect(state.mode).toEqual({ kind: 'explore' });
 	});
 
-	it('starts the duel after using dash during training', () => {
+	it('freezes dialogue while paused and resumes on the next escape', () => {
 		const state = createInitialGameState();
-		state.phase = 'trainDash';
-		state.player.dashCooldown = 0;
+		state.player.position = { x: elder.position.x + 0.5, z: elder.position.z };
+		stepGame(state, { ...idleInput, interact: true }, frame);
 
-		stepGame(state, { ...idleInput, dash: true }, frame);
+		stepGame(state, { ...idleInput, pause: true }, frame);
+		expect(state.paused).toBe(true);
+		expect(state.mode.kind).toBe('dialogue');
+		expect(state.prompt).toBe('Paused');
 
-		expect(state.phase).toBe('duel');
-		expect(state.objective).toBe('Defeat the rival disciple');
+		stepGame(state, { ...idleInput, interact: true }, frame);
+		expect(state.mode).toEqual({ kind: 'dialogue', villagerId: 'elder_shen', lineIndex: 0 });
+
+		stepGame(state, { ...idleInput, pause: true }, frame);
+		expect(state.paused).toBe(false);
+		stepGame(state, { ...idleInput, interact: true }, frame);
+		expect(state.mode).toEqual({ kind: 'dialogue', villagerId: 'elder_shen', lineIndex: 1 });
+	});
+
+	it('blocks both bag-open paths during dialogue and pause but still closes an open bag', () => {
+		const state = createInitialGameState();
+		state.player.position = { x: elder.position.x + 0.5, z: elder.position.z };
+		stepGame(state, { ...idleInput, interact: true }, frame);
+		expect(state.mode.kind).toBe('dialogue');
+
+		stepGame(state, { ...idleInput, toggleInventory: true }, frame);
+		expect(state.inventoryOpen).toBe(false);
+		stepGame(state, idleInput, 0, [{ type: 'toggleInventory' }]);
+		expect(state.inventoryOpen).toBe(false);
+
+		state.mode = { kind: 'explore' };
+		state.inventoryOpen = true;
+		state.paused = true;
+		stepGame(state, idleInput, 0, [{ type: 'toggleInventory' }]);
+		expect(state.inventoryOpen).toBe(false);
+
+		state.inventoryOpen = true;
+		stepGame(state, { ...idleInput, toggleInventory: true }, frame);
+		expect(state.inventoryOpen).toBe(false);
+
+		stepGame(state, { ...idleInput, toggleInventory: true }, frame);
+		expect(state.inventoryOpen).toBe(false);
+		stepGame(state, idleInput, 0, [{ type: 'toggleInventory' }]);
+		expect(state.inventoryOpen).toBe(false);
+
+		state.paused = false;
+		stepGame(state, { ...idleInput, toggleInventory: true }, frame);
+		expect(state.inventoryOpen).toBe(true);
+	});
+
+	it('starts the spar on the last line of Lu’s dialogue and refills the duel', () => {
+		const state = createInitialGameState();
+		state.quest = { stepIndex: 1, stepProgress: 0 };
+		state.player.position = { x: lu.position.x + 0.5, z: lu.position.z };
+		state.player.health = 40;
+		state.player.qi = 10;
+		state.player.dashCooldown = 0.8;
+		state.rival.health = 12;
+
+		stepGame(state, { ...idleInput, interact: true }, frame);
+		expect(state.mode).toEqual({ kind: 'dialogue', villagerId: 'senior_brother_lu', lineIndex: 0 });
+		expect(state.rival.active).toBe(false);
+
+		for (let index = 1; index < lu.questLines.length; index++) {
+			stepGame(state, { ...idleInput, interact: true }, frame);
+			expect(state.mode).toEqual({
+				kind: 'dialogue',
+				villagerId: 'senior_brother_lu',
+				lineIndex: index
+			});
+		}
+
+		stepGame(state, { ...idleInput, interact: true }, frame);
+		expect(state.mode).toEqual({ kind: 'duel' });
 		expect(state.rival.active).toBe(true);
+		expect(state.rival.health).toBe(state.rival.maxHealth);
+		expect(state.player.health).toBe(state.player.maxHealth);
+		expect(state.player.qi).toBe(state.player.maxQi);
+		expect(state.player.dashCooldown).toBe(0);
 	});
 
 	it('light attack waits for its active window, damages once, then recovers', () => {
@@ -265,9 +391,13 @@ describe('wuxia simulation state', () => {
 
 		stepGame(state, idleInput, frame);
 
+		// The rival's lethal hit still resolves before the victory check wins the exchange.
 		expect(state.player.health).toBe(0);
-		expect(state.rival.health).toBe(0);
-		expect(state.phase).toBe('victory');
+		expect(state.mode).toEqual({ kind: 'explore' });
+		expect(state.quest.stepIndex).toBe(QUEST_STEPS.length);
+		expect(state.itemFeedback).toMatch(/^Won: /);
+		expect(state.rival.position).toEqual(lu.position);
+		expect(state.rival.health).toBe(state.rival.maxHealth);
 	});
 
 	it('dead active attacker cannot deal damage', () => {
@@ -284,7 +414,7 @@ describe('wuxia simulation state', () => {
 		stepGame(state, idleInput, frame);
 
 		expect(state.player.health).toBe(110);
-		expect(state.phase).toBe('victory');
+		expect(state.quest.stepIndex).toBe(QUEST_STEPS.length);
 	});
 
 	it('reports player action status through the HUD snapshot', () => {
@@ -327,18 +457,19 @@ describe('wuxia simulation state', () => {
 		expect(state.rival.health).toBe(100 - LIGHT_ATTACK_TIMING.damage - 2);
 	});
 
-	it('restarts with the current item progress and derived stats', () => {
+	it('creates a fresh state with the current item progress and derived stats', () => {
 		const state = createInitialGameState();
 		state.items.inventory.jade_breathing_charm = 1;
 		state.items.equipment.accessory = 'jade_breathing_charm';
 
-		const restarted = restartGame(state.items);
+		const fresh = createInitialGameState(state.items);
 
-		expect(restarted.player.maxHealth).toBe(110);
-		expect(restarted.player.health).toBe(110);
-		expect(restarted.player.maxQi).toBe(120);
-		expect(restarted.player.qi).toBe(120);
-		expect(restarted.items.equipment.accessory).toBe('jade_breathing_charm');
+		expect(fresh.player.maxHealth).toBe(110);
+		expect(fresh.player.health).toBe(110);
+		expect(fresh.player.maxQi).toBe(120);
+		expect(fresh.player.qi).toBe(120);
+		expect(fresh.items.equipment.accessory).toBe('jade_breathing_charm');
+		expect(fresh.quest).toEqual({ stepIndex: 0, stepProgress: 0 });
 	});
 
 	it('opens the inventory overlay and pauses combat simulation', () => {
@@ -354,14 +485,30 @@ describe('wuxia simulation state', () => {
 		expect(toHudSnapshot(state).inventory.isOpen).toBe(true);
 	});
 
-	it('closes inventory with pause input before toggling the pause phase', () => {
+	it('closes inventory with pause input before toggling the pause flag', () => {
 		const state = setupDuel();
 		state.inventoryOpen = true;
 
 		stepGame(state, { ...idleInput, pause: true }, frame);
 
 		expect(state.inventoryOpen).toBe(false);
-		expect(state.phase).toBe('duel');
+		expect(state.mode).toEqual({ kind: 'duel' });
+		expect(state.paused).toBe(false);
+	});
+
+	it('pauses the duel without losing the duel mode or rival meter context', () => {
+		const state = setupDuel();
+
+		stepGame(state, { ...idleInput, pause: true }, frame);
+
+		const hud = toHudSnapshot(state);
+		expect(state.paused).toBe(true);
+		expect(hud.isPaused).toBe(true);
+		expect(hud.mode).toBe('duel');
+		expect(state.mode).toEqual({ kind: 'duel' });
+
+		stepGame(state, { ...idleInput, pause: true }, frame);
+		expect(state.paused).toBe(false);
 	});
 
 	it('uses quick-slot consumables during the duel', () => {
@@ -404,41 +551,68 @@ describe('wuxia simulation state', () => {
 		expect(state.items.inventory.lesser_healing_pill).toBe(2);
 	});
 
-	it('grants one victory reward on the victory transition', () => {
+	it('grants one victory reward, completes the quest and returns Lu to his post for free roam', () => {
 		const state = setupDuel();
 		state.rival.health = 1;
 
 		stepGame(state, { ...idleInput, lightAttack: true }, frame);
 		advance(state, LIGHT_ATTACK_TIMING.startup + LIGHT_ATTACK_TIMING.active / 2);
+
+		expect(state.mode).toEqual({ kind: 'explore' });
+		expect(state.quest.stepIndex).toBe(QUEST_STEPS.length);
+		expect(state.itemFeedback).toMatch(/^Won: /);
+		// Lu idles at his authored post again; the renderer reads these same coordinates.
+		expect(state.rival.position).toEqual(lu.position);
+		expect(state.rival.heading).toBe(lu.heading);
+		expect(state.rival.active).toBe(false);
+		expect(state.rival.health).toBe(state.rival.maxHealth);
+		expect(state.rival.combatAction.phase).toBe('idle');
 
 		const firstReward = state.items.lastReward;
 		const inventoryAfterVictory = { ...state.items.inventory };
 
 		stepGame(state, idleInput, frame);
 
-		expect(state.phase).toBe('victory');
-		expect(firstReward).not.toBeNull();
 		expect(state.items.lastReward).toEqual(firstReward);
 		expect(state.items.inventory).toEqual(inventoryAfterVictory);
 		expect(toHudSnapshot(state).inventory.lastRewardText).toContain('x');
 	});
 
-	it('enters victory, defeat, and restart states deterministically', () => {
+	it('respawns the player on defeat and offers the rematch through Lu’s dialogue', () => {
 		const state = setupDuel();
-		state.rival.health = 1;
+		state.player.health = 1;
 
-		stepGame(state, { ...idleInput, lightAttack: true }, frame);
-		advance(state, LIGHT_ATTACK_TIMING.startup + LIGHT_ATTACK_TIMING.active / 2);
-		expect(state.phase).toBe('victory');
+		// The rival is already in range; let it finish the player off.
+		advance(state, RIVAL_STRIKE_TIMING.startup + RIVAL_STRIKE_TIMING.active + frame);
 
-		const defeated = setupDuel();
-		defeated.player.health = 0;
-		stepGame(defeated, idleInput, frame);
-		expect(defeated.phase).toBe('defeat');
+		expect(state.mode).toEqual({ kind: 'explore' });
+		expect(state.quest.stepIndex).toBe(1);
+		expect(state.player.position).toEqual(PLAYER_SPAWN);
+		expect(state.player.health).toBe(state.player.maxHealth);
+		expect(state.player.qi).toBe(state.player.maxQi);
+		expect(state.rival.position).toEqual(lu.position);
+		expect(state.rival.active).toBe(false);
 
-		const restarted = restartGame();
-		expect(restarted.phase).toBe('seekMentor');
-		expect(restarted.rival.health).toBe(100);
-		expect(restarted.player.combatAction.phase).toBe('idle');
+		state.player.position = { x: lu.position.x + 0.5, z: lu.position.z };
+		stepGame(state, { ...idleInput, interact: true }, frame);
+		expect(state.mode.kind).toBe('dialogue');
+		finishDialogue(state, lu.questLines.length);
+		expect(state.mode).toEqual({ kind: 'duel' });
+		expect(state.rival.active).toBe(true);
+		expect(state.rival.health).toBe(state.rival.maxHealth);
+	});
+
+	it('keeps Lu ambient after the quest is complete so no second duel or reward rolls', () => {
+		const state = createInitialGameState();
+		state.quest = { stepIndex: QUEST_STEPS.length, stepProgress: 0 };
+		state.player.position = { x: lu.position.x + 0.5, z: lu.position.z };
+
+		stepGame(state, { ...idleInput, interact: true }, frame);
+		expect(state.mode.kind).toBe('dialogue');
+		finishDialogue(state, lu.ambientLines.length);
+
+		expect(state.mode).toEqual({ kind: 'explore' });
+		expect(state.rival.active).toBe(false);
+		expect(state.items.lastReward).toBeNull();
 	});
 });

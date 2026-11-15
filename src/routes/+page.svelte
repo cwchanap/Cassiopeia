@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { createGameRuntime, type GameRuntime } from '$lib/game/runtime/createGameRuntime';
+	import { createInitialGameState, toHudSnapshot } from '$lib/game/simulation/state';
 	import type { HudSnapshot, ItemId, QuickSlotNumber } from '$lib/game/simulation/types';
 	import type { Attachment } from 'svelte/attachments';
 
@@ -15,52 +16,16 @@
 		reinforced_training_robe: 7,
 		jade_breathing_charm: 3
 	};
-	let hud = $state<HudSnapshot>({
-		phase: 'seekMentor',
-		objective: 'Meet the mentor',
-		prompt: 'Find the mentor at the shrine gate',
-		playerHealth: 100,
-		playerMaxHealth: 110,
-		playerQi: 100,
-		playerMaxQi: 100,
-		rivalHealth: 100,
-		dashCooldown: 0,
-		attackCooldown: 0,
-		qiCooldown: 0,
-		playerActionStatus: 'Ready',
-		showRestart: false,
-		isPaused: false,
-		inventory: {
-			isOpen: false,
-			consumables: [],
-			equipment: [],
-			equipmentSlots: [
-				{ slot: 'weapon', label: 'Weapon', item: null },
-				{ slot: 'robe', label: 'Robe', item: null },
-				{ slot: 'accessory', label: 'Accessory', item: null }
-			],
-			quickSlots: [
-				{ slot: 1, itemId: null, label: 'Empty', count: 0, usable: false },
-				{ slot: 2, itemId: null, label: 'Empty', count: 0, usable: false },
-				{ slot: 3, itemId: null, label: 'Empty', count: 0, usable: false }
-			],
-			feedback: null,
-			lastRewardText: null
-		}
-	});
+	let hud = $state<HudSnapshot>(toHudSnapshot(createInitialGameState()));
 
-	const phaseLabel = $derived(
-		hud.phase === 'seekMentor'
-			? 'Opening'
-			: hud.phase === 'trainDash'
-				? 'Training'
-				: hud.phase === 'duel'
-					? 'Duel'
-					: hud.phase === 'victory'
-						? 'Victory'
-						: hud.phase === 'defeat'
-							? 'Defeat'
-							: 'Paused'
+	const modeLabel = $derived(
+		hud.isPaused
+			? 'Paused'
+			: hud.mode === 'duel'
+				? 'Duel'
+				: hud.mode === 'dialogue'
+					? (hud.dialogue?.speaker ?? 'Dialogue')
+					: 'Quest'
 	);
 
 	const mountRuntime: Attachment<HTMLDivElement> = (node) => {
@@ -176,11 +141,6 @@
 		};
 	};
 
-	function restart(): void {
-		errorMessage = null;
-		runtime?.restart();
-	}
-
 	function toggleInventory(): void {
 		runtime?.toggleInventory();
 	}
@@ -232,15 +192,7 @@
 	<div class="technique" class:unavailable={!available} class:cooling={cooldown > 0}>
 		<div class="technique-art">{@render art(index)}<kbd>{key}</kbd></div>
 		<strong>{label}</strong>
-		<small
-			>{hud.isPaused
-				? 'Paused'
-				: hud.showRestart
-					? '—'
-					: available
-						? cooldownText(cooldown)
-						: 'Duel only'}</small
-		>
+		<small>{hud.isPaused ? 'Paused' : available ? cooldownText(cooldown) : 'Duel only'}</small>
 	</div>
 {/snippet}
 
@@ -256,7 +208,7 @@
 		<section class="objective-chip" data-testid="objective-chip" aria-label="Current objective">
 			<span class="objective-mark" aria-hidden="true">!</span>
 			<div aria-live="polite">
-				<span class="eyebrow">{phaseLabel}</span><strong>{hud.objective}</strong>
+				<span class="eyebrow">{modeLabel}</span><strong>{hud.objective}</strong>
 			</div>
 		</section>
 
@@ -283,7 +235,7 @@
 			</div>
 		</section>
 
-		{#if hud.phase === 'duel'}
+		{#if hud.mode === 'duel'}
 			<section class="rival-status" aria-label="Rival disciple">
 				<div><span class="eyebrow">Rival disciple</span><strong>{hud.rivalHealth}/100</strong></div>
 				<meter aria-label="Rival health" min="0" max="100" value={hud.rivalHealth}></meter>
@@ -301,10 +253,10 @@
 						'Space',
 						1,
 						hud.dashCooldown,
-						!hud.isPaused && !hud.showRestart
+						!hud.isPaused && hud.mode !== 'dialogue'
 					)}
-					{@render technique('Strike', 'J', 2, hud.attackCooldown, hud.phase === 'duel')}
-					{@render technique('Qi burst', 'K', 3, hud.qiCooldown, hud.phase === 'duel')}
+					{@render technique('Strike', 'J', 2, hud.attackCooldown, hud.mode === 'duel')}
+					{@render technique('Qi burst', 'K', 3, hud.qiCooldown, hud.mode === 'duel')}
 				</section>
 				<section class="quick-slots" data-testid="quick-slots" aria-label="Quick slots">
 					{#each hud.inventory.quickSlots as slot (slot.slot)}
@@ -333,6 +285,7 @@
 						data-testid="bag-toggle"
 						aria-label="Open bag (I)"
 						aria-keyshortcuts="I B"
+						disabled={hud.isPaused || hud.mode === 'dialogue'}
 						onclick={toggleInventory}
 					>
 						<span class="slot-art">{@render art(6)}<kbd>I</kbd></span><strong>Bag</strong><small
@@ -457,24 +410,11 @@
 			</section>
 		{/if}
 
-		{#if hud.showRestart}
-			<section class="end-state" data-testid="end-state" aria-label="Duel result">
-				<span class="panel-seal" aria-hidden="true">◇</span><span class="eyebrow"
-					>{hud.phase === 'victory' ? 'Trial complete' : 'The path continues'}</span
-				>
-				<strong>{hud.phase === 'victory' ? 'Rival yielded' : 'Training failed'}</strong>
-				{#if hud.inventory.lastRewardText && hud.phase === 'victory'}<p class="reward-text">
-						{hud.inventory.lastRewardText}
-					</p>{/if}
-				<button type="button" data-testid="restart-button" onclick={restart}>Train again</button>
-			</section>
-		{/if}
-
 		{#if errorMessage}
 			<section class="fallback-panel" data-testid="fallback-panel" role="alert">
 				<strong>3D scene unavailable</strong>
 				<span>{errorMessage}</span>
-				<button type="button" onclick={restart}>Retry</button>
+				<button type="button" onclick={() => window.location.reload()}>Retry</button>
 			</section>
 		{/if}
 	</div>
@@ -537,8 +477,7 @@
 	.hud-layer.inventory-open .bottom-hud,
 	.hud-layer.inventory-open .control-hint,
 	.hud-layer.inventory-open .pause-hint,
-	.hud-layer.inventory-open .pause-panel,
-	.hud-layer.inventory-open .end-state {
+	.hud-layer.inventory-open .pause-panel {
 		visibility: hidden;
 	}
 	.eyebrow {
@@ -568,7 +507,6 @@
 	.action-bar,
 	.bag-panel,
 	.pause-panel,
-	.end-state,
 	.fallback-panel {
 		border: 1px solid #c3a76b90;
 		background: linear-gradient(120deg, #122720f5, #0c1714ed);
@@ -1068,7 +1006,6 @@
 		font-weight: 400;
 	}
 	.pause-panel,
-	.end-state,
 	.fallback-panel {
 		position: absolute;
 		top: 50%;
@@ -1083,7 +1020,6 @@
 		text-align: center;
 	}
 	.pause-panel > strong,
-	.end-state > strong,
 	.fallback-panel > strong {
 		font:
 			30px/1.15 Georgia,
@@ -1100,12 +1036,6 @@
 		font:
 			42px/1 Georgia,
 			serif;
-	}
-	.reward-text {
-		margin: 0;
-		color: var(--jade);
-		font-size: 13px;
-		line-height: 1.5;
 	}
 	button {
 		padding: 10px 16px;

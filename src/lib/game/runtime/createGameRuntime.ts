@@ -1,12 +1,7 @@
 import { createInputController, type InputController } from '$lib/game/input/createInputController';
 import { createWuxiaScene, type WuxiaScene } from '$lib/game/render/createWuxiaScene';
 import { loadItemProgress, saveItemProgress } from '$lib/game/runtime/save';
-import {
-	createInitialGameState,
-	restartGame,
-	stepGame,
-	toHudSnapshot
-} from '$lib/game/simulation/state';
+import { createInitialGameState, stepGame, toHudSnapshot } from '$lib/game/simulation/state';
 import type {
 	GameState,
 	HudSnapshot,
@@ -17,7 +12,6 @@ import type {
 
 export type GameRuntime = {
 	start(): void;
-	restart(): void;
 	toggleInventory(): void;
 	closeInventory(): void;
 	useInventoryItem(itemId: ItemId): void;
@@ -33,7 +27,7 @@ export type RuntimeOptions = {
 };
 
 export function createGameRuntime(options: RuntimeOptions): GameRuntime {
-	let state: GameState = createInitialGameState(loadItemProgress());
+	const state: GameState = createInitialGameState(loadItemProgress());
 	let lastSavedItems = JSON.stringify(state.items);
 	let input: InputController | null = null;
 	let scene: WuxiaScene | null = null;
@@ -117,12 +111,6 @@ export function createGameRuntime(options: RuntimeOptions): GameRuntime {
 		persistItemsIfChanged();
 	}
 
-	function restart(): void {
-		state = restartGame(state.items);
-		publish();
-		persistItemsIfChanged();
-	}
-
 	function toggleInventory(): void {
 		runInventoryCommand({ type: 'toggleInventory' });
 	}
@@ -159,7 +147,6 @@ export function createGameRuntime(options: RuntimeOptions): GameRuntime {
 
 	return {
 		start,
-		restart,
 		toggleInventory,
 		closeInventory,
 		useInventoryItem,

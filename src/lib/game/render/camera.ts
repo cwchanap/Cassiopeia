@@ -1,7 +1,7 @@
-import type { ActiveGamePhase, Vec2 } from '$lib/game/simulation/types';
+import type { GameModeKind, Vec2 } from '$lib/game/simulation/types';
 
 export type WuxiaCameraPoseInput = {
-	phase: ActiveGamePhase;
+	mode: GameModeKind;
 	playerPosition: Vec2;
 	rival: {
 		active: boolean;
@@ -80,7 +80,7 @@ export function computeWuxiaCameraPose(input: WuxiaCameraPoseInput): WuxiaCamera
 			y: CAMERA_TARGET_HEIGHT,
 			z: focus.z
 		},
-		viewHeight: input.phase === 'duel' ? DUEL_VIEW_HEIGHT : EXPLORATION_VIEW_HEIGHT
+		viewHeight: input.mode === 'duel' ? DUEL_VIEW_HEIGHT : EXPLORATION_VIEW_HEIGHT
 	};
 }
 
@@ -167,7 +167,7 @@ export function projectWorldToScreen(
 }
 
 function getCameraFocus(input: WuxiaCameraPoseInput): Vec2 {
-	if (input.phase === 'duel' && input.rival?.active) {
+	if (input.mode === 'duel' && input.rival?.active) {
 		const dx = input.rival.position.x - input.playerPosition.x;
 		const dz = input.rival.position.z - input.playerPosition.z;
 		const focus = Math.min(0.5, 6 / Math.max(Math.hypot(dx, dz), 0.001));
