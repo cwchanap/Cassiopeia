@@ -53,10 +53,10 @@ existing working game.
    as fallback. **Do not include Noto Serif SC.**
 2. Commit the exact supported CJK glyphs as one text file and a tiny
    reproducible pyftsubset command/script. Add a Node test that every
-   CJK glyph from quest titles, fixed HUD labels and the bilingual
-   title table is in that file; every existing world-layout.json region
-   must have a bilingual title. Fonttools is a build-time-only
-   dependency; the browser must never contact a font CDN.
+   CJK glyph in the current quest titles and fixed HUD labels is
+   covered. Extend the manifest and test for region titles in Slice 4
+   when those labels are implemented. Fonttools is build-time-only;
+   the browser must never contact a font CDN.
 3. Add the small pure hudLayout(hud) selector in src/lib/hud/layout.ts.
    It returns visibility booleans for vitals, map, anchors, techniques,
    rival bar, dialogue and banner plus quest display mode
@@ -216,9 +216,12 @@ pause, feedback and fallback share the new paper/ink styling.
 
 **Steps**
 
-1. Watch transitions of the existing HudSnapshot.region
-   string, and display the corresponding bilingual region
-   title only on entering one of **Whispering Bamboo Shrine,
+1. Add a small bilingual region-title table and extend the
+   font glyph manifest/coverage test: every region in
+   world-layout.json must have a Chinese display title.
+   Watch transitions of the existing HudSnapshot.region
+   string and display the title only on entering one of
+   **Whispering Bamboo Shrine,
    Cloudrest Monastery, Jadebank Market**. Ignore null
    travel areas and repeated frames; use one local timeout/
    transition for fade and cancel it on disposal. No
