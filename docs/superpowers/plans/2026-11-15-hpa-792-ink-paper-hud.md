@@ -122,7 +122,7 @@ labels move correctly while exploring the actual scene.
    screenDirectionToWorld in camera.ts; use the same sine/cosine
    basis and a round-trip/orthogonality test. The round SVG map
    uses it for road/river/bridge/building geometry from the
-   *unchanged* world-layout.json, and for north/target bearings.
+   _unchanged_ world-layout.json, and for north/target bearings.
    Use the exact building turn % 2 footprint swap already in
    world.ts; share a pure helper or test the parity explicitly.
    A target outside the map radius gets a rim arrow and rounded
