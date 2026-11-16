@@ -39,170 +39,192 @@ pixel-locked screenshots: text, positioning and fades should work with live stat
 
 ### Visual tokens and assets
 
-- Shared CSS custom properties under a single HUD stylesheet: paper #ece2cc, ink
-  #1b1815, cinnabar #a82c22, health #c4402f, qi jade #4fa58f, wood #3a2a1c.
-  Brush backings and bar edges are CSS shapes, not newly generated raster artwork.
-- Reuse **static/images/wuxia/hud-atlas.png** for the eight existing player/technique/
-  item slots, preserving indices and key bindings. Use already available
-  **static/images/wuxia/ink-portraits.png** for the initiate and five named villagers.
-  Use **static/images/wuxia/rice-paper.png** for dialogue, bag, pause, and results.
-  The related HPA-793 art task is **Done**; do not implement its older temporary
-  monogram fallback or regenerate portraits in HPA-792.
-- Self-host and subset Ma Shan Zheng (short display hanzi), Noto Serif SC (small
-  labels/keycaps), and Cormorant Garamond (English and lining numerals). Check
-  redistributable font licenses, commit the licenses, and ship only the glyphs needed
-  for the fixed labels plus the quest's authored hanzi. Provide serif fallbacks.
-  No runtime font/CDN dependency.
-- Gameplay instructions, names and dialogue remain in English. Hanzi are decorative
-  labels: 气血, 内力, 初, 轻功, 剑招, 气劲, 行囊, 对话, 北 and the named places/quest titles.
-  Keep accessible English labels and numerical values beside visual brush meters.
+- Share CSS custom properties in one HUD stylesheet: paper #ece2cc, ink
+  #1b1815, cinnabar #a82c22, health #c4402f, qi jade #4fa58f, and wood
+  #3a2a1c. Brush backings, bar edges, and cooldown arcs are CSS shapes.
+- Reuse the already merged HPA-793 asset pack: static/images/wuxia/hud-atlas.png
+  retains the existing eight player/icon/item cells; ink-portraits.png supplies
+  the initiate and five villager portraits by stable villager ID; rice-paper.png
+  supplies scroll, inventory, pause and feedback textures. Do not regenerate
+  art, revert to temporary monogram portraits, or create an art task here.
+- Use only two self-hosted typefaces: a subset of Ma Shan Zheng for hanzi
+  display and Cormorant Garamond for Latin text/numbers. Small CJK labels
+  use a system serif stack (Songti SC, STSong, SimSun, serif) with Ma Shan
+  Zheng as the local fallback. Do not add Noto Serif SC or external font
+  requests. Preserve original font licenses with the assets.
+- Keep a committed glyph-list text file and a tiny reproducible pyftsubset
+  script for the Ma Shan Zheng subset (fonttools is build-time only). One
+  Node test confirms every CJK glyph from authored quest titles, fixed HUD
+  labels and the region-title mapping is covered. It also confirms every
+  world-layout region has a mapped Chinese title.
+- Gameplay instructions, names and dialogue stay in English. Hanzi are
+  decorative: 气血, 内力, 初, 轻功, 剑招, 气劲, 行囊, 对话, 北 and authored
+  quest/region names. Keep English accessible labels and resource numbers.
 
 ## Presentation by game mode
 
 **Exploration**
 
-- **Vitals:** player portrait at top left with cinnabar rank seal 初; separate brush
-  health and qi bars, ratios and Chinese display labels. Remove the action-status row.
-- **Quest scroll:** render the current chain name, five step dots, active step title
-  from HPA-791 quest data, and one English instruction. While completing the
-  dash-marker step, show the existing current/total marker count. When quest is
-  complete, show a short "First day complete — free roam" state without inventing a
-  sixth objective. Do not duplicate quest progression in Svelte.
-- **Round minimap:** a player-centered SVG from world-layout.json roads, river,
-  bridges, building footprints and defined regions. Rotate the ground axes to the
-  fixed 45-degree screen alignment; player stays centered, facing/orientation is
-  understandable, and 北 marks world north. Show the current quest target; clamp
-  its marker to the rim with an outward pointer and straight-line distance in metres
-  when off-map. No quest target after completion.
-- **World anchors:** show legible names over each _on-screen_ villager, a quest
-  diamond over the active target, and an E prompt only for the actual eligible
-  interact target. Shrine bell is eligible as an object target. Suppress tags outside
-  the camera frustum and avoid covering the portrait/quest/minimap where practical.
-- **Medallion bar:** Qinggong (Space), Strike (J), Qi burst (K), three item slots
-  (1–3) and Bag (I/B). Circle icons sit on a brush backing. Strike and Qi burst
-  dim when not dueling; show an angle sweep and remaining seconds for active
-  cooldowns. Reuse cooldown constants from simulation/combat.ts; do not maintain
-  separate magic maximum values. Keep existing item counts and disabled states.
-- **Feedback and place names:** restyle existing item-use/reward/defeat feedback as
-  a non-blocking paper note. On first entering a named region, show a brief
-  brush banner, then fade it. Add a presentation-only "Sect Courtyard" region to
-  world-layout.json for the opening banner, without changing collision geometry.
-  Existing Shrine/Monastery/Market regions remain authoritative.
+- **Vitals:** top-left round portrait and 初 rank seal, brush health and qi
+  bars with native accessible meter semantics and numeric values. Remove the
+  separate action-status text row, but retain playerActionStatus to drive the
+  Strike busy indication.
+- **Quest scroll:** chain title, five progress dots, current bilingual step
+  title, one English instruction, and existing dash-marker count when relevant.
+  A completed quest displays a brief free-roam line; do not add a sixth step.
+- **Round minimap:** a player-centered SVG of existing layout roads, river,
+  bridges, buildings and region outlines. Transform world directions through
+  the **inverse of the existing fixed camera basis**; north remains marked 北.
+  Show the live quest target. When outside the circular view, clamp it to
+  the rim, point outward, and show straight-line metres. No fog, zoom, baked
+  texture or new map rendering engine.
+- **World anchors:** display villager names over visible heads, a quest
+  diamond over the active goal, and an E prompt only for the actual
+  interactable target in range. Use CSS-pixel coordinates from the **real
+  smoothed** camera frame, hide off-frustum anchors and keep them non-clickable.
+- **Techniques and bag:** round medallions on a dark brush backing for Space
+  Qinggong, J Strike, K Qi burst, quick slots 1–3, and I/B Bag. Strike and
+  Qi burst dim outside duels. Qinggong and Qi burst have cooldown sweeps
+  using remaining/max values in HudSnapshot. Strike has **no sweep** because
+  its attackCooldown is never populated; indicate busy from
+  playerActionStatus instead. Preserve item counts, availability and keys.
+- **Feedback:** display the existing item, reward, victory and defeat text
+  in nonblocking paper/ink styling. Do not create a results game mode.
 
 **Dialogue**
 
-Show the single paper handscroll at the bottom: HPA-793 villager portrait by
-stable villager ID, English speaker name, exact currently active English line,
-progress marks and "E Continue". The rest of the exploratory/duel HUD hides,
-including world name tags, map, quest scroll, item slots and hints. One E press
-still advances one authored dialogue line, respecting pause. Do not reimplement
-dialogue state inside the component.
+Only a wide bottom paper handscroll remains: the matching HPA-793 portrait,
+English speaker name, currently authored line, progress dots and E Continue.
+Hide the other HUD and world tags. The existing dialogue simulation remains
+the sole progression authority; Esc pause still works.
 
 **Duel**
 
-Show player vitals, top-center Senior Brother Lu meter, collapsed one-line quest,
-medallions, and floating signed damage numbers. Hide minimap and ordinary villager
-name tags; do not hide the rival bar when Esc pauses the duel. Damage numbers
-reflect _actual resolved hits_ on player or rival and are visual-only. On victory
-or defeat, return to explore with the existing reward/defeat feedback; do not
-reintroduce a restart/results game mode.
+Retain player vitals, put a wide Senior Brother Lu health meter at top center,
+collapse the quest scroll to one line, hide minimap and ordinary village tags,
+and show floating damage amounts on actually resolved hits. Render the rival
+meter from rivalHealth/**rivalMaxHealth**, not a hardcoded 100. Use the
+existing combat-effect lifetime for the damage fade. A paused duel preserves
+the rival health bar behind the pause overlay; victory and defeat return to
+exploration with existing feedback.
+
+**Named-region arrival**
+
+Fade in a bilingual brush banner only on entry to one of the **three existing
+regions**: Whispering Bamboo Shrine, Cloudrest Monastery or Jadebank Market.
+The Jadebank Market screenshot is the attached hud-4-arrival mockup. Do **not**
+add a Sect Courtyard entry to world-layout.json: the GLB embeds that complete
+JSON as its asset contract, and the spawn currently has no region. An
+opening-title card, if later wanted, is a presentation constant in
+villageContent.ts and a separate request; it is not required by these mockups.
+Hide the arrival banner during bag, dialogue and pause overlays.
 
 **Bag, pause and fallback**
 
-Keep existing inventory contents, three slot assignment buttons, use/equip
-actions and focus trap/restore behavior. Retheme the existing bag and pause
-overlays using paper, ink, wood and seals; the WebGL unavailable/retry panel
-can use the same token palette. The bag remains closed/disabled during pause
-or dialogue, and the status/quest/world overlays remain inert under a modal.
-Keep the existing error Retry as page reload; no new recovery flow.
+Restyle existing overlays with shared paper/ink tokens. Keep the inventory
+contents, actions, data-testid names, current manageBagFocus focus trap and
+focus restoration. Opening a closed bag remains blocked during pause/dialogue.
+The renderer error Retry remains a page reload. Decorative HUD components
+must not swallow gameplay pointer/keyboard events.
 
-## Minimal data and camera integration
+## Minimal data, camera and visibility integration
 
-Maintain the current architecture:
+Keep the existing boundaries:
 
-    GameState --toHudSnapshot--> HudSnapshot --Svelte components--> DOM
-         |                            ^
-         +--scene.render(state, dt)----+ camera projection frame
-                      (same requestAnimationFrame)
+    GameState → toHudSnapshot(state) → HudSnapshot → Svelte HUD
+    GameState → scene.render(state, dt) → { pose, viewport } → Svelte anchors
 
-The UI receives only the **HudSnapshot** object. No Svelte component may read
-mutable GameState, query Three.js objects, or independently simulate camera
-smoothing.
+GameState has one mutator, stepGame. Svelte components receive gameplay data
+only from HudSnapshot, and camera data only from a separate projection frame.
+No component reads mutable GameState, owns a Three.js object, or independently
+calculates camera smoothing.
 
-Small additions to presentation data:
+- **Presentation snapshot:** extend HudSnapshot only as each visible slice
+  needs it: player world position, live quest target { id, position } or null,
+  dialogue villagerId, rivalMaxHealth, dashCooldownMax and qiCooldownMax, and
+  active damage-number records. Preserve existing fields/test IDs and the
+  current quest and inventory save formats. Leave the unused attackCooldown
+  model property alone; removing it is unrelated cleanup, not a HUD task.
+- **Quest target:** for dialogue/object/duel targets, use the existing
+  interactTargets(state) helper and filter by activeQuestStep().targetId,
+  so Senior Brother Lu uses his live state.rival.position. For the gate
+  challenge use DASH_MARKERS[stepProgress]. When complete, return null.
+  Narrow QuestStep.targetId from string to InteractTargetId or gate_markers,
+  making content typos a compile error. Do not maintain a second villager
+  position or quest-target catalog.
+- **Projection frame:** WuxiaScene.render returns { pose, viewport } using
+  the already-defined WuxiaCameraPose and WuxiaViewport types from camera.ts,
+  after followCameraPose and resize. The runtime publishes
+  onHudUpdate(toHudSnapshot(state), frame) during a rendered frame. Its
+  inventory-command publish sends the snapshot alone. +page.svelte stores
+  frame in a separate $state, updating it only when supplied; initial
+  frame absence simply hides anchors. No projection field or duplicate
+  pose types in simulation/types.ts and no inventory-specific cached
+  frame handling in the runtime.
+- **Projection/math:** WorldAnchors uses projectWorldToScreen with that real
+  pose and CSS-pixel viewport. Add a small pure worldDirectionToScreen
+  inverse beside screenDirectionToWorld in camera.ts and round-trip-test
+  it; MiniMap uses that function, not a second trigonometric basis.
+  Reuse/mirror the existing world.ts building footprint turn % 2
+  width/depth rule so rotated buildings render correctly.
+- **Hit display:** the hit resolver attaches the actual clamped damage and
+  target fighter to its existing hit/qi CombatEffect when applying health
+  loss. toHudSnapshot projects records needed by the UI with existing IDs,
+  positions and ages. No damage inference from health polling, new timers,
+  or changed duel mechanics.
+- **Central visibility:** one pure src/lib/hud/layout.ts function maps
+  { mode, isPaused, inventory.isOpen } to
+  { vitals, quest: 'full' | 'line' | null, map, anchors, techniques,
+  rivalBar, dialogue, banner }. The page consumes this once and passes
+  simple booleans/variants to small components. A Node table test covers
+  explore/dialogue/duel, pause and bag cases. In particular, the rival bar
+  stays visible behind pause in a duel; dialogue hides normal chrome;
+  bag overlays suppress normal HUD and arrival banners.
+- **Components:** keep +page.svelte as the single runtime owner; create
+  only useful small components under src/lib/hud/ (Vitals, TechniqueBar,
+  QuestScroll, MiniMap, WorldAnchors, DialogueScroll, PlaceBanner). Keep
+  simple feedback, damage and bag panels inline if that avoids gratuitous
+  splitting. The map reads world-layout.json but never mutates it.
+  No component library or new runtime dependency.
 
-- Extend HudSnapshot with player world position, current quest-goal world position
-  (villager, next dash marker, bell or Lu, null when completed), and the world
-  positions already present for villagers. Derive quest target from
-  activeQuestStep(), DASH_MARKERS, SHRINE_BELL and VILLAGERS; no second quest table.
-- Extend HudDialogue with a stable villagerId so its portrait lookup is exact.
-- For each successful hit, augment the existing CombatEffect with optional
-  damage and target actor. The hit resolver writes the amount once; the visual
-  effect retains its existing lifetime, ID, age and world position. HudSnapshot
-  exposes only active damage-number records; no additional gameplay state.
-- Add an optional readonly **projection frame** to HudSnapshot: the actual
-  interpolated WuxiaCameraPose and CSS-pixel viewport from that frame. It may be
-  null before the first render. Define the plain shape in simulation/types.ts;
-  keep the simulation free of DOM, Svelte, and Three.js imports.
-- Change WuxiaScene.render() to return that frame **after** followCameraPose()
-  and resize(). createGameRuntime passes it to the HUD callback along with
-  toHudSnapshot(state), for both live frames and inventory updates (using the
-  last successful frame). Keep existing runtime start/dispose and one frame loop.
-- WorldAnchors.svelte calls the existing pure projectWorldToScreen() with the
-  exact returned pose, viewport, and a consistent head-height Y. Use the
-  scene-host's CSS-pixel coordinate space and hide invalid/offscreen points.
-  The fixed camera does not need a new projection service or calibration layer.
-- The round map needs no camera pose, only player/target world points and the
-  existing pure screenDirectionToWorld() basis. Draw a small SVG view window
-  from world-layout.json, not a full-world screenshot. All map geometry is
-  decorative; world.ts still owns walkability and region lookup.
+## Automated acceptance and visual evidence
 
-When adding the Sect Courtyard display region, test the location and ordering
-against the existing three region bounds. Keep its rectangle within the
-courtyard so roaming between areas does not label the entire world as courtyard.
-The only world-layout.json addition is region metadata; no GLB rebuild is needed.
+These are criteria for the eventual implementation in the **same PR**, not
+claims that the docs-only draft is already implemented.
 
-Keep route state minimal: **+page.svelte** mounts the runtime once, maintains
-the one HudSnapshot state, and delegates to components in **src/lib/hud/**.
-Suggested small components: Vitals, QuestScroll, MiniMap, WorldAnchors,
-TechniqueBar, DialogueScroll, PlaceBanner and InventoryPanel. Pause and
-feedback may remain simple inline components if splitting adds no value.
-Use one **hud.css** token stylesheet; no general-purpose component library.
-Retain existing data-testid names for surviving UI to minimize test churn.
-
-## Visual and functional acceptance
-
-1. **Desktop visual acceptance:** capture automatic Playwright screenshots for
-   exploration, dialogue, duel and arrival at 960×640, plus a 1180×720
-   layout sanity view. Compare each against the respective **four Linear
-   mockups**, verifying composition, color, labels, portraits, scroll placement,
-   map/edge pointer and unobstructed important controls. Screenshots are
-   diagnostic CI artifacts, not committed golden files or human sign-off.
-2. **macOS and Windows end-to-end compatibility:** one unchanged browser
-   Playwright suite can be run on macOS and Windows desktops. Exercise real
-   keyboard movement and E dialogue, medicine/bag assignment, a seeded
-   step-five duel and hit indicator, reward/free roam and reload, plus region
-   arrival and resize checks. Keep the existing CI browser job as the mandatory
-   automated gate; do not introduce an OS runner matrix solely for this UI.
-3. **Mode behavior:** exploration shows mapped quest goals and anchored names;
-   dialogue hides every non-dialogue overlay; duel shows rival bar and damage
-   numbers and hides the minimap; Esc pause preserves duel context; bag actions
-   and focus behavior still work, with closed/disabled bag in dialogue/pause.
-4. **Deterministic component/pure tests:** Vitals ratios, QuestScroll five dots/
-   active step and completed mode, DialogueScroll line/progress/portrait,
-   off-map pointer distance/bearing, world-to-screen anchors using the actual
-   smoothed pose, damage-number lifetime, and region-transition banner state.
-   Include an assertion that available fonts/assets resolve without CDN calls.
-5. **Quality gate:** bun run check, bun run lint, bun run test, and the existing
-   GitHub Actions workflows pass on the implementation PR. No change to save
-   format or gameplay semantics. Android and Linux need no user-facing
-   acceptance; rely on CI for them. iOS/touch control/layout is not part of
-   this keyboard-first task.
+1. **One-platform MCP end-to-end acceptance:** a browser-capable MCP
+   agent drives the desktop game at 960×640 through real Elder dialogue,
+   three markers, medicine and quick-slot assignment, and the existing
+   v2-seeded Lu duel, hit indicators, reward, free roam and reload. It
+   verifies actual keyboard interaction, bag focus and return, pause
+   behavior, rival meter, disabled actions, on/offscreen target markers,
+   world-tag alignment during camera follow, and region arrival. Reuse
+   the existing Playwright journey and screenshot attachments; no full-map
+   timed browser walk or production-only testing APIs.
+2. **Visual acceptance with mockups:** capture four named screenshots
+   (explore, dialogue, duel, Jadebank Market arrival) at 960×640 and a
+   1180×720 layout sanity capture. The MCP agent visually compares each
+   against the corresponding four Linear mockups, records concrete
+   pass/fail observations in the PR, and attaches diagnostic screenshots.
+   Automated DOM assertions separately verify presence, state, visibility,
+   non-overlap and readable text. No golden pixel baselines and **no human
+   acceptance/sign-off criterion**.
+3. **Pure/component tests:** table-test hudLayout for all modes/overlays;
+   test Vitals ratios, QuestScroll five states, DialogueScroll speaker
+   and line, target lookup, map inverse/edge distance, shared building
+   footprints, camera-follow anchor positioning, damage age/amount,
+   region-title and glyph coverage. Ensure shipped assets/fonts load
+   without external requests and the GLB/world-layout contract is unchanged.
+4. **Quality gate:** bun run check, bun run lint and bun run test pass, with
+   the existing GitHub Actions build/lint, unit and Playwright jobs green.
+   Existing automated CI is Linux Chromium; one MCP browser platform is
+   sufficient because there is no platform-specific UI path. No macOS/
+   Windows runner matrix or unexecuted OS acceptance promise. Mobile/
+   touch/gamepad and platform-specific visual work are out of scope.
 
 ## Explicitly deferred
 
-New image art or SFX, mobile/touch/gamepad design, translation/localization,
-quest or combat mechanics, save migrations, map fog/zoom/fast travel, renderer
-sprites, generalized UI frameworks, server persistence, and additional PRs.
-If new art is later requested, scope it as a separate art ticket rather than
-folding generation into this coding task.
+New art/SFX (separate ticket if later requested), mobile/touch/gamepad,
+translation systems, new quests or combat mechanics, save migration,
+renderer text sprites, map zoom/fog/navigation, general-purpose UI
+frameworks, additional CI OS runners, manual acceptance and a second PR.
