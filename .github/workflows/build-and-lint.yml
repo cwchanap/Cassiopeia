@@ -28,10 +28,6 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - name: Install dependencies
         run: bun install --frozen-lockfile
-      - name: Print formatted HPA-792 plan (temporary)
-        run: |
-          bunx prettier --write docs/superpowers/plans/2026-11-15-hpa-792-ink-paper-hud.md
-          node -e 'const fs=require("fs"); console.log("FORMATTED_PLAN_JSON:"+JSON.stringify(fs.readFileSync("docs/superpowers/plans/2026-11-15-hpa-792-ink-paper-hud.md","utf8")))'
       - name: Check types
         run: bun run check
       - name: Lint
