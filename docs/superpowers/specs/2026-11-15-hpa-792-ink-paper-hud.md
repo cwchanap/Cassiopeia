@@ -111,7 +111,7 @@ and show floating damage amounts on actually resolved hits. Render the rival
 meter from rivalHealth/**rivalMaxHealth**, not a hardcoded 100. Damage
 numbers remain visible during exploration for their existing 0.65-second
 effect lifetime after a finishing blow: resolveEndState changes mode to
-explore in the *same tick*. Hide the numbers only in dialogue, pause or
+explore in the _same tick_. Hide the numbers only in dialogue, pause or
 an open bag. A paused duel preserves the rival bar behind the overlay;
 victory and defeat return to exploration with existing feedback.
 
@@ -176,7 +176,7 @@ calculates camera smoothing.
   it; MiniMap uses that function, not a second trigonometric basis.
   Reuse/mirror the existing world.ts building footprint turn % 2
   width/depth rule so rotated buildings render correctly.
-- **Hit display:** extend CombatEffect with *optional*
+- **Hit display:** extend CombatEffect with _optional_
   damage?: number and target?: 'player' | 'rival' so existing dash
   effects and renderer test fixtures remain valid. The hit resolver adds
   actual clamped damage and target to hit/qi effects as it applies damage;
@@ -227,7 +227,7 @@ claims that the docs-only draft is already implemented.
    production debug API. The MCP agent runs/inspects this **same**
    checked-in test suite, rather than a second gameplay walkthrough.
 2. **Visual acceptance with mockups:** add testInfo.attach captures
-   *inside* wuxia-mvp.e2e.ts for hud-1-explore, hud-2-dialogue,
+   _inside_ wuxia-mvp.e2e.ts for hud-1-explore, hud-2-dialogue,
    hud-3-duel, hud-4-arrival (960×640), plus 1180×720 sanity.
    Playwright CI asserts DOM content/visibility and saves screenshots.
    The browser-capable MCP agent **only inspects the saved captures**
