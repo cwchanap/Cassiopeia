@@ -57,12 +57,14 @@ existing working game.
    covered. Extend the manifest and test for region titles in Slice 4
    when those labels are implemented. Fonttools is build-time-only;
    the browser must never contact a font CDN.
-3. Add the small pure hudLayout(hud) selector in src/lib/hud/layout.ts.
-   It returns visibility booleans for vitals, map, anchors, techniques,
-   rival bar, dialogue and banner plus quest display mode
-   (full/line/hidden). Table-test explore/dialogue/duel × pause × bag.
-   In particular, keep the rival bar behind a duel pause; hide all
-   normal chrome when the bag opens; dialogue hides other chrome.
+3. Add pure hudLayout(hud) in src/lib/hud/layout.ts with vitals,
+   map, anchors, techniques, rivalBar, dialogue, banner,
+   damageNumbers, itemFeedback and quest mode (full/line/hidden).
+   Table-test explore/dialogue/duel × pause × bag. The rival bar
+   stays behind duel pause, while damageNumbers is true in explore
+   or duel unless paused, in dialogue or with the bag open.
+   **itemFeedback remains visible while the bag is open**; this
+   supports the existing Playwright quick-slot assignment check.
    The page computes the selector once and passes plain props.
 4. Add rivalMaxHealth, dashCooldownMax and qiCooldownMax to
    HudSnapshot from existing FighterState/combat constants (only
@@ -113,11 +115,14 @@ labels move correctly while exploring the actual scene.
    duel (using hudLayout), hide in dialogue/bag.
 2. Add player position and questTarget { id, position } | null
    to HudSnapshot. For villagers/bell, filter existing
-   interactTargets(state) by the active step's targetId, so Lu
-   uses state.rival.position. For gate markers use the next
+   interactTargets(state) by activeQuestStep().targetId, so Lu
+   uses state.rival.position. For markers use the next
    DASH_MARKERS[stepProgress]. Return null on free roam.
-   Narrow QuestStep.targetId to InteractTargetId or gate_markers;
-   do not duplicate the quest target table or villager positions.
+   Narrow QuestStep.targetId to InteractTargetId or gate_markers.
+   Also add **position: Vec2** to HudInteractTarget and copy the
+   existing state.interactTarget.position in hudInteractTarget().
+   WorldAnchors can then place the shrine-bell E prompt directly,
+   without a villager lookup or questTarget fallback.
 3. Add worldDirectionToScreen beside the existing
    screenDirectionToWorld in camera.ts; use the same sine/cosine
    basis and a round-trip/orthogonality test. The round SVG map
@@ -128,28 +133,37 @@ labels move correctly while exploring the actual scene.
    A target outside the map radius gets a rim arrow and rounded
    straight-line metres. No canvas renderer, fog, navigation or
    extra map image.
-4. Return a frame from WuxiaScene.render(state, dt) with the
-   **actual interpolated pose** and CSS-pixel viewport, typed
-   with WuxiaCameraPose and WuxiaViewport from camera.ts.
-   Runtime accepts onHudUpdate(snapshot, optionalFrame); its
-   requestAnimationFrame loop sends both after render. Its
-   zero-dt inventory publishes send snapshot only. The route
-   stores the projection frame in independent $state and updates
-   it only when provided. **Do not** add projection to
-   HudSnapshot or copy camera types into simulation.
-5. WorldAnchors projects each head/quest marker using
-   projectWorldToScreen(point, frame.pose, frame.viewport),
-   hiding off-frustum and initial-no-frame tags. Show E only
-   for hud.interactTarget, anchor it to the correct villager
-   or bell, and keep existing game-prompt test ID. Keep
-   pointer-events:none and verify canvas CSS-pixel positioning
-   at 960×640 and after a resize, including a moving camera
-   with real follow lag.
-6. Focused tests cover target switching through all five
-   stages, marker progress, Lu's live position, type-safe
-   IDs, map north/inverse, on/off-map distance and pointer
-   clamping, footprint turn parity, smoothed-camera tag
-   alignment and zero-size/initial missing projection.
+4. Return **WuxiaProjectionFrame | null** from
+   WuxiaScene.render(state, dt), using the actual interpolated
+   pose and CSS viewport typed with camera.ts types; return null
+   on the existing disposed early-exit path. Runtime accepts
+   onHudUpdate(snapshot, optionalFrame) and passes a frame only
+   after a successful render; zero-dt inventory commands send
+   snapshot only. +page.svelte holds the separate frame $state,
+   updating it only when provided. Do not copy pose types into
+   simulation or add HudSnapshot.projection.
+5. WorldAnchors projects heads and quest markers with
+   projectWorldToScreen(point, frame.pose, frame.viewport).
+   Show the actual hud.prompt interaction text on the E tag at
+   **hud.interactTarget.position**, including the shrine bell;
+   do not derive its location from hud.villagers or questTarget.
+   Hide off-frustum/initial-no-frame tags, keep pointer-events:none,
+   and verify CSS-pixel positioning, resize and camera follow lag.
+6. **Transition the game-prompt test ID in the same slice:** keep
+   the old +page.svelte <p class="prompt"> only when
+   hud.mode !== 'explore', and put the single
+   data-testid="game-prompt" on WorldAnchors' in-range E tag.
+   When exploring without an interaction target, QuestScroll
+   carries the objective and game-prompt is absent. Update
+   page.svelte.spec.ts and explore assertions in
+   wuxia-mvp.e2e.ts (including walk-to-target assertions) in
+   the same commit. Never render duplicate game-prompt IDs.
+7. Focused tests cover target switching through all five
+   stages, shrine-bell and villager E positions, marker
+   progress, Lu's live position, typed target IDs, map
+   north/inverse, on/off-map distance and pointer clamping,
+   turned building footprints, smoothed-camera tag alignment,
+   disposed-render null and the explore game-prompt transition.
 
 **Green checkpoint:** real exploration map and labels visible,
 player can follow the marker directions, and the full existing
@@ -171,31 +185,40 @@ and the duel shows the wide rival bar and damage numbers.
 
 **Steps**
 
-1. Extend HudDialogue with villagerId directly from
-   GameMode's stable ID. Map it to the HPA-793 portrait
-   atlas; render the current English speaker, line,
-   progress marks and E Continue on a rice-paper scroll.
-   Existing E/Esc progression stays in simulation. Preserve
-   one data-testid=game-prompt with the speaker/line.
-   hudLayout hides the rest of the HUD while in dialogue.
+1. Extend HudDialogue with villagerId directly from GameMode.
+   Map to the HPA-793 portrait atlas; render the current
+   English speaker, line, progress dots and E Continue on
+   paper. Keep the existing E/Esc dialogue progression.
+   **Move** data-testid="game-prompt" from the legacy
+   non-explore <p> to DialogueScroll for dialogue, retaining
+   the same speaker/line text; remove the legacy prompt
+   entirely. In duel, replace the obsolete prompt check in
+   wuxia-mvp.e2e.ts with rival meter and technique assertions.
+   Keep the WorldAnchors explore-only prompt from Slice 2;
+   never expose two matching game-prompt elements.
 2. Replace the small rival meter with a wide top-center bar.
    Read HudSnapshot.rivalHealth/rivalMaxHealth; keep
    aria-label=Rival health. The quest collapses to a line,
    minimap and normal names hide, and pause leaves the
    rival meter visible underneath.
-3. In resolveActiveHits, record the actual **applied**
-   damage (old health minus clamped new health) and target
-   actor on the existing hit/qi CombatEffect. Reuse its
-   original ID, world position, age and 0.65 s expiry;
-   only read live damage-number records through
-   toHudSnapshot. No DOM polling for health deltas, new
-   timer or gameplay balance change. Project text through
-   the actual renderer frame and fade it.
-4. Update existing Playwright dialogue and duel selectors,
-   with focused component assertions for speaker portrait,
-   line progression, the visibility selector, rival meter
-   during pause, attack activity and hit value/expiry.
-   Keep the same v2 save and post-victory result behavior.
+3. Extend CombatEffect with **optional** damage?: number
+   and target?: 'player' | 'rival'; dash effects and existing
+   scene test literals keep working. In resolveActiveHits,
+   attach actual applied damage (old minus clamped new health)
+   and target to hit/qi effects with their existing IDs,
+   positions, age and 0.65-second lifetime. toHudSnapshot
+   exposes the records. Render through the real camera frame
+   even after a killing blow exits duel for explore in the
+   same tick; hudLayout.damageNumbers is independent of
+   duel mode and hides only in pause/dialogue/open bag.
+   No DOM health polling, new timer or balance change.
+4. Update dialogue/duel Playwright selectors in the same
+   commit: one dialogue game-prompt, no duel game-prompt,
+   and the rival meter + J/K controls for duel. Component
+   tests cover speaker portrait, line progress, mode
+   visibility, paused rival meter, action status and hit
+   amount/expiry, including the killing blow **after**
+   transition to explore. Keep v2 save and reward behavior.
 
 **Green checkpoint:** visible mockup-aligned dialogue and duel,
 with damage indicator and existing combat controls; check/lint/
@@ -229,11 +252,11 @@ pause, feedback and fallback share the new paper/ink styling.
    world-layout.json**: the embedded GLB equality
    contract must stay valid without a Blender rebuild.
 2. hudLayout suppresses the banner in dialogue, bag and
-   pause. Style the bag and pause with shared paper/ink
-   tokens while retaining manageBagFocus trap/return,
-   all item/use/equip/quick-slot hooks and Esc/I/B guards.
-   Style existing feedback and WebGL fallback Retry
-   without resurrecting results/restart modes.
+   pause, **but keeps item-feedback visible during bag-open
+   assignment**. Style bag and pause with paper/ink tokens;
+   preserve manageBagFocus trap/return, all item/slot
+   actions, their data-testid hooks, and Esc/I/B guards.
+   Style feedback and WebGL Retry without restart modes.
 3. Test transitions between null and named regions,
    table-driven overlay visibility, temporary banner
    lifecycle and unmount, bag keyboard focus and
@@ -261,32 +284,40 @@ running game in this same PR.
 
 **Steps**
 
-1. Have a browser-capable **MCP** agent execute one desktop
-   E2E acceptance flow at 960×640, using real WASD/E/Esc/
-   Space/J/K/I/B and Playwright's existing seeded-v2-save
-   shortcut for the Lu duel. Check Elder dialogue, ordered
-   dash markers, medicine/slot assignment, duel damage,
-   one reward, free roam and reload. Reuse the current
-   Playwright e2e as the repeatable CI check. No separate
-   macOS/Windows matrix and no production debug API.
-2. For the arrival composition, use a focused bounded
-   real-input route to an existing named region (the
-   Jadebank Market mockup is the target), rather than
-   replaying a long full five-step quest route. Check
-   region name, banner, map and distant quest pointer.
-   If the route needs stabilization, use the pure world
-   waypoint/collision test as its guide; do not teleport
-   by adding a production-only state mutation API.
-3. Attach named screenshots from the game for
-   **hud-1-explore**, **hud-2-dialogue**, **hud-3-duel**
-   and **hud-4-arrival** at 960×640, plus a 1180×720
-   layout sanity capture. The MCP agent visually compares
-   them to the four existing Linear mockups and records
-   concrete composition/contrast/label/overlap results
-   in this PR. DOM assertions separately verify visible
-   mode elements and text, resource meters, controls and
-   numeric data. No pixel baselines and no human review/
-   sign-off acceptance gate.
+1. Extend the **existing checked-in**
+   src/routes/wuxia-mvp.e2e.ts with all new HUD DOM assertions
+   using real WASD/E/Esc/Space/J/K/I/B. Preserve Elder,
+   ordered markers, Qin/slot, v2-seeded Lu duel, actual hit,
+   reward, free roam and reload; assert HUD mode visibility,
+   bag focus/feedback, map pointer, prompt-ID uniqueness
+   and anchor behavior. It is the **single gameplay E2E
+   source** run by CI and invoked/inspected via MCP. The MCP
+   agent must **not** repeat the gameplay walkthrough.
+   No OS matrix or production-only test API.
+2. Add a **focused arrival test in the same E2E file**,
+   not another full quest replay. From spawn, use bounded
+   real-key frame batches: S+D heads east across the
+   **z = 0 bridge** to x >= 21, then S+A heads south along
+   **x ≈ 24** toward the market at z >= 27. This avoids
+   the RiceFarmhouse footprint at x = 29, z = 17.
+   Use existing world waypoint/collision tests to validate
+   the route; avoid blind multi-second key holds because
+   SwiftShader can render below 5 fps and dt is capped
+   at 0.05 seconds. Wait for PlaceBanner's **first visible**
+   state and capture immediately before its fade; assert
+   market title, minimap and distant quest pointer. No
+   teleportation/debug endpoint or browser-only state API.
+3. Add named **testInfo.attach() screenshots inside
+   wuxia-mvp.e2e.ts**: hud-1-explore, hud-2-dialogue,
+   hud-3-duel, hud-4-arrival at 960×640, plus 1180×720
+   sanity. CI keeps the artifacts alongside repeatable
+   DOM assertions for mode/content/controls/visibility.
+   The MCP agent's **only additional role** is to inspect
+   the Playwright-generated captures against the four
+   Linear mockups and post concrete composition/contrast/
+   label/overlap observations to this **same draft PR**.
+   Do not run the gameplay a second time or require
+   pixel baselines or human sign-off.
 4. Check world tags on moving camera and after resize,
    off-map map bearing and distance, duel pause/rival
    meter, effect expiry, focus trap/return, GLB-ready
@@ -311,38 +342,43 @@ running game in this same PR.
 Criteria below apply to the **implementation**, not this
 planning-only revision. There is **no human acceptance** step.
 
-1. **MCP-controlled desktop browser E2E (one platform):**
-   from clean v2 progress, real inputs complete the
-   Elder/markers/Qin/bag opening, then the existing
-   save fixture reaches Lu duel, damage displays, victory,
-   free roam and reload. Interactions and focus/keyboard
-   controls still work at the existing 960×640 viewport.
-2. **Visual checks using Linear mockups:** the browser
-   agent captures four state screenshots at 960×640 and
-   a 1180×720 layout capture, compares them visually to
-   the attached explore/dialogue/duel/Jadebank Market
-   mockups, records results and failures in the PR, and
-   leaves diagnostic artifacts. DOM tests assert the
-   actual visible/hidden mode elements and their content.
-   No goldens, human sign-off or platform-specific matrix.
-3. **Pure and component tests:** hudLayout table,
-   Vitals health/qi, QuestScroll five stages/completion,
-   DialogueScroll speaker/line/portrait, real camera
-   frame and inverse transform, questTarget live location,
-   SVG target clamp and north, exact building orientation,
-   font glyph/region mapping, effect amount/expiry,
-   and region transitions all pass.
-4. **Regression and lifecycle:** duel pause keeps
-   rivalHealth/rivalMaxHealth visible; bag focus returns
-   and blocks openings in dialogue/pause; world anchors
-   do not drift with camera smoothing; Three.js GLB
-   equality contract is unchanged; no new save format,
-   quest mechanics, art or SFX. The app remains playable
-   in the existing Linux Chromium automated CI.
+1. **One repeatable CI/MCP browser E2E (one platform):**
+   the checked-in Playwright tests, invoked/inspected via
+   browser-capable MCP and run in existing Linux Chromium
+   CI, use real input from clean progress through Elder,
+   markers, Qin/slot and seeded Lu duel, killing blow,
+   victory, free roam and reload. All controls, focus,
+   market arrival and prompt-ID transitions work at
+   960×640. No duplicate agent gameplay run.
+2. **Visual checks using Linear mockups:** Playwright
+   testInfo.attach records four named 960×640 state
+   screenshots and a 1180×720 sanity capture in CI.
+   The MCP agent visually compares those **existing**
+   artifacts with the four Linear mockups and records
+   concrete pass/fail results in this PR. DOM tests
+   assert mode visibility, content, prompt uniqueness,
+   meters and controls. No duplicate screenshot flow,
+   pixel goldens, human sign-off or OS matrix.
+3. **Pure and component tests:** hudLayout modes and
+   overlays (including explore killing-blow numbers and
+   bag-open item-feedback), Vitals, QuestScroll,
+   DialogueScroll, actual nullable renderer frame,
+   inverse map math, live quest/interact positions
+   including the bell, off-map edge pointer, footprint
+   turns, CJK glyph/region coverage, hit effect
+   lifetime and region transitions pass.
+4. **Regression and lifecycle:** paused duel retains
+   rivalHealth/rivalMaxHealth, the final damage number
+   survives duel-to-explore for its remaining lifetime,
+   bag focus returns and feedback remains visible on
+   assignment, single game-prompt moves safely across
+   slices, anchors use the actual camera frame, the GLB
+   equality contract is unchanged, and neither gameplay
+   nor save format/art/SFX changes.
 5. **Quality gates:** bun run check, bun run lint,
    bun run test, and existing Actions build, unit and
    Playwright workflows pass on the latest commit.
-   A single-platform browser acceptance run suffices:
+   A single-platform browser acceptance run suffices;
    there is no macOS/Windows-specific HUD implementation.
    Mobile/touch/gamepad checks are out of scope.
 
