@@ -74,7 +74,7 @@ pixel-locked screenshots: text, positioning and fades should work with live stat
   understandable, and 北 marks world north. Show the current quest target; clamp
   its marker to the rim with an outward pointer and straight-line distance in metres
   when off-map. No quest target after completion.
-- **World anchors:** show legible names over each *on-screen* villager, a quest
+- **World anchors:** show legible names over each _on-screen_ villager, a quest
   diamond over the active target, and an E prompt only for the actual eligible
   interact target. Shrine bell is eligible as an object target. Suppress tags outside
   the camera frustum and avoid covering the portrait/quest/minimap where practical.
@@ -103,7 +103,7 @@ dialogue state inside the component.
 Show player vitals, top-center Senior Brother Lu meter, collapsed one-line quest,
 medallions, and floating signed damage numbers. Hide minimap and ordinary villager
 name tags; do not hide the rival bar when Esc pauses the duel. Damage numbers
-reflect *actual resolved hits* on player or rival and are visual-only. On victory
+reflect _actual resolved hits_ on player or rival and are visual-only. On victory
 or defeat, return to explore with the existing reward/defeat feedback; do not
 reintroduce a restart/results game mode.
 
