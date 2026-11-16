@@ -104,7 +104,7 @@ its temporary HUD.
    DASH_COOLDOWN/LIGHT_ATTACK_COOLDOWN/QI_BURST_COOLDOWN. Maintain disabled
    buttons and quick-slot IDs. Keep I/B and 1–3 inventory behavior.
 4. Retheme bag, pause, error fallback and existing feedback/result note.
-   Preserve *all* inventory item, assign/use/equip IDs and the current
+   Preserve _all_ inventory item, assign/use/equip IDs and the current
    manageBagFocus attachment and focus return. Check the transparent HUD
    overlay still allows keyboard scene input but does not click through modal
    controls. The result is the existing win/defeat feedback, not a new mode.
@@ -185,7 +185,7 @@ lint and test pass.
    0.65-second lifetime. No timers or collision changes to produce numbers.
 3. PlaceBanner watches changes in hud.region and shows the matching
    bilingual name (Sect Courtyard, Shrine, Monastery, Market). Show once on
-   initial spawn and on entering a *different* named region; ignore null
+   initial spawn and on entering a _different_ named region; ignore null
    transit areas. Fade after a short presentation duration using one local
    component state/transition; do not persist banner state or modify
    quest progression. Hide it during dialogue and bag/pause overlays.
@@ -207,7 +207,7 @@ test pass.
 **Files**
 
 - src/routes/wuxia-mvp.e2e.ts and src/routes/page.svelte.spec.ts
-- Focused src/lib/hud/*.spec.ts or pure tests beside the helpers
+- Focused src/lib/hud/\*.spec.ts or pure tests beside the helpers
 - src/routes/+page.svelte, CLAUDE.md and assets/wuxia/README.md
 
 **Work**
