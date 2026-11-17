@@ -90,9 +90,16 @@
 				data-testid="map-rim-target"
 				transform={`translate(${marker.x * SCALE} ${marker.y * SCALE}) rotate(${(marker.angle * 180) / Math.PI})`}
 			>
-				<path d="M0 -5 L9 0 L0 5 Z"></path>
-				<text x="0" y="14" text-anchor="middle">{marker.metres}m</text>
+				<path d="M0 -4.5 L7 0 L0 4.5 Z"></path>
 			</g>
+			<text
+				class="map-rim-label"
+				data-testid="map-rim-metres"
+				x={marker.x * SCALE * ((RADIUS - 20) / RADIUS)}
+				y={marker.y * SCALE * ((RADIUS - 20) / RADIUS)}
+				text-anchor="middle"
+				dominant-baseline="central">{marker.metres}m</text
+			>
 		{/if}
 		<text class="map-north hanzi-small" x={north.x} y={north.y} text-anchor="middle"
 			>{HUD_HANZI_LABELS.north}</text
@@ -146,9 +153,12 @@
 	.map-rim path {
 		fill: var(--cinnabar);
 	}
-	.map-rim text {
+	.map-rim-label {
 		fill: var(--cinnabar);
 		font: 600 8px var(--font-latin);
+		paint-order: stroke;
+		stroke: var(--paper);
+		stroke-width: 2.5px;
 	}
 	.map-north {
 		fill: var(--ink);
