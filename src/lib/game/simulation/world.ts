@@ -3,13 +3,25 @@ import type { Vec2 } from './types';
 
 export const WORLD_BOUNDS = layout.bounds;
 const BODY_RADIUS = 0.28;
+export function buildingFootprint(building: { width: number; depth: number; turn: number }): {
+	width: number;
+	depth: number;
+} {
+	return building.turn % 2
+		? { width: building.depth, depth: building.width }
+		: { width: building.width, depth: building.depth };
+}
+
 const obstacles = [
-	...layout.buildings.map((building) => ({
-		x: building.x,
-		z: building.z,
-		width: building.turn % 2 ? building.depth + 0.3 : building.width + 0.25,
-		depth: building.turn % 2 ? building.width + 0.25 : building.depth + 0.3
-	})),
+	...layout.buildings.map((building) => {
+		const footprint = buildingFootprint(building);
+		return {
+			x: building.x,
+			z: building.z,
+			width: footprint.width + (building.turn % 2 ? 0.3 : 0.25),
+			depth: footprint.depth + (building.turn % 2 ? 0.25 : 0.3)
+		};
+	}),
 	...layout.walls,
 	...layout.props,
 	...layout.trees.map((tree) => ({ ...tree, width: 0.4, depth: 0.4 }))

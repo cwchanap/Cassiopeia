@@ -120,6 +120,13 @@ export function screenDirectionToWorld(right: number, down: number): Vec2 {
 	};
 }
 
+export function worldDirectionToScreen(x: number, z: number): { right: number; down: number } {
+	return {
+		right: x * COS_AZIMUTH - z * SIN_AZIMUTH,
+		down: x * SIN_AZIMUTH + z * COS_AZIMUTH
+	};
+}
+
 export function orthoFrustum(pose: WuxiaCameraPose, viewport: WuxiaViewport): WuxiaCameraFrustum {
 	const aspect = viewport.width > 0 && viewport.height > 0 ? viewport.width / viewport.height : 1;
 	const halfHeight = pose.viewHeight / 2;

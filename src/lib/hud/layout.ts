@@ -6,7 +6,7 @@ export type HudLayoutInput = {
 	bagOpen: boolean;
 };
 
-export type QuestScrollMode = 'full' | 'line' | 'hidden';
+export type QuestScrollMode = 'full' | 'line' | null;
 
 export type HudLayout = {
 	vitals: boolean;
@@ -25,7 +25,7 @@ export function hudLayout({ mode, isPaused, bagOpen }: HudLayoutInput): HudLayou
 	const overlay = isPaused || bagOpen;
 	return {
 		vitals: mode !== 'dialogue' && !bagOpen,
-		quest: overlay || mode === 'dialogue' ? 'hidden' : mode === 'duel' ? 'line' : 'full',
+		quest: overlay || mode === 'dialogue' ? null : mode === 'duel' ? 'line' : 'full',
 		map: mode === 'explore' && !overlay,
 		anchors: mode === 'explore' && !overlay,
 		techniques: mode !== 'dialogue',

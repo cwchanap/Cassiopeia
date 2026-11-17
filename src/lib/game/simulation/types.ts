@@ -228,12 +228,20 @@ export type HudDialogue = {
 export type HudInteractTarget = {
 	id: InteractTargetId;
 	name: string;
+	position: Vec2;
 };
 
 export type HudQuestStep = {
 	stepIndex: number;
 	title: string;
 	instruction: string;
+};
+
+export type QuestTargetId = InteractTargetId | 'gate_markers';
+
+export type HudQuestTarget = {
+	id: QuestTargetId;
+	position: Vec2;
 };
 
 export type HudVillager = {
@@ -251,6 +259,8 @@ export type HudSnapshot = {
 	prompt: string | null;
 	dialogue: HudDialogue | null;
 	interactTarget: HudInteractTarget | null;
+	questTarget: HudQuestTarget | null;
+	playerPosition: Vec2;
 	region: string | null;
 	playerHealth: number;
 	playerMaxHealth: number;

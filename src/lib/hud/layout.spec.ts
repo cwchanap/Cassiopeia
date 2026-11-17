@@ -36,7 +36,7 @@ describe('hudLayout', () => {
 		const l = layout('dialogue');
 		expect(l.dialogue).toBe(true);
 		expect(l.vitals).toBe(false);
-		expect(l.quest).toBe('hidden');
+		expect(l.quest).toBeNull();
 		expect(l.map).toBe(false);
 		expect(l.anchors).toBe(false);
 		expect(l.techniques).toBe(false);
@@ -62,14 +62,14 @@ describe('hudLayout', () => {
 		expect(l.rivalBar).toBe(true);
 		expect(l.vitals).toBe(true);
 		expect(l.damageNumbers).toBe(false);
-		expect(l.quest).toBe('hidden');
+		expect(l.quest).toBeNull();
 	});
 
 	it('hides the rival bar when the bag is open, even in a duel', () => {
 		const l = layout('duel', false, true);
 		expect(l.rivalBar).toBe(false);
 		expect(l.vitals).toBe(false);
-		expect(l.quest).toBe('hidden');
+		expect(l.quest).toBeNull();
 		expect(l.itemFeedback).toBe(true);
 	});
 
@@ -97,7 +97,7 @@ describe('hudLayout', () => {
 				expect(l.banner).toBe(false);
 				expect(l.damageNumbers).toBe(false);
 				expect(l.dialogue).toBe(false);
-				expect(l.quest).toBe('hidden');
+				expect(l.quest).toBeNull();
 			}
 			if (input.isPaused) {
 				expect(l.map).toBe(false);
@@ -105,7 +105,7 @@ describe('hudLayout', () => {
 				expect(l.banner).toBe(false);
 				expect(l.damageNumbers).toBe(false);
 				expect(l.itemFeedback).toBe(false);
-				expect(l.quest).toBe('hidden');
+				expect(l.quest).toBeNull();
 			}
 			if (input.mode === 'dialogue' && !input.isPaused && !input.bagOpen) {
 				expect(l.dialogue).toBe(true);

@@ -234,7 +234,9 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 				await page.keyboard.up(key);
 			}
 			await renderedFrames(1);
-			expect(await prompt.innerText().catch(() => '')).toBe(text);
+			// allInnerTexts never waits: the anchored E prompt only exists while in
+			// range, so a waiting innerText() would stall every walking retry.
+			expect(await prompt.allInnerTexts().catch(() => [])).toEqual([text]);
 		}).toPass({ timeout: 120000 });
 	};
 
@@ -262,7 +264,9 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	await expect(objectiveChip).toContainText('Dash through the three gate markers in order');
 	await expect(objectiveChip).toContainText('0/3');
 	await expect(page.getByTestId('quick-slot-3')).toContainText('Qi Pill');
-	await expect(prompt).toHaveText('Dash through the three gate markers in order');
+	// Exploring with no interactable in range: the scroll carries the objective,
+	// and no anchored E prompt exists.
+	await expect(prompt).toHaveCount(0);
 
 	// After the reload the player is at the authored spawn, so the camera focus is the
 	// exact spawn point — the marker projections are deterministic.
@@ -292,9 +296,8 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	await page.reload();
 	await expect(page.getByTestId('game-shell')).toBeVisible();
 	await expect(objectiveChip).toContainText('Fetch medicine from Auntie Qin');
-	await expect(prompt).toHaveText(
-		'Fetch medicine from Auntie Qin by the Herbalist and assign a pill to a quick slot'
-	);
+	await expect(objectiveChip).toContainText('assign a pill to a quick slot');
+	await expect(prompt).toHaveCount(0);
 
 	await walkFramesToPrompt(['w', 'd'], 'Press E to speak with Auntie Qin');
 
@@ -360,7 +363,7 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	await page.reload();
 	await expect(page.getByTestId('game-shell')).toBeVisible();
 	await expect(objectiveChip).toContainText('Speak with Senior Brother Lu and win the spar');
-	await expect(prompt).toHaveText('Speak with Senior Brother Lu and win the spar');
+	await expect(prompt).toHaveCount(0);
 
 	await walkFramesToPrompt(['s', 'd'], 'Press E to speak with Senior Brother Lu');
 	await page.keyboard.press('e');

@@ -1,5 +1,9 @@
 import { createInputController, type InputController } from '$lib/game/input/createInputController';
-import { createWuxiaScene, type WuxiaScene } from '$lib/game/render/createWuxiaScene';
+import {
+	createWuxiaScene,
+	type WuxiaProjectionFrame,
+	type WuxiaScene
+} from '$lib/game/render/createWuxiaScene';
 import { loadGameProgress, saveGameProgress } from '$lib/game/runtime/save';
 import { createInitialGameState, stepGame, toHudSnapshot } from '$lib/game/simulation/state';
 import type {
@@ -22,7 +26,7 @@ export type GameRuntime = {
 
 export type RuntimeOptions = {
 	host: HTMLElement;
-	onHudUpdate: (snapshot: HudSnapshot) => void;
+	onHudUpdate: (snapshot: HudSnapshot, frame?: WuxiaProjectionFrame) => void;
 	onError: (message: string) => void;
 };
 
@@ -37,8 +41,12 @@ export function createGameRuntime(options: RuntimeOptions): GameRuntime {
 	let disposed = false;
 	let started = false;
 
-	function publish(): void {
-		options.onHudUpdate(toHudSnapshot(state));
+	function publish(frame?: WuxiaProjectionFrame): void {
+		if (frame) {
+			options.onHudUpdate(toHudSnapshot(state), frame);
+		} else {
+			options.onHudUpdate(toHudSnapshot(state));
+		}
 	}
 
 	function persistProgressIfChanged(): void {
@@ -61,8 +69,8 @@ export function createGameRuntime(options: RuntimeOptions): GameRuntime {
 		previousTime = now;
 
 		stepGame(state, input.getSnapshot(), deltaTime);
-		scene.render(state, deltaTime);
-		publish();
+		const frame = scene.render(state, deltaTime);
+		publish(frame ?? undefined);
 		persistProgressIfChanged();
 
 		frameId = window.requestAnimationFrame(loop);

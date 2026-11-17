@@ -1,11 +1,11 @@
 import { DASH_MARKERS, QUEST_STEPS, type QuestStep } from './villageContent';
-import type { ItemId, MarkerProgress, QuestProgress, VillagerId } from './types';
+import type { ItemId, MarkerProgress, QuestProgress, QuestTargetId, VillagerId } from './types';
 
 export type QuestEvent =
 	| { type: 'dialogueComplete'; villagerId: VillagerId }
 	| { type: 'duelWon' }
 	| { type: 'markerCrossed' }
-	| { type: 'objectUsed'; targetId: string }
+	| { type: 'objectUsed'; targetId: QuestTargetId }
 	| { type: 'quickSlotAssigned'; itemId: ItemId };
 
 export function createInitialQuest(): QuestProgress {

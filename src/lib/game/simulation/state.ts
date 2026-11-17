@@ -33,7 +33,7 @@ import {
 	useConsumable
 } from './items';
 import { activeDialogueLine, advanceDialogue } from './dialogue';
-import { nearestInteractTarget, villagerPosition } from './interaction';
+import { interactTargets, nearestInteractTarget, villagerPosition } from './interaction';
 import { activeQuestStep, advanceQuest, createInitialQuest, markerProgress } from './quest';
 import { DASH_MARKERS, getVillager, PLAYER_SPAWN, SHRINE_BELL, VILLAGERS } from './villageContent';
 import type { AttackTiming } from './combat';
@@ -213,6 +213,8 @@ export function toHudSnapshot(state: GameState): HudSnapshot {
 		prompt: state.prompt,
 		dialogue: activeDialogueLine(state),
 		interactTarget: hudInteractTarget(state),
+		questTarget: hudQuestTarget(state),
+		playerPosition: { ...state.player.position },
 		region: regionAt(state.player.position),
 		playerHealth: Math.round(state.player.health),
 		playerMaxHealth: Math.round(state.player.maxHealth),
@@ -238,8 +240,22 @@ function hudInteractTarget(state: GameState): HudSnapshot['interactTarget'] {
 	}
 	return {
 		id: target.id,
-		name: target.id === SHRINE_BELL.id ? SHRINE_BELL.name : getVillager(target.id).name
+		name: target.id === SHRINE_BELL.id ? SHRINE_BELL.name : getVillager(target.id).name,
+		position: { ...target.position }
 	};
+}
+
+function hudQuestTarget(state: GameState): HudSnapshot['questTarget'] {
+	const step = activeQuestStep(state.quest);
+	if (!step) {
+		return null;
+	}
+	if (step.targetId === 'gate_markers') {
+		const marker = DASH_MARKERS[state.quest.stepProgress];
+		return marker ? { id: 'gate_markers', position: { ...marker } } : null;
+	}
+	const target = interactTargets(state).find((entry) => entry.id === step.targetId);
+	return target ? { id: target.id, position: { ...target.position } } : null;
 }
 
 function getPlayerActionStatus(combatAction: CombatActionState): PlayerActionStatus {

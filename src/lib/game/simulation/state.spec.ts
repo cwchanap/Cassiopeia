@@ -146,7 +146,8 @@ describe('wuxia simulation state', () => {
 		stepGame(state, idleInput, frame);
 		expect(toHudSnapshot(state).interactTarget).toEqual({
 			id: 'elder_shen',
-			name: elder.name
+			name: elder.name,
+			position: { x: elder.position.x + 0, z: elder.position.z }
 		});
 
 		stepGame(state, { ...idleInput, toggleInventory: true }, frame);
@@ -944,7 +945,11 @@ describe('shrine bell', () => {
 
 		expect(state.prompt).toBe('Press E to ring the shrine bell');
 		const hud = toHudSnapshot(state);
-		expect(hud.interactTarget).toEqual({ id: 'shrine_bell', name: 'Shrine Bell' });
+		expect(hud.interactTarget).toEqual({
+			id: 'shrine_bell',
+			name: 'Shrine Bell',
+			position: SHRINE_BELL.position
+		});
 		expect(hud.region).toBe('Whispering Bamboo Shrine');
 
 		stepGame(state, { ...idleInput, interact: true }, frame);
@@ -971,6 +976,67 @@ describe('shrine bell', () => {
 		finishDialogue(atZhu, zhu.ambientLines.length);
 		expect(atZhu.mode).toEqual({ kind: 'explore' });
 		expect(atZhu.quest).toEqual({ stepIndex: 3, stepProgress: 0 });
+	});
+});
+
+describe('hud quest target and player position', () => {
+	function atStep(stepIndex: number, stepProgress = 0): GameState {
+		const state = createInitialGameState();
+		state.quest = { stepIndex, stepProgress };
+		return state;
+	}
+
+	it('exposes the player position on the snapshot', () => {
+		const state = createInitialGameState();
+		state.player.position = { x: 3.5, z: -7.25 };
+
+		const hud = toHudSnapshot(state);
+		expect(hud.playerPosition).toEqual({ x: 3.5, z: -7.25 });
+
+		state.player.position.x = 99;
+		expect(hud.playerPosition.x).toBe(3.5);
+	});
+
+	it('points at each stage target through all five quest steps', () => {
+		expect(toHudSnapshot(atStep(0)).questTarget).toEqual({
+			id: 'elder_shen',
+			position: elder.position
+		});
+		expect(toHudSnapshot(atStep(1, 0)).questTarget).toEqual({
+			id: 'gate_markers',
+			position: DASH_MARKERS[0]
+		});
+		expect(toHudSnapshot(atStep(1, 2)).questTarget).toEqual({
+			id: 'gate_markers',
+			position: DASH_MARKERS[2]
+		});
+		expect(toHudSnapshot(atStep(2)).questTarget).toEqual({
+			id: 'auntie_qin',
+			position: qin.position
+		});
+		expect(toHudSnapshot(atStep(3)).questTarget).toEqual({
+			id: 'shrine_bell',
+			position: SHRINE_BELL.position
+		});
+		expect(toHudSnapshot(atStep(4)).questTarget).toEqual({
+			id: 'senior_brother_lu',
+			position: lu.position
+		});
+	});
+
+	it('tracks Senior Brother Lu at his live rival position', () => {
+		const state = atStep(4);
+		state.rival.position = { x: -12.5, z: 6.5 };
+
+		expect(toHudSnapshot(state).questTarget).toEqual({
+			id: 'senior_brother_lu',
+			position: { x: -12.5, z: 6.5 }
+		});
+	});
+
+	it('returns no quest target once the quest is complete', () => {
+		const state = atStep(QUEST_STEPS.length);
+		expect(toHudSnapshot(state).questTarget).toBeNull();
 	});
 });
 
@@ -1036,7 +1102,11 @@ describe('first-day journey', () => {
 			walkTo(state, waypoint);
 		}
 		expect(hud().region).toBe('Whispering Bamboo Shrine');
-		expect(hud().interactTarget).toEqual({ id: 'shrine_bell', name: 'Shrine Bell' });
+		expect(hud().interactTarget).toEqual({
+			id: 'shrine_bell',
+			name: 'Shrine Bell',
+			position: SHRINE_BELL.position
+		});
 		expect(state.prompt).toBe('Press E to ring the shrine bell');
 		stepGame(state, { ...idleInput, interact: true }, frame);
 		expect(state.quest).toEqual({ stepIndex: 4, stepProgress: 0 });

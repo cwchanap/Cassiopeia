@@ -453,6 +453,21 @@ describe('scene lifecycle', () => {
 		expect(renderer.domElement.removed).toBe(true);
 	});
 
+	test('returns the smoothed projection frame and null once disposed', () => {
+		loaderMock.loadWuxiaAssets.mockImplementation(() => () => {});
+		const { handle } = createScene();
+		const state = createInitialGameState();
+
+		const frame = handle.render(state, 1 / 60);
+		expect(frame).not.toBeNull();
+		expect(frame!.viewport).toEqual({ width: 960, height: 640 });
+		expect(frame!.pose.target.x).toBeCloseTo(state.player.position.x);
+		expect(frame!.pose.target.z).toBeCloseTo(state.player.position.z);
+
+		handle.dispose();
+		expect(handle.render(state, 1 / 60)).toBeNull();
+	});
+
 	test('renders Lu visible at his authored post and heading after a real duel victory', () => {
 		loaderMock.loadWuxiaAssets.mockImplementation(() => () => {});
 		const { handle, scene } = createScene();

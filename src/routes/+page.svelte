@@ -2,9 +2,13 @@
 	import { createGameRuntime, type GameRuntime } from '$lib/game/runtime/createGameRuntime';
 	import { createInitialGameState, toHudSnapshot } from '$lib/game/simulation/state';
 	import type { HudSnapshot, ItemId, QuickSlotNumber } from '$lib/game/simulation/types';
+	import type { WuxiaProjectionFrame } from '$lib/game/render/createWuxiaScene';
 	import { hudLayout } from '$lib/hud/layout';
 	import Vitals from '$lib/hud/Vitals.svelte';
 	import TechniqueBar from '$lib/hud/TechniqueBar.svelte';
+	import QuestScroll from '$lib/hud/QuestScroll.svelte';
+	import MiniMap from '$lib/hud/MiniMap.svelte';
+	import WorldAnchors from '$lib/hud/WorldAnchors.svelte';
 	import type { Attachment } from 'svelte/attachments';
 	import '$lib/hud/hud.css';
 
@@ -21,6 +25,7 @@
 		jade_breathing_charm: 3
 	};
 	let hud = $state<HudSnapshot>(toHudSnapshot(createInitialGameState()));
+	let frame = $state<WuxiaProjectionFrame | null>(null);
 
 	const layout = $derived(
 		hudLayout({ mode: hud.mode, isPaused: hud.isPaused, bagOpen: hud.inventory.isOpen })
@@ -39,13 +44,16 @@
 	const mountRuntime: Attachment<HTMLDivElement> = (node) => {
 		runtime = createGameRuntime({
 			host: node,
-			onHudUpdate(snapshot) {
+			onHudUpdate(snapshot, nextFrame) {
 				// Capture focus before the HUD becomes inert when the bag opens.
 				if (snapshot.inventory.isOpen && !hud.inventory.isOpen) {
 					bagReturnFocus =
 						document.activeElement instanceof HTMLElement ? document.activeElement : null;
 				}
 				hud = snapshot;
+				if (nextFrame) {
+					frame = nextFrame;
+				}
 			},
 			onError(message) {
 				errorMessage = message;
@@ -195,21 +203,29 @@
 	></div>
 
 	<div class="hud-layer" class:inventory-open={hud.inventory.isOpen}>
-		{#if layout.quest !== 'hidden'}
-			<section
-				class="objective-chip paper-panel"
-				data-testid="objective-chip"
-				aria-label="Current objective"
-			>
-				<span class="objective-mark" aria-hidden="true">!</span>
-				<div aria-live="polite">
-					<span class="eyebrow">{modeLabel}{hud.region ? ` · ${hud.region}` : ''}</span><strong
-						>{hud.quest ? `${hud.quest.title} · ` : ''}{hud.objective}{hud.markerProgress
-							? ` · ${hud.markerProgress.current}/${hud.markerProgress.total}`
-							: ''}</strong
-					>
-				</div>
-			</section>
+		{#if layout.map}
+			<MiniMap playerPosition={hud.playerPosition} target={hud.questTarget} />
+		{/if}
+
+		{#if layout.quest}
+			<QuestScroll
+				variant={layout.quest}
+				{modeLabel}
+				region={hud.region}
+				quest={hud.quest}
+				objective={hud.objective}
+				markerProgress={hud.markerProgress}
+			/>
+		{/if}
+
+		{#if layout.anchors}
+			<WorldAnchors
+				{frame}
+				villagers={hud.villagers}
+				target={hud.questTarget}
+				interact={hud.interactTarget}
+				prompt={hud.prompt}
+			/>
 		{/if}
 
 		{#if layout.vitals}
@@ -236,7 +252,7 @@
 		{/if}
 
 		<div class="bottom-hud" inert={hud.inventory.isOpen}>
-			{#if hud.prompt}
+			{#if hud.prompt && hud.mode !== 'explore'}
 				<p class="prompt" data-testid="game-prompt" aria-live="polite">{hud.prompt}</p>
 			{/if}
 			{#if layout.techniques}
@@ -427,7 +443,6 @@
 		pointer-events: auto;
 		background: #1b181580;
 	}
-	.hud-layer.inventory-open .objective-chip,
 	.hud-layer.inventory-open .rival-status,
 	.hud-layer.inventory-open .bottom-hud,
 	.hud-layer.inventory-open .control-hint,
@@ -465,31 +480,6 @@
 		background-image: url('/images/wuxia/hud-atlas.png');
 		background-size: 400% 200%;
 		background-repeat: no-repeat;
-	}
-	.objective-chip {
-		position: absolute;
-		top: max(26px, env(safe-area-inset-top));
-		right: max(26px, env(safe-area-inset-right));
-		display: flex;
-		align-items: center;
-		gap: 14px;
-		width: 276px;
-		padding: 14px 17px;
-	}
-	.objective-mark {
-		display: grid;
-		place-items: center;
-		flex: 0 0 25px;
-		height: 25px;
-		border: 1px solid var(--cinnabar);
-		color: var(--cinnabar);
-		font: 20px var(--font-hanzi);
-		border-radius: 50% 50% 3px 3px;
-	}
-	.objective-chip strong {
-		display: block;
-		margin-top: 5px;
-		font: 600 18px/1.2 var(--font-latin);
 	}
 	.rival-status {
 		position: absolute;
@@ -818,24 +808,6 @@
 		}
 	}
 	@media (max-width: 720px) {
-		.objective-chip {
-			top: max(140px, calc(env(safe-area-inset-top) + 128px));
-			left: 15px;
-			right: auto;
-			width: auto;
-			max-width: calc(100% - 30px);
-			padding: 10px 15px;
-			gap: 12px;
-		}
-		.objective-chip strong {
-			font-size: 16px;
-			margin-top: 4px;
-		}
-		.objective-mark {
-			flex-basis: 20px;
-			height: 24px;
-			font-size: 17px;
-		}
 		.rival-status {
 			top: 210px;
 			width: 230px;
@@ -895,11 +867,6 @@
 		}
 	}
 	@media (max-height: 540px) and (min-width: 600px) {
-		.objective-chip {
-			top: 16px;
-			left: auto;
-			right: 16px;
-		}
 		.rival-status {
 			top: 120px;
 		}
