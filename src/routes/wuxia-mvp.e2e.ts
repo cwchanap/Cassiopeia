@@ -1,9 +1,45 @@
-import { expect, test, type Page } from '@playwright/test';
-import { computeWuxiaCameraPose, projectWorldToScreen } from '$lib/game/render/camera';
+import { mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import {
+	computeWuxiaCameraPose,
+	projectWorldToScreen,
+	screenDirectionToWorld
+} from '$lib/game/render/camera';
 import { DASH_MARKERS, getVillager } from '$lib/game/simulation/villageContent';
 import type { Vec2 } from '$lib/game/simulation/types';
 
 const VIEWPORT = { width: 960, height: 640 };
+
+const HUD_SHOT_DIR = path.resolve(
+	'.superpowers/sdd/2026-11-15-hpa-792-ink-paper-hud/hud-screenshots'
+);
+
+async function attachHudShot(page: Page, testInfo: TestInfo, name: string): Promise<void> {
+	const body = await page.screenshot();
+	await mkdir(HUD_SHOT_DIR, { recursive: true });
+	await writeFile(path.join(HUD_SHOT_DIR, `${name}.png`), body);
+	await testInfo.attach(name, { body, contentType: 'image/png' });
+}
+
+function waitFrames(page: Page, count: number): Promise<void> {
+	return page.evaluate(
+		(ticks) =>
+			new Promise<void>((resolve) => {
+				let remaining = ticks;
+				const tick = () => {
+					remaining -= 1;
+					if (remaining <= 0) {
+						resolve();
+					} else {
+						requestAnimationFrame(tick);
+					}
+				};
+				requestAnimationFrame(tick);
+			}),
+		count
+	);
+}
 
 // Keep software WebGL affordable while exercising the full gameplay and persistence flow.
 test.use({ viewport: VIEWPORT });
@@ -152,7 +188,7 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 }, testInfo) => {
 	// Software WebGL can drop below 5 fps; the capped simulation step then advances only a
 	// fraction of a game second per wall second, so keep wall-clock limits generous.
-	test.setTimeout(600000);
+	test.setTimeout(900000);
 	await page.goto('/');
 	await page.evaluate(() => localStorage.clear());
 	await page.reload();
@@ -184,10 +220,13 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	expect(luPoint.inView).toBe(true);
 	await expectActorVisible(page, elderPoint, 'darkGreen');
 	await expectActorVisible(page, luPoint, 'maroon');
-	await testInfo.attach('first-day-opening-960x640.png', {
-		body: await page.screenshot(),
-		contentType: 'image/png'
-	});
+	await expect(page.getByTestId('mini-map')).toBeVisible();
+	await expect(page.getByTestId('map-target')).toBeVisible();
+	await expect(page.getByTestId('world-anchors')).toBeVisible();
+	await expect(page.locator('.control-hint')).toBeVisible();
+	await expect(page.locator('.pause-hint')).toBeVisible();
+	expect(await page.locator('[data-testid="game-prompt"]').count()).toBeLessThanOrEqual(1);
+	await attachHudShot(page, testInfo, 'hud-1-explore');
 
 	await page.getByTestId('bag-toggle').click();
 	await expect(page.getByTestId('bag-panel')).toBeVisible();
@@ -267,6 +306,11 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	await page.keyboard.press('e');
 	await expect(prompt).toBeInViewport();
 	await expect(prompt).toContainText('Elder Shen:');
+	await expect(page.getByTestId('dialogue-scroll')).toBeVisible();
+	await expect(page.getByTestId('mini-map')).toHaveCount(0);
+	await expect(page.getByTestId('status-cluster')).toHaveCount(0);
+	expect(await page.locator('[data-testid="game-prompt"]').count()).toBe(1);
+	await attachHudShot(page, testInfo, 'hud-2-dialogue');
 	await expect(page.getByTestId('bag-toggle')).toBeHidden();
 	await page.keyboard.press('i');
 	await expect(page.getByTestId('bag-panel')).toBeHidden();
@@ -336,7 +380,7 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	await page.keyboard.press('e');
 	await expect(prompt).toContainText('set it on a quick slot');
 	await page.keyboard.press('e');
-	await expect(prompt).toHaveText('Press E to speak with Auntie Qin');
+	await expect(prompt).toHaveText('Press E to speak with Auntie Qin', { timeout: 30000 });
 	await expect(objectiveChip).toContainText('Fetch medicine from Auntie Qin');
 	await expect(page.getByTestId('item-feedback')).toHaveText('Received Lesser Healing Pill x2');
 
@@ -402,6 +446,8 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	await expect(prompt).toHaveCount(0);
 	await expect(page.getByRole('meter', { name: 'Rival health' })).toBeVisible();
 	await expect(page.getByTestId('mini-map')).toHaveCount(0);
+	await expect(objectiveChip).toContainText('win the spar');
+	await attachHudShot(page, testInfo, 'hud-3-duel');
 	await expect(page.locator('.technique', { hasText: 'Strike' }).locator('small')).toHaveText(
 		/Ready|Striking|Recovering|Staggered/
 	);
@@ -474,6 +520,7 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	}
 
 	await expect(page.getByTestId('objective-chip')).toContainText('free roam');
+	await expect(page.getByTestId('damage-number').first()).toBeVisible();
 	await expect(page.getByTestId('item-feedback')).toContainText('Won:');
 	const rewardPrompt = await page.getByTestId('item-feedback').innerText();
 	const rewardMatch = rewardPrompt.match(/Won: (?<name>.+?) x(?<count>\d+)/);
@@ -543,4 +590,103 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	await expect(async () => {
 		expect(await page.locator('canvas.wuxia-canvas').evaluate((el) => el.clientWidth)).toBe(1180);
 	}).toPass({ timeout: 15000 });
+	await attachHudShot(page, testInfo, 'hud-1180x720-sanity');
+});
+
+test('announces the Jadebank Market arrival banner via the z = 0 bridge route', async ({
+	page
+}, testInfo) => {
+	test.setTimeout(600000);
+	await page.goto('/');
+	await page.evaluate(() => localStorage.clear());
+	await page.reload();
+	await expect(page.getByTestId('game-shell')).toBeVisible();
+	await expect(page.getByTestId('mini-map')).toBeVisible();
+
+	const banner = page.getByTestId('place-banner');
+	const readPlayerPosition = async (): Promise<Vec2 | null> => {
+		const rim = page.getByTestId('map-rim-target');
+		const rimMetres = page.getByTestId('map-rim-metres');
+		if ((await rim.count()) === 0 || (await rimMetres.count()) === 0) {
+			return null;
+		}
+		const transform = await rim.getAttribute('transform').catch(() => null);
+		const metresText = await rimMetres.textContent().catch(() => null);
+		const match = transform && /translate\(([-\d.]+)[ ,]+([-\d.]+)\)/.exec(transform);
+		const metres = metresText && Number(/([\d.]+)m/.exec(metresText)?.[1]);
+		if (!match || !metres) {
+			return null;
+		}
+		const magnitude = Math.hypot(Number(match[1]), Number(match[2]));
+		if (magnitude === 0) {
+			return null;
+		}
+		const delta = screenDirectionToWorld(
+			(Number(match[1]) / magnitude) * metres,
+			(Number(match[2]) / magnitude) * metres
+		);
+		return { x: elder.position.x - delta.x, z: elder.position.z - delta.z };
+	};
+
+	const holdKeysUntil = async (
+		keys: string[],
+		done: () => Promise<boolean>,
+		description: string
+	) => {
+		for (const key of keys) {
+			await page.keyboard.down(key);
+		}
+		const deadline = Date.now() + 300000;
+		try {
+			while (Date.now() < deadline) {
+				if (await done()) {
+					return;
+				}
+				await waitFrames(page, 1);
+			}
+			throw new Error(`Timed out while walking: ${description}`);
+		} finally {
+			for (const key of keys) {
+				await page.keyboard.up(key);
+			}
+		}
+	};
+
+	const arrival: { hanzi: string | null; name: string | null; shot: Buffer | null } = {
+		hanzi: null,
+		name: null,
+		shot: null
+	};
+
+	await holdKeysUntil(
+		['s', 'd'],
+		async () => ((await readPlayerPosition())?.x ?? 0) >= 22,
+		'crossing the z = 0 bridge east to x >= 21'
+	);
+	await holdKeysUntil(
+		['s', 'a'],
+		async () => {
+			if (await banner.isVisible().catch(() => false)) {
+				arrival.hanzi = await banner.locator('.place-hanzi').textContent();
+				arrival.name = await banner.locator('.place-name').textContent();
+				arrival.shot = await page.screenshot();
+				return true;
+			}
+			return ((await readPlayerPosition())?.z ?? 0) >= 28;
+		},
+		'heading south along x ~= 24 into Jadebank Market at z >= 27'
+	);
+
+	if (!arrival.shot) {
+		throw new Error('Reached z >= 28 without a visible Jadebank Market place banner');
+	}
+	await mkdir(HUD_SHOT_DIR, { recursive: true });
+	await writeFile(path.join(HUD_SHOT_DIR, 'hud-4-arrival.png'), arrival.shot);
+	await testInfo.attach('hud-4-arrival', { body: arrival.shot, contentType: 'image/png' });
+	expect(arrival.hanzi).toBe('玉津集');
+	expect(arrival.name).toBe('Jadebank Market');
+	await expect(page.getByTestId('mini-map')).toBeVisible();
+	await expect(page.getByTestId('map-rim-target')).toBeVisible();
+	const metres = (await page.getByTestId('map-rim-metres').textContent()) ?? '';
+	expect(Number(/([\d.]+)m/.exec(metres)?.[1])).toBeGreaterThan(20);
 });
