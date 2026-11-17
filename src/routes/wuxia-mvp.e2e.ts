@@ -457,6 +457,9 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 				return { sel, box: await locator.boundingBox() };
 			})
 		);
+		const rivalBox = boxes.find((b) => b.sel === 'rival-status')!.box;
+		expect(rivalBox, 'rival-status must have a bounding box').not.toBeNull();
+		expect(rivalBox!.width, 'rival meter must stay readable').toBeGreaterThanOrEqual(200);
 		for (const a of boxes) {
 			for (const b of boxes) {
 				if (a === b) continue;
@@ -468,9 +471,10 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 			}
 		}
 	};
-	await expectDuelChromeSeparated();
-	await page.setViewportSize({ width: 1180, height: 720 });
-	await expectDuelChromeSeparated();
+	for (const width of [800, 960, 1100, 1180]) {
+		await page.setViewportSize({ width, height: width === 1180 ? 720 : 640 });
+		await expectDuelChromeSeparated();
+	}
 	await page.setViewportSize({ width: 960, height: 640 });
 	await attachHudShot(page, testInfo, 'hud-3-duel');
 	await expect(page.locator('.technique', { hasText: 'Strike' }).locator('small')).toHaveText(

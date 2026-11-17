@@ -201,7 +201,7 @@
 		white-space: nowrap;
 	}
 	.technique-hanzi {
-		color: var(--cinnabar);
+		color: var(--cinnabar-bright);
 		font-size: 11px;
 		line-height: 1;
 	}
@@ -220,7 +220,7 @@
 	}
 	.technique.cooling > small,
 	.technique.busy > small {
-		color: var(--cinnabar);
+		color: var(--cinnabar-bright);
 	}
 	.quick-slots {
 		display: grid;

@@ -501,6 +501,9 @@
 		padding: 10px 15px 12px;
 		transform: translateX(-50%);
 	}
+	.rival-status .eyebrow {
+		color: var(--cinnabar-bright);
+	}
 	.rival-status > div:first-child {
 		display: flex;
 		align-items: center;
@@ -784,12 +787,18 @@
 		align-items: center;
 		gap: 12px;
 	}
-	@media (max-width: 1050px) {
+	@media (min-width: 961px) and (max-width: 1171px) {
 		.rival-status {
 			left: 382px;
 			right: 316px;
 			width: auto;
 			transform: none;
+		}
+	}
+	@media (min-width: 721px) and (max-width: 960px) {
+		.rival-status {
+			top: 162px;
+			width: min(440px, calc(100% - 52px));
 		}
 	}
 	@media (max-width: 1050px) {

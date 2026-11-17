@@ -20,6 +20,7 @@
 	--ink: #1b1815;
 	--ink-soft: #453d33;
 	--cinnabar: #a82c22;
+	--cinnabar-bright: color-mix(in srgb, var(--cinnabar) 60%, var(--paper));
 	--health: #c4402f;
 	--qi: #4fa58f;
 	--wood: #3a2a1c;

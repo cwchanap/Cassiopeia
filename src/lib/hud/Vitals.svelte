@@ -83,7 +83,7 @@
 	}
 	.eyebrow {
 		display: block;
-		color: var(--cinnabar);
+		color: var(--cinnabar-bright);
 		font-size: 9px;
 		letter-spacing: 0.2em;
 		text-transform: uppercase;
