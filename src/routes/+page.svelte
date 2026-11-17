@@ -11,6 +11,7 @@
 	import WorldAnchors from '$lib/hud/WorldAnchors.svelte';
 	import DialogueScroll from '$lib/hud/DialogueScroll.svelte';
 	import DamageNumbers from '$lib/hud/DamageNumbers.svelte';
+	import PlaceBanner from '$lib/hud/PlaceBanner.svelte';
 	import type { Attachment } from 'svelte/attachments';
 	import '$lib/hud/hud.css';
 
@@ -256,6 +257,8 @@
 		{#if layout.dialogue && hud.dialogue}
 			<DialogueScroll dialogue={hud.dialogue} />
 		{/if}
+
+		<PlaceBanner region={hud.region} visible={layout.banner} />
 
 		{#if layout.damageNumbers}
 			<DamageNumbers {frame} numbers={hud.damageNumbers} />
