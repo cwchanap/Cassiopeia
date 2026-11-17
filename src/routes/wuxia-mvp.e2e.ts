@@ -226,14 +226,38 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 		);
 	const walkFramesToPrompt = async (keys: string[], text: string) => {
 		await expect(async () => {
-			for (const key of keys) {
+			let moveKeys = keys;
+			const transform = await page
+				.getByTestId('map-target')
+				.getAttribute('transform')
+				.catch(() => null);
+			const match = transform && /translate\(([-\d.]+)[ ,]+([-\d.]+)\)/.exec(transform);
+			if (match) {
+				const right = Number(match[1]);
+				const down = Number(match[2]);
+				moveKeys = [
+					Math.abs(down) > 4 ? (down > 0 ? 's' : 'w') : null,
+					Math.abs(right) > 4 ? (right > 0 ? 'd' : 'a') : null
+				].filter((key): key is string => key !== null);
+				if (moveKeys.length === 0) {
+					moveKeys = keys;
+				}
+			}
+			for (const key of moveKeys) {
 				await page.keyboard.down(key);
 			}
-			await renderedFrames(3);
-			for (const key of keys) {
-				await page.keyboard.up(key);
+			try {
+				for (let frame = 0; frame < 6; frame++) {
+					await renderedFrames(1);
+					if ((await prompt.allInnerTexts().catch(() => []))[0] === text) {
+						return;
+					}
+				}
+			} finally {
+				for (const key of moveKeys) {
+					await page.keyboard.up(key);
+				}
 			}
-			await renderedFrames(1);
 			expect(await prompt.allInnerTexts().catch(() => [])).toEqual([text]);
 		}).toPass({ timeout: 120000 });
 	};
