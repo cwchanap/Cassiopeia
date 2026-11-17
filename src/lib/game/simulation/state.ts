@@ -219,9 +219,12 @@ export function toHudSnapshot(state: GameState): HudSnapshot {
 		playerQi: Math.round(state.player.qi),
 		playerMaxQi: Math.round(state.player.maxQi),
 		rivalHealth: Math.round(state.rival.health),
+		rivalMaxHealth: Math.round(state.rival.maxHealth),
 		dashCooldown: state.player.dashCooldown,
+		dashCooldownMax: DASH_COOLDOWN,
 		attackCooldown: state.player.attackCooldown,
 		qiCooldown: state.player.qiCooldown,
+		qiCooldownMax: QI_BURST_COOLDOWN,
 		playerActionStatus: getPlayerActionStatus(state.player.combatAction),
 		isPaused: state.paused,
 		inventory: createHudInventorySnapshot(state.items, state.inventoryOpen, state.itemFeedback)

@@ -243,7 +243,7 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	await page.keyboard.press('e');
 	await expect(prompt).toBeInViewport();
 	await expect(prompt).toContainText('Elder Shen:');
-	await expect(page.getByTestId('bag-toggle')).toBeDisabled();
+	await expect(page.getByTestId('bag-toggle')).toBeHidden();
 	await page.keyboard.press('i');
 	await expect(page.getByTestId('bag-panel')).toBeHidden();
 	await expect(prompt).toContainText('So you are the new initiate');
