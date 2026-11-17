@@ -88,12 +88,13 @@
 		white-space: nowrap;
 	}
 	.name-tag {
-		padding: 2px 7px;
-		border-radius: 3px;
-		background: #1b1815b8;
-		color: var(--paper);
-		font: 600 11px/1.3 var(--font-latin);
-		letter-spacing: 0.04em;
+		padding: 3px 8px;
+		border: 1px solid color-mix(in srgb, var(--wood) 55%, transparent);
+		border-radius: 2px;
+		background: var(--paper);
+		color: var(--ink);
+		font: 600 12px/1.2 var(--font-latin);
+		box-shadow: 0 2px 5px rgb(0 0 0 / 30%);
 	}
 	.quest-tag {
 		color: var(--cinnabar);
@@ -101,12 +102,12 @@
 		text-shadow: 0 1px 4px rgb(27 24 21 / 60%);
 	}
 	.prompt-tag {
-		padding: 5px 14px;
-		border: 1px solid color-mix(in srgb, var(--wood) 55%, transparent);
-		border-radius: 3px 9px 4px 11px / 9px 4px 10px 5px;
-		background: color-mix(in srgb, var(--paper) 94%, transparent);
-		color: var(--ink);
+		padding: 4px 10px;
+		border: 1px solid color-mix(in srgb, var(--paper) 35%, transparent);
+		border-radius: 2px;
+		background: rgb(27 24 21 / 94%);
+		color: var(--paper);
 		font: 600 13px/1.3 var(--font-latin);
-		box-shadow: 0 3px 12px rgb(0 0 0 / 35%);
+		box-shadow: 0 2px 8px rgb(0 0 0 / 35%);
 	}
 </style>

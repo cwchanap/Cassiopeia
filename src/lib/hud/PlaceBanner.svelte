@@ -6,7 +6,7 @@
 	let {
 		region,
 		visible = true,
-		duration = 2600
+		duration = 5000
 	}: {
 		region: string | null;
 		visible?: boolean;
@@ -36,6 +36,7 @@
 			>
 				<span class="place-hanzi hanzi" lang="zh">{title}</span>
 				<span class="place-name">{region}</span>
+				<span class="place-seal hanzi" aria-hidden="true">{title.slice(-1)}</span>
 			</div>
 		{/if}
 	</div>
@@ -49,40 +50,79 @@
 		display: grid;
 		justify-items: center;
 		gap: 6px;
-		padding: 14px 34px 12px;
+		width: min(410px, calc(100% - 40px));
+		padding: 16px 48px 14px;
 		transform: translateX(-50%);
-		border-top: 1px solid color-mix(in srgb, var(--paper) 45%, transparent);
-		border-bottom: 1px solid color-mix(in srgb, var(--paper) 45%, transparent);
-		background: linear-gradient(
-			90deg,
-			transparent,
-			rgb(27 24 21 / 62%) 18%,
-			rgb(27 24 21 / 62%) 82%,
-			transparent
-		);
 		color: var(--paper);
 		text-align: center;
 		text-shadow: 0 2px 8px rgb(0 0 0 / 65%);
+		isolation: isolate;
+	}
+	.place-banner::before {
+		position: absolute;
+		z-index: -1;
+		inset: 0;
+		background: linear-gradient(100deg, rgb(27 24 21 / 90%), rgb(27 24 21 / 86%));
+		clip-path: polygon(
+			0 22%,
+			6% 4%,
+			22% 0,
+			49% 4%,
+			77% 0,
+			95% 8%,
+			100% 27%,
+			97% 60%,
+			100% 88%,
+			87% 100%,
+			52% 96%,
+			15% 100%,
+			3% 91%
+		);
+		content: '';
 	}
 	.place-banner.obscured {
 		visibility: hidden;
 	}
 	.place-hanzi {
-		font-size: 46px;
+		font-size: 48px;
 		line-height: 1.1;
 		letter-spacing: 0.14em;
 	}
 	.place-name {
-		font-size: 12px;
+		padding-top: 5px;
+		border-top: 1px solid color-mix(in srgb, var(--paper) 60%, transparent);
+		font-size: 14px;
 		letter-spacing: 0.32em;
-		text-transform: uppercase;
+	}
+	.place-seal {
+		position: absolute;
+		right: 23px;
+		bottom: 12px;
+		display: grid;
+		place-items: center;
+		width: 32px;
+		height: 32px;
+		border-radius: 2px;
+		background: var(--cinnabar);
+		font-size: 23px;
+		line-height: 1;
+		transform: rotate(5deg);
 	}
 	@media (max-width: 720px) {
+		.place-banner {
+			padding: 14px 42px;
+		}
 		.place-hanzi {
 			font-size: 34px;
 		}
 		.place-name {
-			font-size: 10px;
+			font-size: 12px;
+		}
+		.place-seal {
+			right: 17px;
+			width: 25px;
+			height: 25px;
+			font-size: 18px;
 		}
 	}
 </style>

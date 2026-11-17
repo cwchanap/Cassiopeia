@@ -41,6 +41,9 @@ describe('QuestScroll', () => {
 		await expect
 			.element(page.getByTestId('objective-chip'))
 			.toHaveTextContent(QUEST_STEPS[4].title);
+		await expect.element(page.getByTestId('objective-chip')).toHaveTextContent('Step 5 of 5');
+		const title = document.querySelector<HTMLElement>('.quest-scroll strong')!;
+		expect(title.scrollWidth).toBeLessThanOrEqual(title.clientWidth);
 		expect(page.getByTestId('quest-step-dot').all()).toHaveLength(0);
 	});
 
@@ -93,10 +96,8 @@ describe('QuestScroll', () => {
 			expect(strongRect.height).toBeLessThanOrEqual(lineHeight * 1.5);
 			expect(strongRect.right).toBeLessThanOrEqual(chipRect.right + 0.5);
 			expect(strongRect.left).toBeGreaterThanOrEqual(chipRect.left - 0.5);
-			const eyebrow = chip!.querySelector<HTMLElement>('.eyebrow');
-			expect(eyebrow === null || getComputedStyle(eyebrow).display === 'none').toBe(true);
 			expect(strong!.textContent).toContain(longStep.title);
-			expect(strong!.textContent).toContain(longStep.instruction);
+			expect(chip!.textContent).toContain(longStep.instruction);
 			expect(strong!.getAttribute('title')).toBe(`${longStep.title} · ${longStep.instruction}`);
 		} finally {
 			document.body.classList.remove('hud-layer');

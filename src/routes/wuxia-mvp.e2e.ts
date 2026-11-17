@@ -477,7 +477,7 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 			}
 		}
 	};
-	for (const width of [800, 937, 938, 960, 1100, 1180]) {
+	for (const width of [320, 390, 720, 721, 800, 937, 938, 960, 1100, 1180]) {
 		await page.setViewportSize({ width, height: width === 1180 ? 720 : 640 });
 		await expectDuelChromeSeparated(width >= 938);
 	}
@@ -626,6 +626,31 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 		expect(await page.locator('canvas.wuxia-canvas').evaluate((el) => el.clientWidth)).toBe(1180);
 	}).toPass({ timeout: 15000 });
 	await attachHudShot(page, testInfo, 'hud-1180x720-sanity');
+
+	for (const width of [320, 390]) {
+		await page.setViewportSize({ width, height: 640 });
+		const chrome = [
+			page.getByTestId('status-cluster'),
+			page.getByTestId('mini-map'),
+			page.getByTestId('objective-chip'),
+			page.locator('.bottom-hud')
+		];
+		const boxes = await Promise.all(
+			chrome.map(async (locator) => {
+				await expect(locator).toBeInViewport();
+				return (await locator.boundingBox())!;
+			})
+		);
+		for (let i = 0; i < boxes.length; i++) {
+			for (let j = i + 1; j < boxes.length; j++) {
+				const a = boxes[i];
+				const b = boxes[j];
+				const overlapX = a.x < b.x + b.width && b.x < a.x + a.width;
+				const overlapY = a.y < b.y + b.height && b.y < a.y + a.height;
+				expect(overlapX && overlapY, `HUD panels must not overlap at ${width}px`).toBe(false);
+			}
+		}
+	}
 });
 
 type BannerProbe = {
@@ -746,6 +771,10 @@ test('announces the Jadebank Market arrival banner via the z = 0 bridge route', 
 				arrival.name = info.name;
 				arrival.opacity = info.opacity;
 				await page.screenshot({ path: arrival.shot });
+				const afterShot = await probePlaceBanner(page);
+				if (!afterShot?.visible || afterShot.opacity < 0.8) {
+					throw new Error('Jadebank Market banner expired while capturing the screenshot');
+				}
 				return true;
 			}
 			if (info?.visible) {
