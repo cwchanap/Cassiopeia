@@ -92,8 +92,26 @@ tends the bell, take the eastern bypass around the ancestral hall to the monaste
 the west riverbank south and cross the final bridge to Jadebank Market where Peddler Wei works
 the boardwalk. The far northern bridge loops back to the rice farms.
 
+The runtime HUD (`src/lib/hud/`) consumes these atlases directly: `ink-portraits.png` cells
+0–5 map Initiate, Elder Shen, Senior Brother Lu, Auntie Qin, Old Zhu and Peddler Wei to the
+dialogue scroll portrait, and `ink-icons.png` cells 0–6 (Qinggong, Strike, Qi burst, healing
+pill, qi pill, bag, training robe) map to `itemArt`/`TechniqueBar` indices in
+`src/routes/+page.svelte`; `rice-paper.png` tiles every `paper-panel`. Hanzi HUD text (vital
+labels, region titles in `src/lib/hud/labels.ts`) renders with the subset
+`../../static/fonts/wuxia/MaShanZheng-hanzi.woff2`; `hanzi-glyphs.txt` is the required glyph
+inventory checked by `src/lib/hud/fonts.spec.ts`, and `scripts/build_wuxia_fonts.py`
+regenerates the subset and `hanzi-subset-coverage.txt`/`hanzi-subset.sha256` from the OFL
+sources.
+
 Check the bundle contract and loader lifecycle with:
 
 ```sh
 bun x vitest run src/lib/game/render/wuxiaAssets.spec.ts
+```
+
+HUD component/pure tests and the end-to-end visual pass run with:
+
+```sh
+bun x vitest run src/lib/hud
+bun x playwright test src/routes/wuxia-mvp.e2e.ts
 ```
