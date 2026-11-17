@@ -787,7 +787,7 @@
 		align-items: center;
 		gap: 12px;
 	}
-	@media (min-width: 961px) and (max-width: 1171px) {
+	@media (min-width: 938px) and (max-width: 1171px) {
 		.rival-status {
 			left: 382px;
 			right: 316px;
@@ -795,7 +795,7 @@
 			transform: none;
 		}
 	}
-	@media (min-width: 721px) and (max-width: 960px) {
+	@media (min-width: 721px) and (max-width: 937px) {
 		.rival-status {
 			top: 162px;
 			width: min(440px, calc(100% - 52px));
