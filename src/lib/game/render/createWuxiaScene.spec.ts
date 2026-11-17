@@ -468,6 +468,30 @@ describe('scene lifecycle', () => {
 		expect(handle.render(state, 1 / 60)).toBeNull();
 	});
 
+	test('reports follow lag and live host size in the returned frame', () => {
+		loaderMock.loadWuxiaAssets.mockImplementation(() => () => {});
+		const { handle } = createScene();
+		const state = createInitialGameState();
+
+		handle.render(state, 1 / 60);
+		state.player.position = { x: 4, z: 0 };
+		const frame = handle.render(state, 1 / 60);
+
+		expect(frame).not.toBeNull();
+		expect(frame!.pose.target.x).toBeGreaterThan(0);
+		expect(frame!.pose.target.x).toBeLessThan(4);
+		expect(frame!.pose.position.x).toBeGreaterThan(frame!.pose.target.x);
+
+		host.clientWidth = 640;
+		host.clientHeight = 480;
+		const resized = handle.render(state, 1 / 60);
+		expect(resized!.viewport).toEqual({ width: 640, height: 480 });
+		host.clientWidth = 960;
+		host.clientHeight = 640;
+
+		handle.dispose();
+	});
+
 	test('renders Lu visible at his authored post and heading after a real duel victory', () => {
 		loaderMock.loadWuxiaAssets.mockImplementation(() => () => {});
 		const { handle, scene } = createScene();

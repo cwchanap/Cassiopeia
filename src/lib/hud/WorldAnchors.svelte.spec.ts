@@ -1,7 +1,11 @@
 import { page } from 'vitest/browser';
 import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
-import { computeWuxiaCameraPose } from '$lib/game/render/camera';
+import {
+	computeWuxiaCameraPose,
+	followCameraPose,
+	projectWorldToScreen
+} from '$lib/game/render/camera';
 import { getVillager, SHRINE_BELL } from '$lib/game/simulation/villageContent';
 import WorldAnchors from './WorldAnchors.svelte';
 
@@ -50,23 +54,73 @@ describe('WorldAnchors', () => {
 		await expect.element(page.getByTestId('quest-anchor')).toBeInTheDocument();
 	});
 
-	it('anchors the E prompt at the interact target position with the prompt text', async () => {
-		render(WorldAnchors, {
+	it('anchors the E prompt at the projected interact position through follow lag and resize', async () => {
+		const bell = SHRINE_BELL.position;
+		const villagerPosition = { x: bell.x + 3, z: bell.z + 1 };
+		const targetPosition = { x: bell.x - 3.5, z: bell.z - 2 };
+		const desiredPose = computeWuxiaCameraPose({
+			mode: 'explore',
+			playerPosition: bell,
+			rival: null
+		});
+		const trailingPose = computeWuxiaCameraPose({
+			mode: 'explore',
+			playerPosition: { x: bell.x + 6, z: bell.z + 4 },
+			rival: null
+		});
+		const laggedPose = followCameraPose(trailingPose, desiredPose, 0.4);
+
+		const { container, rerender } = render(WorldAnchors, {
 			props: {
-				frame: frameAt(SHRINE_BELL.position.x, SHRINE_BELL.position.z),
-				villagers: [],
-				target: { id: 'shrine_bell', position: SHRINE_BELL.position },
-				interact: {
-					id: 'shrine_bell',
-					name: 'Shrine Bell',
-					position: SHRINE_BELL.position
-				},
+				frame: { pose: laggedPose, viewport },
+				villagers: [{ id: elder.id, name: elder.name, position: villagerPosition }],
+				target: { id: 'gate_markers', position: targetPosition },
+				interact: { id: 'shrine_bell', name: 'Shrine Bell', position: bell },
 				prompt: 'Press E to ring the shrine bell'
 			}
 		});
 
-		await expect
-			.element(page.getByTestId('game-prompt'))
-			.toHaveTextContent('Press E to ring the shrine bell');
+		const prompt = container.querySelector<HTMLElement>('[data-testid="game-prompt"]')!;
+		const nameTag = container.querySelector<HTMLElement>('[data-testid="world-anchor"]')!;
+		const questTag = container.querySelector<HTMLElement>('[data-testid="quest-anchor"]')!;
+		expect(prompt).not.toBeNull();
+		expect(nameTag).not.toBeNull();
+		expect(questTag).not.toBeNull();
+		expect(prompt.textContent).toBe('Press E to ring the shrine bell');
+
+		function expectedTop(point: { x: number; z: number }, height: number) {
+			return projectWorldToScreen({ x: point.x, y: height, z: point.z }, laggedPose, viewport);
+		}
+
+		const bellScreen = expectedTop(bell, 1.6);
+		expect(bellScreen.inView).toBe(true);
+		expect(parseFloat(prompt.style.left)).toBeCloseTo(bellScreen.x, 1);
+		expect(parseFloat(prompt.style.top)).toBeCloseTo(bellScreen.y, 1);
+		expect(
+			Math.abs(parseFloat(prompt.style.left) - expectedTop(villagerPosition, 1.95).x)
+		).toBeGreaterThan(20);
+		expect(
+			Math.abs(parseFloat(prompt.style.left) - expectedTop(targetPosition, 1.7).x)
+		).toBeGreaterThan(20);
+
+		const resized = { width: 480, height: 800 };
+		const laggedAgain = followCameraPose(laggedPose, desiredPose, 0.6);
+		await rerender({
+			frame: { pose: laggedAgain, viewport: resized },
+			villagers: [{ id: elder.id, name: elder.name, position: villagerPosition }],
+			target: { id: 'gate_markers', position: targetPosition },
+			interact: { id: 'shrine_bell', name: 'Shrine Bell', position: bell },
+			prompt: 'Press E to ring the shrine bell'
+		});
+
+		const resizedPrompt = container.querySelector<HTMLElement>('[data-testid="game-prompt"]')!;
+		const resizedScreen = projectWorldToScreen(
+			{ x: bell.x, y: 1.6, z: bell.z },
+			laggedAgain,
+			resized
+		);
+		expect(resizedScreen.inView).toBe(true);
+		expect(parseFloat(resizedPrompt.style.left)).toBeCloseTo(resizedScreen.x, 1);
+		expect(parseFloat(resizedPrompt.style.top)).toBeCloseTo(resizedScreen.y, 1);
 	});
 });

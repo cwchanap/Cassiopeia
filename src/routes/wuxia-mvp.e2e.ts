@@ -234,8 +234,6 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 				await page.keyboard.up(key);
 			}
 			await renderedFrames(1);
-			// allInnerTexts never waits: the anchored E prompt only exists while in
-			// range, so a waiting innerText() would stall every walking retry.
 			expect(await prompt.allInnerTexts().catch(() => [])).toEqual([text]);
 		}).toPass({ timeout: 120000 });
 	};
@@ -264,8 +262,6 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	await expect(objectiveChip).toContainText('Dash through the three gate markers in order');
 	await expect(objectiveChip).toContainText('0/3');
 	await expect(page.getByTestId('quick-slot-3')).toContainText('Qi Pill');
-	// Exploring with no interactable in range: the scroll carries the objective,
-	// and no anchored E prompt exists.
 	await expect(prompt).toHaveCount(0);
 
 	// After the reload the player is at the authored spawn, so the camera focus is the
