@@ -26,8 +26,13 @@ import { loadWuxiaAssets } from './wuxiaAssets';
 import { WORLD_BOUNDS } from '$lib/game/simulation/world';
 import layout from '../world-layout.json';
 
+export type WuxiaProjectionFrame = {
+	pose: WuxiaCameraPose;
+	viewport: WuxiaViewport;
+};
+
 export type WuxiaScene = {
-	render(snapshot: GameState, deltaTime: number): void;
+	render(snapshot: GameState, deltaTime: number): WuxiaProjectionFrame | null;
 	dispose(): void;
 };
 
@@ -153,8 +158,8 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 		}
 	}
 
-	function render(snapshot: GameState, deltaTime: number): void {
-		if (disposed) return;
+	function render(snapshot: GameState, deltaTime: number): WuxiaProjectionFrame | null {
+		if (disposed) return null;
 		const viewport = resize();
 
 		applyFighter(
@@ -213,6 +218,7 @@ export function createWuxiaScene(host: HTMLElement): WuxiaScene {
 		sunlight.target.position.set(cameraPose.target.x, 0, cameraPose.target.z);
 
 		renderer.render(scene, camera);
+		return { pose: cameraPose, viewport };
 	}
 
 	function resize(): WuxiaViewport {

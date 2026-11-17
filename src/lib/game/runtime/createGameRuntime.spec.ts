@@ -47,6 +47,16 @@ describe('game runtime progress persistence', () => {
 		expect(onHudUpdate.mock.calls[0][0].mode).toBe('explore');
 	});
 
+	it('publishes zero-dt inventory updates without a projection frame', () => {
+		const onHudUpdate = vi.fn();
+
+		const runtime = createRuntime(onHudUpdate);
+		runtime.closeInventory();
+
+		expect(onHudUpdate).toHaveBeenCalled();
+		expect(onHudUpdate.mock.calls[0]).toHaveLength(1);
+	});
+
 	it('skips writes while items and quest are unchanged', () => {
 		const runtime = createRuntime();
 

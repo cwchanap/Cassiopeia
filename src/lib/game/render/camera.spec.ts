@@ -8,6 +8,7 @@ import {
 	orthoFrustum,
 	projectWorldToScreen,
 	screenDirectionToWorld,
+	worldDirectionToScreen,
 	type WuxiaCameraPoint,
 	type WuxiaCameraPose,
 	type WuxiaViewport
@@ -251,6 +252,39 @@ describe('screenDirectionToWorld', () => {
 		expect(up.z).toBeCloseTo(-Math.SQRT1_2);
 		expect(right.x).toBeCloseTo(Math.SQRT1_2);
 		expect(right.z).toBeCloseTo(-Math.SQRT1_2);
+	});
+});
+
+describe('worldDirectionToScreen', () => {
+	test('round-trips with screenDirectionToWorld', () => {
+		for (const [x, z] of [
+			[0, -1],
+			[1, 0],
+			[-3.5, 7.25],
+			[2, 2]
+		]) {
+			const screen = worldDirectionToScreen(x, z);
+			const world = screenDirectionToWorld(screen.right, screen.down);
+			expect(world.x).toBeCloseTo(x);
+			expect(world.z).toBeCloseTo(z);
+		}
+	});
+
+	test('keeps the fixed camera basis orthonormal', () => {
+		const north = worldDirectionToScreen(0, -1);
+		const east = worldDirectionToScreen(1, 0);
+
+		expect(Math.hypot(north.right, north.down)).toBeCloseTo(1);
+		expect(Math.hypot(east.right, east.down)).toBeCloseTo(1);
+		expect(north.right * east.right + north.down * east.down).toBeCloseTo(0);
+	});
+
+	test('places world north up-screen under the fixed azimuth', () => {
+		const north = worldDirectionToScreen(0, -1);
+
+		expect(north.down).toBeLessThan(0);
+		expect(north.right).toBeCloseTo(Math.SQRT1_2);
+		expect(north.down).toBeCloseTo(-Math.SQRT1_2);
 	});
 });
 

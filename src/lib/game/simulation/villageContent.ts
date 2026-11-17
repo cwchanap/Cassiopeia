@@ -1,11 +1,11 @@
-import type { ItemReward, Vec2, VillagerId } from './types';
+import type { ItemReward, QuestTargetId, Vec2, VillagerId } from './types';
 
 export type QuestStepKind = 'talk' | 'dashMarkers' | 'receiveItem' | 'object' | 'duel';
 
 export type QuestStep = {
 	id: string;
 	kind: QuestStepKind;
-	targetId: string;
+	targetId: QuestTargetId;
 	title: string;
 	instruction: string;
 	grant?: ItemReward;
