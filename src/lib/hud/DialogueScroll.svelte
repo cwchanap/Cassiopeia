@@ -43,32 +43,54 @@
 </section>
 
 <style>
-	.dialogue-scroll {
+	.dialogue-scroll.paper-panel {
 		position: absolute;
 		bottom: max(26px, env(safe-area-inset-bottom));
 		left: 50%;
-		display: flex;
-		align-items: center;
-		gap: 18px;
+		display: grid;
+		grid-template-columns: 76px minmax(0, 1fr) auto;
+		gap: 10px 18px;
 		width: min(720px, calc(100% - 40px));
-		padding: 18px 24px;
+		padding: 18px 24px 16px;
+		border-radius: 0;
 		transform: translateX(-50%);
 	}
+	.dialogue-scroll::before,
+	.dialogue-scroll::after {
+		position: absolute;
+		top: -6px;
+		bottom: -6px;
+		width: 7px;
+		border-radius: 5px;
+		background: var(--wood);
+		box-shadow: 0 2px 4px rgb(0 0 0 / 30%);
+		content: '';
+	}
+	.dialogue-scroll::before {
+		left: -4px;
+	}
+	.dialogue-scroll::after {
+		right: -4px;
+	}
 	.dialogue-portrait {
-		flex: 0 0 76px;
+		grid-column: 1;
+		grid-row: 1 / 3;
 		width: 76px;
 		height: 76px;
-		border: 2px solid var(--wood);
-		outline: 1px solid color-mix(in srgb, var(--paper) 60%, transparent);
+		margin-top: -30px;
+		border: 3px solid var(--paper);
+		outline: 1px solid var(--wood);
 		outline-offset: 2px;
 		border-radius: 50%;
 		background-image: url('/images/wuxia/ink-portraits.png');
 		background-size: 400% 200%;
 		background-repeat: no-repeat;
 		background-color: var(--paper-deep);
+		box-shadow: 0 3px 8px rgb(0 0 0 / 35%);
 	}
 	.dialogue-text {
-		flex: 1;
+		grid-column: 2 / 4;
+		grid-row: 1;
 		min-width: 0;
 	}
 	.eyebrow {
@@ -89,20 +111,21 @@
 		font: 400 15px/1.45 var(--font-latin);
 	}
 	.dialogue-tail {
-		display: flex;
-		flex-direction: column;
-		align-items: flex-end;
-		gap: 10px;
+		display: contents;
 	}
 	.line-dots {
 		display: flex;
-		gap: 6px;
+		grid-column: 2;
+		grid-row: 2;
+		align-items: center;
+		gap: 5px;
+		padding-left: 2px;
 	}
 	.line-dot {
-		width: 7px;
-		height: 7px;
+		width: 6px;
+		height: 6px;
 		border: 1px solid var(--wood);
-		border-radius: 50%;
+		transform: rotate(45deg);
 	}
 	.line-dot.done {
 		background: var(--wood);
@@ -113,12 +136,12 @@
 	}
 	.continue-hint {
 		display: flex;
+		grid-column: 3;
+		grid-row: 2;
 		align-items: center;
-		gap: 8px;
+		gap: 6px;
 		color: var(--ink-soft);
-		font-size: 11px;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
+		font-size: 13px;
 	}
 	kbd {
 		display: inline-block;
@@ -132,14 +155,15 @@
 		text-align: center;
 	}
 	@media (max-width: 720px) {
-		.dialogue-scroll {
-			gap: 12px;
+		.dialogue-scroll.paper-panel {
+			grid-template-columns: 56px minmax(0, 1fr) auto;
+			gap: 8px 12px;
 			padding: 13px 16px;
 		}
 		.dialogue-portrait {
-			flex-basis: 56px;
 			width: 56px;
 			height: 56px;
+			margin-top: -23px;
 		}
 		.speaker {
 			font-size: 17px;

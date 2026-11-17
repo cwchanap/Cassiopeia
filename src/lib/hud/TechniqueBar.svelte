@@ -147,19 +147,31 @@
 </div>
 
 <style>
-	.action-bar {
+	.action-bar.ink-panel {
 		position: relative;
 		display: flex;
-		gap: 15px;
-		padding: 13px 18px 12px;
-		border-radius: 40px 40px 10px 10px;
+		gap: 10px;
+		padding: 8px 18px 7px;
+		border: 0;
+		border-radius: 0;
+		background: none;
+		box-shadow: none;
+		isolation: isolate;
+	}
+	.action-bar::before {
+		position: absolute;
+		z-index: -1;
+		inset: 18px 0 0;
+		background: linear-gradient(105deg, rgb(27 24 21 / 95%), rgb(27 24 21 / 91%));
+		clip-path: polygon(0 14%, 5% 0, 96% 3%, 100% 25%, 98% 55%, 100% 88%, 94% 100%, 6% 98%, 1% 82%);
+		content: '';
 	}
 	.techniques {
 		display: grid;
 		grid-template-columns: repeat(3, minmax(0, 1fr));
-		gap: 12px;
+		gap: 8px;
 		flex: 3;
-		padding-right: 16px;
+		padding-right: 10px;
 		border-right: 1px solid rgb(236 226 204 / 25%);
 	}
 	.technique,
@@ -167,7 +179,7 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 2px;
+		gap: 1px;
 		min-width: 0;
 		text-align: center;
 	}
@@ -183,30 +195,46 @@
 	.technique-art,
 	.slot-art {
 		display: block;
-		width: 56px;
-		height: 56px;
-		margin-bottom: 3px;
+		width: 44px;
+		height: 44px;
+		margin-bottom: 5px;
 	}
 	.technique-art kbd,
 	.slot-art kbd {
 		position: absolute;
-		bottom: -5px;
+		bottom: -6px;
 		left: 50%;
+		min-width: 17px;
+		padding: 1px 3px;
+		border: 1px solid color-mix(in srgb, var(--wood) 55%, transparent);
+		border-radius: 2px;
+		background: var(--paper);
+		color: var(--ink);
+		font: 600 10px/1 var(--font-latin);
 		transform: translateX(-50%);
+	}
+	.slot-art kbd {
+		top: -4px;
+		bottom: auto;
+		left: -4px;
+		transform: none;
 	}
 	.technique > strong,
 	.quick-slots button > strong {
+		order: 2;
 		color: var(--paper);
 		font: 600 12px/1.2 var(--font-latin);
 		white-space: nowrap;
 	}
 	.technique-hanzi {
+		order: 1;
 		color: var(--cinnabar-bright);
-		font-size: 11px;
+		font-size: 12px;
 		line-height: 1;
 	}
 	.technique > small,
 	.quick-slots small {
+		order: 3;
 		color: color-mix(in srgb, var(--paper) 62%, transparent);
 		font-size: 9px;
 		line-height: 1.2;
@@ -225,11 +253,13 @@
 	.quick-slots {
 		display: grid;
 		grid-template-columns: repeat(4, minmax(0, 1fr));
-		gap: 12px;
+		gap: 8px;
 		flex: 4;
 		pointer-events: auto;
 	}
 	.quick-slots button {
+		position: relative;
+		min-height: 44px;
 		border: 0;
 		padding: 0;
 		background: transparent;
@@ -242,6 +272,20 @@
 	.quick-slots button:disabled {
 		opacity: 0.55;
 	}
+	.quick-slots button:not(.bag-button, .empty) small {
+		position: absolute;
+		top: 30px;
+		right: 1px;
+		min-width: 17px;
+		padding: 2px;
+		border-radius: 50%;
+		background: var(--cinnabar);
+		color: var(--paper);
+		font-size: 9px;
+	}
+	.quick-slots .empty small {
+		visibility: hidden;
+	}
 	.empty-mark {
 		display: grid;
 		place-items: center;
@@ -253,21 +297,20 @@
 		border-style: dashed;
 	}
 	@media (max-width: 720px) {
-		.action-bar {
-			gap: 8px;
-			padding: 9px 10px 8px;
-			border-radius: 30px 30px 8px 8px;
+		.action-bar.ink-panel {
+			gap: 6px;
+			padding: 7px 10px 6px;
 		}
 		.techniques {
-			gap: 6px;
+			gap: 4px;
 			padding-right: 8px;
 		}
 		.quick-slots {
-			gap: 6px;
+			gap: 4px;
 		}
 		.technique-art,
 		.slot-art {
-			width: min(100%, 48px);
+			width: min(100%, 42px);
 			height: auto;
 			aspect-ratio: 1;
 		}
@@ -287,8 +330,8 @@
 		}
 	}
 	@media (max-height: 540px) and (min-width: 600px) {
-		.action-bar {
-			padding: 8px 12px;
+		.action-bar.ink-panel {
+			padding: 6px 12px;
 		}
 		.technique-art,
 		.slot-art {

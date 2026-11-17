@@ -493,22 +493,50 @@
 		background-size: 400% 200%;
 		background-repeat: no-repeat;
 	}
-	.rival-status {
+	.rival-status.ink-panel {
 		position: absolute;
-		top: 34px;
-		left: 50%;
-		width: min(440px, 62%);
-		padding: 10px 15px 12px;
+		top: 20px;
+		left: 52%;
+		width: min(400px, calc(100% - 620px));
+		padding: 10px 18px 11px 24px;
+		border: 0;
+		border-radius: 0;
+		background: none;
+		box-shadow: none;
 		transform: translateX(-50%);
+		isolation: isolate;
+	}
+	.rival-status::before {
+		position: absolute;
+		z-index: -1;
+		inset: 0;
+		background: linear-gradient(105deg, rgb(27 24 21 / 96%), rgb(27 24 21 / 91%));
+		clip-path: polygon(1% 8%, 12% 0, 88% 4%, 100% 16%, 98% 52%, 100% 84%, 88% 100%, 2% 95%, 0 50%);
+		content: '';
+	}
+	.rival-status::after {
+		position: absolute;
+		top: 10px;
+		left: -3px;
+		width: 19px;
+		height: 19px;
+		border-radius: 2px;
+		background: var(--cinnabar);
+		content: '';
+		transform: rotate(-5deg);
 	}
 	.rival-status .eyebrow {
-		color: var(--cinnabar-bright);
+		color: var(--paper);
+		font-size: 16px;
+		font-weight: 600;
+		letter-spacing: 0.02em;
+		text-transform: none;
 	}
 	.rival-status > div:first-child {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		margin-bottom: 7px;
+		margin-bottom: 6px;
 	}
 	.rival-status strong {
 		color: color-mix(in srgb, var(--paper) 80%, transparent);
@@ -516,9 +544,14 @@
 		font-weight: 400;
 		font-variant-numeric: tabular-nums;
 	}
-	.rival-meter {
-		height: 10px;
-		padding: 2px;
+	.rival-status .rival-meter {
+		height: 9px;
+		padding: 0;
+		border: 0;
+		border-radius: 0;
+		background: rgb(236 226 204 / 18%);
+		box-shadow: none;
+		clip-path: polygon(0 50%, 3% 0, 97% 0, 100% 50%, 97% 100%, 3% 100%);
 	}
 	.rival-meter meter {
 		appearance: none;
@@ -557,17 +590,17 @@
 	}
 	.bottom-hud {
 		position: absolute;
-		bottom: max(22px, env(safe-area-inset-bottom));
+		bottom: max(14px, env(safe-area-inset-bottom));
 		left: 50%;
-		width: 660px;
+		width: 540px;
 		max-width: calc(100% - 28px);
 		transform: translateX(-50%);
 	}
 	.control-hint,
 	.pause-hint {
 		position: absolute;
-		bottom: 24px;
-		padding: 8px 10px;
+		bottom: 18px;
+		padding: 5px 7px;
 		border-radius: 3px;
 		background: #1b1815cc;
 		color: #ece2cc;
@@ -787,31 +820,25 @@
 		align-items: center;
 		gap: 12px;
 	}
-	@media (min-width: 938px) and (max-width: 1171px) {
-		.rival-status {
-			left: 382px;
-			right: 316px;
-			width: auto;
-			transform: none;
-		}
-	}
-	@media (min-width: 721px) and (max-width: 937px) {
-		.rival-status {
-			top: 162px;
+	@media (min-width: 721px) and (max-width: 900px) {
+		.rival-status.ink-panel {
+			top: 112px;
+			left: 50%;
 			width: min(440px, calc(100% - 52px));
 		}
 	}
-	@media (max-width: 1050px) {
+	@media (max-width: 860px) {
 		.control-hint,
 		.pause-hint {
-			bottom: 190px;
+			bottom: 130px;
 		}
 	}
 	@media (max-width: 720px) {
-		.rival-status {
+		.rival-status.ink-panel {
 			left: auto;
 			right: 16px;
-			width: 230px;
+			top: 90px;
+			width: min(230px, calc(100% - 32px));
 			transform: none;
 		}
 		.bottom-hud {
@@ -860,11 +887,11 @@
 		}
 	}
 	@media (max-height: 540px) and (min-width: 600px) {
-		.rival-status {
+		.rival-status.ink-panel {
 			top: 120px;
 		}
 		.bottom-hud {
-			width: 570px;
+			width: 540px;
 			bottom: 8px;
 		}
 		.item-feedback {

@@ -82,7 +82,7 @@
 					transform={`translate(${marker.x * SCALE} ${marker.y * SCALE})`}
 				></path>
 			{/if}
-			<circle class="map-player" cx="0" cy="0" r="3"></circle>
+			<path class="map-player" d="M0 -4 L4 0 L0 4 L-4 0 Z"></path>
 		</g>
 		{#if marker?.onRim}
 			<g
@@ -101,6 +101,7 @@
 				dominant-baseline="central">{marker.metres}m</text
 			>
 		{/if}
+		<circle class="map-north-badge" cx={north.x} cy={north.y - 3} r="8"></circle>
 		<text class="map-north hanzi-small" x={north.x} y={north.y} text-anchor="middle"
 			>{HUD_HANZI_LABELS.north}</text
 		>
@@ -111,9 +112,10 @@
 <style>
 	.mini-map {
 		position: absolute;
-		top: max(26px, env(safe-area-inset-top));
-		right: max(26px, env(safe-area-inset-right));
-		width: 132px;
+		z-index: 1;
+		top: max(18px, env(safe-area-inset-top));
+		right: max(18px, env(safe-area-inset-right));
+		width: 128px;
 	}
 	.mini-map svg {
 		display: block;
@@ -143,7 +145,7 @@
 		fill: color-mix(in srgb, var(--ink) 70%, var(--paper));
 	}
 	.map-player {
-		fill: var(--cinnabar);
+		fill: var(--ink);
 		stroke: var(--paper);
 		stroke-width: 1;
 	}
@@ -160,13 +162,23 @@
 		stroke: var(--paper);
 		stroke-width: 2.5px;
 	}
-	.map-north {
+	.map-north-badge {
 		fill: var(--ink);
+	}
+	.map-north {
+		fill: var(--paper);
 		font-size: 11px;
 	}
 	.map-rim-line {
 		fill: none;
-		stroke: var(--wood);
-		stroke-width: 1.5;
+		stroke: var(--ink);
+		stroke-width: 2.5;
+	}
+	@media (max-width: 480px) {
+		.mini-map {
+			top: max(10px, env(safe-area-inset-top));
+			right: max(10px, env(safe-area-inset-right));
+			width: 96px;
+		}
 	}
 </style>
