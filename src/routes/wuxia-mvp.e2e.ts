@@ -449,6 +449,29 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	await expect(page.getByRole('meter', { name: 'Rival health' })).toBeVisible();
 	await expect(page.getByTestId('mini-map')).toHaveCount(0);
 	await expect(objectiveChip).toContainText('win the spar');
+	const expectDuelChromeSeparated = async () => {
+		const boxes = await Promise.all(
+			['status-cluster', 'rival-status', 'objective-chip'].map(async (sel) => {
+				const locator =
+					sel === 'rival-status' ? page.locator('.rival-status') : page.getByTestId(sel);
+				return { sel, box: await locator.boundingBox() };
+			})
+		);
+		for (const a of boxes) {
+			for (const b of boxes) {
+				if (a === b) continue;
+				expect(a.box, `${a.sel} must have a bounding box`).not.toBeNull();
+				expect(b.box, `${b.sel} must have a bounding box`).not.toBeNull();
+				const overlapX = a.box!.x < b.box!.x + b.box!.width && b.box!.x < a.box!.x + a.box!.width;
+				const overlapY = a.box!.y < b.box!.y + b.box!.height && b.box!.y < a.box!.y + a.box!.height;
+				expect(overlapX && overlapY, `${a.sel} must not overlap ${b.sel}`).toBe(false);
+			}
+		}
+	};
+	await expectDuelChromeSeparated();
+	await page.setViewportSize({ width: 1180, height: 720 });
+	await expectDuelChromeSeparated();
+	await page.setViewportSize({ width: 960, height: 640 });
 	await attachHudShot(page, testInfo, 'hud-3-duel');
 	await expect(page.locator('.technique', { hasText: 'Strike' }).locator('small')).toHaveText(
 		/Ready|Striking|Recovering|Staggered/
@@ -677,17 +700,25 @@ test('announces the Jadebank Market arrival banner via the z = 0 bridge route', 
 	await walkBatchesUntil(
 		['s', 'a'],
 		async () => {
-			if (await banner.isVisible().catch(() => false)) {
-				const opacity = Number(
-					await banner.evaluate((el) => getComputedStyle(el).opacity).catch(() => 0)
-				);
-				if (opacity >= 0.8) {
-					arrival.hanzi = await banner.locator('.place-hanzi').textContent();
-					arrival.name = await banner.locator('.place-name').textContent();
-					arrival.opacity = opacity;
-					await page.screenshot({ path: arrival.shot });
-					return true;
-				}
+			const info = await banner
+				.evaluate((el) => {
+					const style = getComputedStyle(el);
+					return {
+						visible: style.display !== 'none' && style.visibility !== 'hidden',
+						opacity: Number(style.opacity),
+						hanzi: el.querySelector('.place-hanzi')?.textContent ?? null,
+						name: el.querySelector('.place-name')?.textContent ?? null
+					};
+				})
+				.catch(() => null);
+			if (info?.visible && info.opacity >= 0.8) {
+				arrival.hanzi = info.hanzi;
+				arrival.name = info.name;
+				arrival.opacity = info.opacity;
+				await page.screenshot({ path: arrival.shot });
+				return true;
+			}
+			if (info?.visible) {
 				return false;
 			}
 			return ((await readPlayerPosition())?.z ?? 0) >= 28;

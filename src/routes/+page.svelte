@@ -784,10 +784,12 @@
 		align-items: center;
 		gap: 12px;
 	}
-	@media (max-width: 1180px) {
+	@media (max-width: 1050px) {
 		.rival-status {
-			left: 60%;
-			width: min(330px, 38%);
+			left: 382px;
+			right: 316px;
+			width: auto;
+			transform: none;
 		}
 	}
 	@media (max-width: 1050px) {
@@ -798,7 +800,10 @@
 	}
 	@media (max-width: 720px) {
 		.rival-status {
+			left: auto;
+			right: 16px;
 			width: 230px;
+			transform: none;
 		}
 		.bottom-hud {
 			bottom: max(12px, env(safe-area-inset-bottom));
