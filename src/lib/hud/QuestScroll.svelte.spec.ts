@@ -68,6 +68,41 @@ describe('QuestScroll', () => {
 		}
 	});
 
+	it('collapses to one visually rendered line with the long objective still exposed', async () => {
+		document.body.classList.add('hud-layer');
+		try {
+			const longStep = QUEST_STEPS.reduce((a, b) =>
+				a.instruction.length + a.title.length >= b.instruction.length + b.title.length ? a : b
+			);
+			const quest = { stepIndex: 2, title: longStep.title, instruction: longStep.instruction };
+			render(QuestScroll, {
+				variant: 'line',
+				modeLabel: 'Duel',
+				region: 'Jadebank Market',
+				quest,
+				objective: longStep.instruction,
+				markerProgress: null
+			});
+
+			const chip = document.querySelector<HTMLElement>('[data-testid="objective-chip"]');
+			const strong = chip?.querySelector<HTMLElement>('strong');
+			expect(strong).not.toBeNull();
+			const strongRect = strong!.getBoundingClientRect();
+			const chipRect = chip!.getBoundingClientRect();
+			const lineHeight = parseFloat(getComputedStyle(strong!).lineHeight);
+			expect(strongRect.height).toBeLessThanOrEqual(lineHeight * 1.5);
+			expect(strongRect.right).toBeLessThanOrEqual(chipRect.right + 0.5);
+			expect(strongRect.left).toBeGreaterThanOrEqual(chipRect.left - 0.5);
+			const eyebrow = chip!.querySelector<HTMLElement>('.eyebrow');
+			expect(eyebrow === null || getComputedStyle(eyebrow).display === 'none').toBe(true);
+			expect(strong!.textContent).toContain(longStep.title);
+			expect(strong!.textContent).toContain(longStep.instruction);
+			expect(strong!.getAttribute('title')).toBe(`${longStep.title} · ${longStep.instruction}`);
+		} finally {
+			document.body.classList.remove('hud-layer');
+		}
+	});
+
 	it('shows one free-roam line and no extra step when the quest is complete', async () => {
 		render(QuestScroll, {
 			variant: 'full',
