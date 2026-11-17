@@ -375,7 +375,6 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	await page.keyboard.press('e');
 	await expect(prompt).toContainText('Enough talk');
 	await page.keyboard.press('e');
-	// The duel owns no game-prompt: the rival meter and technique medallions take over.
 	await expect(prompt).toHaveCount(0);
 	await expect(page.getByRole('meter', { name: 'Rival health' })).toBeVisible();
 	await expect(page.getByTestId('mini-map')).toHaveCount(0);
