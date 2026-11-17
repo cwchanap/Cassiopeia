@@ -375,8 +375,16 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	await page.keyboard.press('e');
 	await expect(prompt).toContainText('Enough talk');
 	await page.keyboard.press('e');
-	await expect(prompt).toHaveText('J: strike  K: qi burst  Space: dash');
+	// The duel owns no game-prompt: the rival meter and technique medallions take over.
+	await expect(prompt).toHaveCount(0);
 	await expect(page.getByRole('meter', { name: 'Rival health' })).toBeVisible();
+	await expect(page.getByTestId('mini-map')).toHaveCount(0);
+	await expect(page.locator('.technique', { hasText: 'Strike' }).locator('small')).toHaveText(
+		/Ready|Striking|Recovering|Staggered/
+	);
+	await expect(page.locator('.technique', { hasText: 'Qi burst' }).locator('small')).toHaveText(
+		/Ready|[\d.]+s/
+	);
 
 	await page.keyboard.press('Escape');
 	await expect(page.getByTestId('pause-panel')).toBeVisible();

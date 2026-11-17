@@ -27,4 +27,12 @@ describe('Wuxia MVP route', () => {
 		await expect.element(page.getByTestId('mini-map')).toBeInTheDocument();
 		expect(page.getByTestId('game-prompt').all()).toHaveLength(0);
 	});
+
+	it('keeps the dialogue scroll, rival meter and damage numbers out of plain explore', async () => {
+		render(Page);
+
+		expect(page.getByTestId('dialogue-scroll').all()).toHaveLength(0);
+		expect(page.getByRole('meter', { name: 'Rival health' }).all()).toHaveLength(0);
+		expect(page.getByTestId('damage-number').all()).toHaveLength(0);
+	});
 });

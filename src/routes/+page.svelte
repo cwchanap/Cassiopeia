@@ -9,6 +9,8 @@
 	import QuestScroll from '$lib/hud/QuestScroll.svelte';
 	import MiniMap from '$lib/hud/MiniMap.svelte';
 	import WorldAnchors from '$lib/hud/WorldAnchors.svelte';
+	import DialogueScroll from '$lib/hud/DialogueScroll.svelte';
+	import DamageNumbers from '$lib/hud/DamageNumbers.svelte';
 	import type { Attachment } from 'svelte/attachments';
 	import '$lib/hud/hud.css';
 
@@ -240,7 +242,7 @@
 		{#if layout.rivalBar}
 			<section class="rival-status paper-panel" aria-label="Rival disciple">
 				<div>
-					<span class="eyebrow">Rival disciple</span><strong
+					<span class="eyebrow">Senior Brother Lu</span><strong
 						>{hud.rivalHealth}/{hud.rivalMaxHealth}</strong
 					>
 				</div>
@@ -251,10 +253,15 @@
 			</section>
 		{/if}
 
+		{#if layout.dialogue && hud.dialogue}
+			<DialogueScroll dialogue={hud.dialogue} />
+		{/if}
+
+		{#if layout.damageNumbers}
+			<DamageNumbers {frame} numbers={hud.damageNumbers} />
+		{/if}
+
 		<div class="bottom-hud" inert={hud.inventory.isOpen}>
-			{#if hud.prompt && hud.mode !== 'explore'}
-				<p class="prompt" data-testid="game-prompt" aria-live="polite">{hud.prompt}</p>
-			{/if}
 			{#if layout.techniques}
 				<TechniqueBar
 					mode={hud.mode}
@@ -485,7 +492,7 @@
 		position: absolute;
 		top: 34px;
 		left: 50%;
-		width: 300px;
+		width: min(440px, 62%);
 		padding: 10px 15px 12px;
 		transform: translateX(-50%);
 	}
@@ -547,32 +554,6 @@
 		width: 660px;
 		max-width: calc(100% - 28px);
 		transform: translateX(-50%);
-	}
-	.prompt {
-		width: fit-content;
-		max-width: 100%;
-		margin: 0 auto 12px;
-		padding: 8px 32px;
-		border-radius: 3px 9px 4px 11px / 9px 4px 10px 5px;
-		background: linear-gradient(
-			90deg,
-			#ece2cc00,
-			color-mix(in srgb, var(--paper) 93%, transparent) 14%,
-			color-mix(in srgb, var(--paper) 93%, transparent) 86%,
-			#ece2cc00
-		);
-		color: var(--ink);
-		font: 600 16px/1.35 var(--font-latin);
-		text-align: center;
-	}
-	.prompt::before,
-	.prompt::after {
-		content: '◇';
-		display: inline-block;
-		margin: 0 12px;
-		color: var(--cinnabar);
-		font-size: 10px;
-		vertical-align: middle;
 	}
 	.control-hint,
 	.pause-hint {
@@ -816,15 +797,6 @@
 			bottom: max(12px, env(safe-area-inset-bottom));
 			max-width: calc(100% - 20px);
 		}
-		.prompt {
-			font-size: 13px;
-			padding: 8px 12px;
-			margin-bottom: 8px;
-		}
-		.prompt::before,
-		.prompt::after {
-			display: none;
-		}
 		.control-hint,
 		.pause-hint {
 			display: none;
@@ -873,10 +845,6 @@
 		.bottom-hud {
 			width: 570px;
 			bottom: 8px;
-		}
-		.prompt {
-			margin-bottom: 6px;
-			padding-block: 5px;
 		}
 		.item-feedback {
 			bottom: 160px;

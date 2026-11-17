@@ -10,6 +10,7 @@ import {
 	QI_BURST_COST,
 	QI_BURST_TIMING,
 	RIVAL_ATTACK_COOLDOWN,
+	RIVAL_ATTACK_DAMAGE,
 	RIVAL_STRIKE_TIMING
 } from './combat';
 import {
@@ -20,7 +21,7 @@ import {
 	SHRINE_BELL,
 	VILLAGERS
 } from './villageContent';
-import { createStarterItemProgress } from './items';
+import { createStarterItemProgress, getPlayerAttackDamage } from './items';
 import { loadGameProgress, saveGameProgress } from '$lib/game/runtime/save';
 import type { GameState, InputSnapshot, Vec2 } from './types';
 import { canStandAt, moveThroughWorld } from './world';
@@ -1215,6 +1216,84 @@ describe('hud snapshot contract', () => {
 		expect(state.mode).toEqual({ kind: 'explore' });
 		expect(state.quest.stepIndex).toBe(QUEST_STEPS.length);
 		expect(luEntry().position).toEqual(lu.position);
+	});
+
+	it('exposes the active villager id through the dialogue snapshot', () => {
+		const state = createInitialGameState();
+		state.player.position = { x: elder.position.x + 0.5, z: elder.position.z };
+
+		stepGame(state, { ...idleInput, interact: true }, frame);
+
+		expect(toHudSnapshot(state).dialogue?.villagerId).toBe('elder_shen');
+	});
+});
+
+describe('damage number records', () => {
+	it('exposes no damage numbers before any hit lands', () => {
+		const state = setupDuel();
+
+		expect(toHudSnapshot(state).damageNumbers).toEqual([]);
+
+		stepGame(state, { ...idleInput, dash: true }, frame);
+		expect(toHudSnapshot(state).damageNumbers).toEqual([]);
+	});
+
+	it('records applied light-attack damage, target and position on the hit effect', () => {
+		const state = setupDuel();
+		stepGame(state, { ...idleInput, lightAttack: true }, frame);
+		advance(state, LIGHT_ATTACK_TIMING.startup + LIGHT_ATTACK_TIMING.active / 2);
+
+		const [number] = toHudSnapshot(state).damageNumbers;
+		expect(number.damage).toBe(14);
+		expect(number.target).toBe('rival');
+		expect(number.age).toBeGreaterThan(0);
+		expect(state.rival.health).toBe(state.rival.maxHealth - 14);
+
+		const effect = state.effects.find((entry) => entry.id === number.id);
+		expect(effect?.kind).toBe('hit');
+		expect(number.position).toEqual(effect?.position);
+	});
+
+	it('records qi burst damage on the qi effect without disturbing dash effects', () => {
+		const state = setupDuel();
+		state.rival.position = { x: 2, z: 0 };
+
+		stepGame(state, { ...idleInput, qiBurst: true }, frame);
+		advance(state, QI_BURST_TIMING.startup + QI_BURST_TIMING.active / 2);
+
+		const record = toHudSnapshot(state).damageNumbers.find((entry) => entry.target === 'rival');
+		expect(record?.damage).toBe(getPlayerAttackDamage(state.items, 'qiBurst'));
+		const effect = state.effects.find((entry) => entry.id === record?.id);
+		expect(effect?.kind).toBe('qi');
+		expect(effect?.damage).toBe(record?.damage);
+		expect(effect?.target).toBe('rival');
+	});
+
+	it('tags rival strikes on the player with the rival damage', () => {
+		const state = setupDuel();
+
+		advance(state, RIVAL_STRIKE_TIMING.startup + RIVAL_STRIKE_TIMING.active / 2);
+
+		const [number] = toHudSnapshot(state).damageNumbers;
+		expect(number.target).toBe('player');
+		expect(number.damage).toBe(RIVAL_ATTACK_DAMAGE);
+	});
+
+	it('keeps the clamped killing-blow number alive after the duel ends in the same tick', () => {
+		const state = setupDuel();
+		state.rival.health = 5;
+
+		stepGame(state, { ...idleInput, lightAttack: true }, frame);
+		advance(state, LIGHT_ATTACK_TIMING.startup + LIGHT_ATTACK_TIMING.active / 2);
+
+		expect(state.mode).toEqual({ kind: 'explore' });
+		const [number] = toHudSnapshot(state).damageNumbers;
+		expect(number.target).toBe('rival');
+		expect(number.damage).toBe(5);
+		expect(number.age).toBeLessThan(0.65);
+
+		advance(state, 0.7);
+		expect(toHudSnapshot(state).damageNumbers).toEqual([]);
 	});
 });
 
