@@ -107,7 +107,7 @@
 	.quest-scroll strong {
 		display: block;
 		margin-top: 5px;
-		font: 600 18px/1.2 var(--font-latin);
+		font: 600 18px/1.2 var(--font-latin-cjk);
 	}
 	@media (max-width: 720px) {
 		.quest-scroll {
