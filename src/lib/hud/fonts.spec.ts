@@ -24,6 +24,15 @@ const coverage = new Set(
 );
 
 describe('wuxia hanzi font subset', () => {
+	it.each(['MaShanZheng-hanzi.woff2', 'CormorantGaramond.woff2'])(
+		'ships %s as a real WOFF2 binary, not a TrueType file or dump',
+		(name) => {
+			const bytes = readFileSync(resolve(FONTS_DIR, name));
+			expect(bytes.length).toBeGreaterThan(1024);
+			expect(bytes.subarray(0, 4).toString('latin1')).toBe('wOF2');
+		}
+	);
+
 	it('binds the committed coverage dump to the shipped woff2 binary', () => {
 		const expected = readFileSync(resolve(FONTS_DIR, 'hanzi-subset.sha256'), 'utf-8').trim();
 		const actual = createHash('sha256')

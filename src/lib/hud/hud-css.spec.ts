@@ -31,21 +31,50 @@ function token(name: string): string {
 	return value.trim();
 }
 
+function brightCinnabar(): [number, number, number] {
+	const mix = /color-mix\(in srgb, var\(--cinnabar\) (\d+)%, var\(--paper\)\)/.exec(
+		token('cinnabar-bright')
+	);
+	expect(mix, '--cinnabar-bright must mix --cinnabar with --paper').not.toBeNull();
+	const share = Number(mix![1]) / 100;
+	const cinnabar = hexToRgb(token('cinnabar'));
+	const paper = hexToRgb(token('paper'));
+	return cinnabar.map((c, i) => Math.round(c * share + paper[i] * (1 - share))) as [
+		number,
+		number,
+		number
+	];
+}
+
+function inkPanelStopsOver(scenery: [number, number, number]): [number, number, number][] {
+	const block = /\.ink-panel\s*\{[^}]*background:\s*linear-gradient\(([^;]+)\)/s.exec(css);
+	expect(block, 'ink-panel must declare a linear-gradient background').not.toBeNull();
+	const stops = [...block![1].matchAll(/rgb\(\s*(\d+)\s+(\d+)\s+(\d+)\s*\/\s*([\d.]+)%\s*\)/g)];
+	expect(stops.length, 'ink-panel gradient must use translucent rgb stops').toBeGreaterThanOrEqual(
+		2
+	);
+	return stops.map(([, r, g, b, a]) => {
+		const alpha = Number(a) / 100;
+		return [
+			Math.round(Number(r) * alpha + scenery[0] * (1 - alpha)),
+			Math.round(Number(g) * alpha + scenery[1] * (1 - alpha)),
+			Math.round(Number(b) * alpha + scenery[2] * (1 - alpha))
+		] as [number, number, number];
+	});
+}
+
 describe('hud.css ink-panel text contrast', () => {
+	it('keeps the bright cinnabar text token at WCAG AA over the composited ink gradient', () => {
+		const bright = brightCinnabar();
+		for (const backdrop of inkPanelStopsOver([255, 255, 255])) {
+			expect(
+				contrastRatio(bright, backdrop),
+				`cinnabar-bright vs gradient stop composited over white rgb(${backdrop})`
+			).toBeGreaterThanOrEqual(4.5);
+		}
+	});
+
 	it('keeps the bright cinnabar text token at WCAG AA on the ink background', () => {
-		const ink = hexToRgb(token('ink'));
-		const mix = /color-mix\(in srgb, var\(--cinnabar\) (\d+)%, var\(--paper\)\)/.exec(
-			token('cinnabar-bright')
-		);
-		expect(mix, '--cinnabar-bright must mix --cinnabar with --paper').not.toBeNull();
-		const share = Number(mix![1]) / 100;
-		const cinnabar = hexToRgb(token('cinnabar'));
-		const paper = hexToRgb(token('paper'));
-		const bright = cinnabar.map((c, i) => Math.round(c * share + paper[i] * (1 - share))) as [
-			number,
-			number,
-			number
-		];
-		expect(contrastRatio(bright, ink)).toBeGreaterThanOrEqual(4.5);
+		expect(contrastRatio(brightCinnabar(), hexToRgb(token('ink')))).toBeGreaterThanOrEqual(4.5);
 	});
 });

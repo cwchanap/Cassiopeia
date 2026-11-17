@@ -628,6 +628,37 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	await attachHudShot(page, testInfo, 'hud-1180x720-sanity');
 });
 
+type BannerProbe = {
+	visible: boolean;
+	opacity: number;
+	hanzi: string | null;
+	name: string | null;
+} | null;
+
+function probePlaceBanner(page: Page): Promise<BannerProbe> {
+	return page.evaluate(() => {
+		const el = document.querySelector<HTMLElement>('[data-testid="place-banner"]');
+		if (!el) return null;
+		const style = getComputedStyle(el);
+		return {
+			visible: style.display !== 'none' && style.visibility !== 'hidden',
+			opacity: Number(style.opacity),
+			hanzi: el.querySelector('.place-hanzi')?.textContent ?? null,
+			name: el.querySelector('.place-name')?.textContent ?? null
+		};
+	});
+}
+
+test('place banner probe resolves without waiting when the banner is absent', async ({ page }) => {
+	await page.goto('/');
+	await expect(page.getByTestId('game-shell')).toBeVisible();
+	const result = await Promise.race([
+		probePlaceBanner(page),
+		page.waitForTimeout(2000).then(() => 'still-waiting' as const)
+	]);
+	expect(result).toBeNull();
+});
+
 test('announces the Jadebank Market arrival banner via the z = 0 bridge route', async ({
 	page
 }, testInfo) => {
@@ -638,7 +669,6 @@ test('announces the Jadebank Market arrival banner via the z = 0 bridge route', 
 	await expect(page.getByTestId('game-shell')).toBeVisible();
 	await expect(page.getByTestId('mini-map')).toBeVisible();
 
-	const banner = page.getByTestId('place-banner');
 	const readPlayerPosition = async (): Promise<Vec2 | null> => {
 		const rim = page.getByTestId('map-rim-target');
 		const rimMetres = page.getByTestId('map-rim-metres');
@@ -710,17 +740,7 @@ test('announces the Jadebank Market arrival banner via the z = 0 bridge route', 
 	await walkBatchesUntil(
 		['s', 'a'],
 		async () => {
-			const info = await banner
-				.evaluate((el) => {
-					const style = getComputedStyle(el);
-					return {
-						visible: style.display !== 'none' && style.visibility !== 'hidden',
-						opacity: Number(style.opacity),
-						hanzi: el.querySelector('.place-hanzi')?.textContent ?? null,
-						name: el.querySelector('.place-name')?.textContent ?? null
-					};
-				})
-				.catch(() => null);
+			const info = await probePlaceBanner(page);
 			if (info?.visible && info.opacity >= 0.8) {
 				arrival.hanzi = info.hanzi;
 				arrival.name = info.name;

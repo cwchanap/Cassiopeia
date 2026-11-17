@@ -19,6 +19,7 @@ def subset_font(source: Path, dest: Path, unicodes: str) -> TTFont:
     subsetter = subset.Subsetter(options)
     subsetter.populate(text=unicodes)
     subsetter.subset(font)
+    font.flavor = 'woff2'
     font.save(dest)
     return font
 
