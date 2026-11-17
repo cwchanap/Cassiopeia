@@ -1,5 +1,3 @@
-import { mkdir, writeFile } from 'node:fs/promises';
-import path from 'node:path';
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
 import {
 	computeWuxiaCameraPose,
@@ -11,15 +9,10 @@ import type { Vec2 } from '$lib/game/simulation/types';
 
 const VIEWPORT = { width: 960, height: 640 };
 
-const HUD_SHOT_DIR = path.resolve(
-	'.superpowers/sdd/2026-11-15-hpa-792-ink-paper-hud/hud-screenshots'
-);
-
 async function attachHudShot(page: Page, testInfo: TestInfo, name: string): Promise<void> {
-	const body = await page.screenshot();
-	await mkdir(HUD_SHOT_DIR, { recursive: true });
-	await writeFile(path.join(HUD_SHOT_DIR, `${name}.png`), body);
-	await testInfo.attach(name, { body, contentType: 'image/png' });
+	const shotPath = testInfo.outputPath(`${name}.png`);
+	await page.screenshot({ path: shotPath });
+	await testInfo.attach(name, { path: shotPath, contentType: 'image/png' });
 }
 
 function waitFrames(page: Page, count: number): Promise<void> {
@@ -309,6 +302,8 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	await expect(page.getByTestId('dialogue-scroll')).toBeVisible();
 	await expect(page.getByTestId('mini-map')).toHaveCount(0);
 	await expect(page.getByTestId('status-cluster')).toHaveCount(0);
+	await expect(page.locator('.control-hint')).toBeHidden();
+	await expect(page.locator('.pause-hint')).toBeHidden();
 	expect(await page.locator('[data-testid="game-prompt"]').count()).toBe(1);
 	await attachHudShot(page, testInfo, 'hud-2-dialogue');
 	await expect(page.getByTestId('bag-toggle')).toBeHidden();
@@ -384,15 +379,22 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	await expect(objectiveChip).toContainText('Fetch medicine from Auntie Qin');
 	await expect(page.getByTestId('item-feedback')).toHaveText('Received Lesser Healing Pill x2');
 
-	await page.getByTestId('bag-toggle').click();
+	await page.keyboard.press('i');
 	await expect(page.getByTestId('bag-panel')).toBeVisible();
+	await expect(page.getByTestId('bag-close')).toBeFocused();
 	await expectBagItemCount(page, 'bag-item-lesser_healing_pill', 5);
 	await page.getByTestId('bag-assign-lesser_healing_pill-slot-1').click();
 	await expect(page.getByTestId('item-feedback')).toHaveText(
 		'Assigned Lesser Healing Pill to slot 1'
 	);
+	await page.keyboard.press('b');
+	await expect(page.getByTestId('bag-panel')).toBeHidden();
+	expect(await page.evaluate(() => document.activeElement?.tagName)).toBe('BODY');
+	await page.getByTestId('bag-toggle').click();
+	await expect(page.getByTestId('bag-panel')).toBeVisible();
 	await page.getByTestId('bag-close').click();
 	await expect(page.getByTestId('bag-panel')).toBeHidden();
+	await expect(page.getByTestId('bag-toggle')).toBeFocused();
 	await expect(objectiveChip).toContainText('Whispering Bamboo Shrine');
 
 	await page.evaluate(() => {
@@ -596,7 +598,7 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 test('announces the Jadebank Market arrival banner via the z = 0 bridge route', async ({
 	page
 }, testInfo) => {
-	test.setTimeout(600000);
+	test.setTimeout(900000);
 	await page.goto('/');
 	await page.evaluate(() => localStorage.clear());
 	await page.reload();
@@ -628,63 +630,81 @@ test('announces the Jadebank Market arrival banner via the z = 0 bridge route', 
 		return { x: elder.position.x - delta.x, z: elder.position.z - delta.z };
 	};
 
-	const holdKeysUntil = async (
+	const walkBatchesUntil = async (
 		keys: string[],
 		done: () => Promise<boolean>,
-		description: string
+		description: string,
+		perFrame = false
 	) => {
-		for (const key of keys) {
-			await page.keyboard.down(key);
-		}
 		const deadline = Date.now() + 300000;
-		try {
-			while (Date.now() < deadline) {
-				if (await done()) {
-					return;
-				}
-				await waitFrames(page, 1);
-			}
-			throw new Error(`Timed out while walking: ${description}`);
-		} finally {
+		while (Date.now() < deadline) {
 			for (const key of keys) {
-				await page.keyboard.up(key);
+				await page.keyboard.down(key);
 			}
+			let finished = false;
+			try {
+				for (let frame = 0; frame < 3 && !finished; frame++) {
+					await waitFrames(page, 1);
+					if (perFrame || frame === 2) {
+						finished = await done();
+					}
+				}
+			} finally {
+				for (const key of keys) {
+					await page.keyboard.up(key);
+				}
+			}
+			if (finished || (await done())) {
+				return;
+			}
+			await waitFrames(page, 1);
 		}
+		throw new Error(`Timed out while walking: ${description}`);
 	};
 
-	const arrival: { hanzi: string | null; name: string | null; shot: Buffer | null } = {
+	const arrival: { hanzi: string | null; name: string | null; opacity: number; shot: string } = {
 		hanzi: null,
 		name: null,
-		shot: null
+		opacity: 0,
+		shot: testInfo.outputPath('hud-4-arrival.png')
 	};
 
-	await holdKeysUntil(
+	await walkBatchesUntil(
 		['s', 'd'],
 		async () => ((await readPlayerPosition())?.x ?? 0) >= 22,
 		'crossing the z = 0 bridge east to x >= 21'
 	);
-	await holdKeysUntil(
+	await walkBatchesUntil(
 		['s', 'a'],
 		async () => {
 			if (await banner.isVisible().catch(() => false)) {
-				arrival.hanzi = await banner.locator('.place-hanzi').textContent();
-				arrival.name = await banner.locator('.place-name').textContent();
-				arrival.shot = await page.screenshot();
-				return true;
+				const opacity = Number(
+					await banner.evaluate((el) => getComputedStyle(el).opacity).catch(() => 0)
+				);
+				if (opacity >= 0.8) {
+					arrival.hanzi = await banner.locator('.place-hanzi').textContent();
+					arrival.name = await banner.locator('.place-name').textContent();
+					arrival.opacity = opacity;
+					await page.screenshot({ path: arrival.shot });
+					return true;
+				}
+				return false;
 			}
 			return ((await readPlayerPosition())?.z ?? 0) >= 28;
 		},
-		'heading south along x ~= 24 into Jadebank Market at z >= 27'
+		'heading south along x ~= 24 into Jadebank Market at z >= 27',
+		true
 	);
 
-	if (!arrival.shot) {
-		throw new Error('Reached z >= 28 without a visible Jadebank Market place banner');
+	if (arrival.opacity < 0.8) {
+		throw new Error(
+			`Reached z >= 28 without an opaque Jadebank Market place banner (opacity ${arrival.opacity})`
+		);
 	}
-	await mkdir(HUD_SHOT_DIR, { recursive: true });
-	await writeFile(path.join(HUD_SHOT_DIR, 'hud-4-arrival.png'), arrival.shot);
-	await testInfo.attach('hud-4-arrival', { body: arrival.shot, contentType: 'image/png' });
+	await testInfo.attach('hud-4-arrival', { path: arrival.shot, contentType: 'image/png' });
 	expect(arrival.hanzi).toBe('玉津集');
 	expect(arrival.name).toBe('Jadebank Market');
+	expect(arrival.opacity).toBeGreaterThanOrEqual(0.8);
 	await expect(page.getByTestId('mini-map')).toBeVisible();
 	await expect(page.getByTestId('map-rim-target')).toBeVisible();
 	const metres = (await page.getByTestId('map-rim-metres').textContent()) ?? '';

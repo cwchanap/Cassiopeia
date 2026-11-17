@@ -241,7 +241,7 @@
 		{/if}
 
 		{#if layout.rivalBar}
-			<section class="rival-status paper-panel" aria-label="Rival disciple">
+			<section class="rival-status ink-panel" aria-label="Rival disciple">
 				<div>
 					<span class="eyebrow">Senior Brother Lu</span><strong
 						>{hud.rivalHealth}/{hud.rivalMaxHealth}</strong
@@ -281,8 +281,10 @@
 				/>
 			{/if}
 		</div>
-		<div class="control-hint"><span><kbd>W A S D</kbd> / <kbd>Arrows</kbd> Move</span></div>
-		<div class="pause-hint"><kbd>Esc</kbd> Pause</div>
+		<div class="control-hint" hidden={hud.mode === 'dialogue'}>
+			<span><kbd>W A S D</kbd> / <kbd>Arrows</kbd> Move</span>
+		</div>
+		<div class="pause-hint" hidden={hud.mode === 'dialogue'}><kbd>Esc</kbd> Pause</div>
 
 		{#if hud.inventory.feedback && layout.itemFeedback}
 			<p class="item-feedback" data-testid="item-feedback" role="status">
@@ -506,7 +508,7 @@
 		margin-bottom: 7px;
 	}
 	.rival-status strong {
-		color: var(--ink-soft);
+		color: color-mix(in srgb, var(--paper) 80%, transparent);
 		font-size: 11px;
 		font-weight: 400;
 		font-variant-numeric: tabular-nums;
@@ -782,18 +784,20 @@
 		align-items: center;
 		gap: 12px;
 	}
+	@media (max-width: 1180px) {
+		.rival-status {
+			left: 60%;
+			width: min(330px, 38%);
+		}
+	}
 	@media (max-width: 1050px) {
 		.control-hint,
 		.pause-hint {
 			bottom: 190px;
 		}
-		.rival-status {
-			top: 165px;
-		}
 	}
 	@media (max-width: 720px) {
 		.rival-status {
-			top: 210px;
 			width: 230px;
 		}
 		.bottom-hud {

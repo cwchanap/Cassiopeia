@@ -94,9 +94,11 @@ the boardwalk. The far northern bridge loops back to the rice farms.
 
 The runtime HUD (`src/lib/hud/`) consumes these atlases directly: `ink-portraits.png` cells
 0–5 map Initiate, Elder Shen, Senior Brother Lu, Auntie Qin, Old Zhu and Peddler Wei to the
-dialogue scroll portrait, and `ink-icons.png` cells 0–6 (Qinggong, Strike, Qi burst, healing
-pill, qi pill, bag, training robe) map to `itemArt`/`TechniqueBar` indices in
-`src/routes/+page.svelte`; `rice-paper.png` tiles every `paper-panel`. Hanzi HUD text (vital
+dialogue scroll portrait and vitals portrait, while `../../static/images/wuxia/hud-atlas.png`
+combines cell 0 (Initiate) with the seven `ink-icons.png` cells in order — cells 1–7 are
+Qinggong, Strike, Qi burst, healing pill, qi pill, bag and training robe — and supplies the
+`itemArt`/`TechniqueBar` indices in `src/routes/+page.svelte`;
+`rice-paper.png` tiles every `paper-panel`. Hanzi HUD text (vital
 labels, region titles in `src/lib/hud/labels.ts`) renders with the subset
 `../../static/fonts/wuxia/MaShanZheng-hanzi.woff2`; `hanzi-glyphs.txt` is the required glyph
 inventory checked by `src/lib/hud/fonts.spec.ts`, and `scripts/build_wuxia_fonts.py`

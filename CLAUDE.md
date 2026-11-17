@@ -66,7 +66,7 @@ The HUD (HPA-792) is driven entirely by `HudSnapshot` (initial values come from 
 
 MiniMap math lives in `src/lib/hud/map.ts`: `worldToMap` reuses `worldDirectionToScreen` from `camera.ts` so map bearings match screen movement exactly; `mapTarget` clamps the quest marker to a `MINIMAP_RADIUS_METRES` rim pointer with a metre distance label when the target is off-map. `WorldAnchors` and `DamageNumbers` position screen elements from the renderer's actual `WuxiaProjectionFrame` (the same `orthoFrustum` used to draw), never a recomputed pose.
 
-HUD fonts: `static/fonts/wuxia/` holds `CormorantGaramond.woff2` and the subset `MaShanZheng-hanzi.woff2`; `hanzi-glyphs.txt` lists every glyph the subset must cover (including the three region titles) and is checked by `src/lib/hud/fonts.spec.ts`. Regenerate subsets with `python3 scripts/build_wuxia_fonts.py`.
+HUD fonts: `static/fonts/wuxia/` holds `CormorantGaramond.woff2` and the subset `MaShanZheng-hanzi.woff2`; `hanzi-glyphs.txt` lists every glyph the subset must cover (including the three region titles) and is checked by `src/lib/hud/fonts.spec.ts`. Regenerate subsets with `python3 scripts/build_wuxia_fonts.py <MaShanZheng-Regular.ttf path> <CormorantGaramond.ttf path>` (both TTF paths are required arguments).
 
 The page-level Svelte component uses Svelte 5 runes (`$state`, `$derived`, `$props`) and the new `{@attach}` syntax to mount the runtime on a `<div>`. Keep this pattern when adding new mount points.
 

@@ -73,7 +73,7 @@
 	</div>
 {/snippet}
 
-<div class="action-bar paper-panel">
+<div class="action-bar ink-panel">
 	<section class="techniques" aria-label="Keyboard techniques">
 		{@render medallion(
 			'Qinggong',
@@ -160,7 +160,7 @@
 		gap: 12px;
 		flex: 3;
 		padding-right: 16px;
-		border-right: 1px solid color-mix(in srgb, var(--wood) 40%, transparent);
+		border-right: 1px solid rgb(236 226 204 / 25%);
 	}
 	.technique,
 	.quick-slots button {
@@ -196,7 +196,7 @@
 	}
 	.technique > strong,
 	.quick-slots button > strong {
-		color: var(--ink);
+		color: var(--paper);
 		font: 600 12px/1.2 var(--font-latin);
 		white-space: nowrap;
 	}
@@ -207,7 +207,7 @@
 	}
 	.technique > small,
 	.quick-slots small {
-		color: var(--ink-soft);
+		color: color-mix(in srgb, var(--paper) 62%, transparent);
 		font-size: 9px;
 		line-height: 1.2;
 		font-variant-numeric: tabular-nums;
@@ -216,7 +216,7 @@
 		opacity: 0.55;
 	}
 	.technique.unavailable > strong {
-		color: var(--ink-soft);
+		color: color-mix(in srgb, var(--paper) 55%, transparent);
 	}
 	.technique.cooling > small,
 	.technique.busy > small {
