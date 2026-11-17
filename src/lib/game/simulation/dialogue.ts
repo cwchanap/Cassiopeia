@@ -20,6 +20,7 @@ export function activeDialogueLine(state: GameState): HudDialogue | null {
 	const villager = getVillager(state.mode.villagerId);
 	const lines = dialogueLinesFor(state.quest, villager);
 	return {
+		villagerId: state.mode.villagerId,
 		speaker: villager.name,
 		line: lines[Math.min(state.mode.lineIndex, lines.length - 1)],
 		lineIndex: state.mode.lineIndex,

@@ -212,6 +212,15 @@ export function toHudSnapshot(state: GameState): HudSnapshot {
 		markerProgress: markerProgress(state.quest),
 		prompt: state.prompt,
 		dialogue: activeDialogueLine(state),
+		damageNumbers: state.effects
+			.filter((effect) => effect.damage !== undefined)
+			.map((effect) => ({
+				id: effect.id,
+				position: { ...effect.position },
+				age: effect.age,
+				damage: effect.damage!,
+				target: effect.target!
+			})),
 		interactTarget: hudInteractTarget(state),
 		questTarget: hudQuestTarget(state),
 		playerPosition: { ...state.player.position },
@@ -669,9 +678,16 @@ function resolveActiveHits(state: GameState): void {
 	const hits = [playerHit, rivalHit].filter((hit): hit is PendingHit => hit !== null);
 
 	for (const hit of hits) {
+		const healthBefore = hit.target.health;
 		hit.target.health = Math.max(0, hit.target.health - hit.damage);
 		hit.attacker.combatAction.hasHit = true;
-		addEffect(state, hit.effect, hit.position);
+		addEffect(
+			state,
+			hit.effect,
+			hit.position,
+			healthBefore - hit.target.health,
+			hit.target === state.player ? 'player' : 'rival'
+		);
 	}
 
 	for (const hit of hits) {
@@ -774,12 +790,20 @@ function updatePrompt(state: GameState): void {
 	state.prompt = reward ? `Victory. Won: ${reward}` : 'The village is yours to explore.';
 }
 
-function addEffect(state: GameState, kind: CombatEffect['kind'], position: Vec2): void {
+function addEffect(
+	state: GameState,
+	kind: CombatEffect['kind'],
+	position: Vec2,
+	damage?: number,
+	target?: CombatEffect['target']
+): void {
 	state.effects.push({
 		id: state.nextEffectId,
 		kind,
 		position: { ...position },
-		age: 0
+		age: 0,
+		damage,
+		target
 	});
 	state.nextEffectId += 1;
 }

@@ -75,6 +75,8 @@ export type CombatEffect = {
 	kind: 'dash' | 'hit' | 'qi';
 	position: Vec2;
 	age: number;
+	damage?: number;
+	target?: 'player' | 'rival';
 };
 
 export type ItemId =
@@ -219,10 +221,19 @@ export type GameState = {
 };
 
 export type HudDialogue = {
+	villagerId: VillagerId;
 	speaker: string;
 	line: string;
 	lineIndex: number;
 	lineCount: number;
+};
+
+export type HudDamageNumber = {
+	id: number;
+	position: Vec2;
+	age: number;
+	damage: number;
+	target: 'player' | 'rival';
 };
 
 export type HudInteractTarget = {
@@ -258,6 +269,7 @@ export type HudSnapshot = {
 	markerProgress: MarkerProgress | null;
 	prompt: string | null;
 	dialogue: HudDialogue | null;
+	damageNumbers: HudDamageNumber[];
 	interactTarget: HudInteractTarget | null;
 	questTarget: HudQuestTarget | null;
 	playerPosition: Vec2;
