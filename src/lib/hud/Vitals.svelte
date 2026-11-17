@@ -9,7 +9,7 @@
 	}: { health: number; maxHealth: number; qi: number; maxQi: number } = $props();
 </script>
 
-<section class="vitals paper-panel" data-testid="status-cluster" aria-label="Player status">
+<section class="vitals ink-panel" data-testid="status-cluster" aria-label="Player status">
 	<div class="portrait-wrap">
 		<div class="portrait" aria-hidden="true"></div>
 		<span class="rank-seal hanzi" aria-hidden="true">{HUD_HANZI_LABELS.rankSeal}</span>
@@ -53,7 +53,7 @@
 		width: 84px;
 		height: 84px;
 		overflow: hidden;
-		border: 2px solid var(--wood);
+		border: 2px solid color-mix(in srgb, var(--paper) 65%, transparent);
 		outline: 1px solid color-mix(in srgb, var(--paper) 60%, transparent);
 		outline-offset: 2px;
 		border-radius: 50%;

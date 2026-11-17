@@ -169,3 +169,19 @@ it('keeps crop plots out of roads and blocks solid props without blocking the ju
 	const post = moveThroughWorld({ x: 10, z: 26.3 }, { x: 13, z: 26.3 });
 	expect(post.x).toBeLessThan(12.3 - 0.13 / 2);
 });
+
+it('keeps the z = 0 bridge market corridor walkable into Jadebank Market', () => {
+	let position = { x: 0, z: 0 };
+	for (const x of [4, 8, 12, 16, 20, 22]) {
+		position = moveThroughWorld(position, { x, z: 0.5 });
+		expect(canStandAt(position), JSON.stringify(position)).toBe(true);
+	}
+	expect(position.x).toBeGreaterThanOrEqual(21);
+	for (const z of [4, 8, 12, 16, 20, 24, 27]) {
+		position = moveThroughWorld(position, { x: 24, z });
+		expect(canStandAt(position), JSON.stringify(position)).toBe(true);
+	}
+	position = moveThroughWorld(position, { x: 24, z: 30 });
+	expect(canStandAt(position)).toBe(true);
+	expect(regionAt(position)).toBe('Jadebank Market');
+});

@@ -54,11 +54,33 @@
 		inset 0 0 22px rgb(58 42 28 / 18%);
 }
 
+/* Dark ink brush backing for floating world HUD (vitals, action bar, rival bar). */
+.hud-layer .ink-panel {
+	border: 1px solid rgb(236 226 204 / 38%);
+	border-radius: 14px 40px 12px 34px / 34px 12px 40px 14px;
+	background: linear-gradient(
+		118deg,
+		rgb(27 24 21 / 92%),
+		rgb(38 32 25 / 86%) 55%,
+		rgb(27 24 21 / 90%)
+	);
+	box-shadow:
+		0 6px 20px rgb(0 0 0 / 50%),
+		inset 0 0 18px rgb(0 0 0 / 35%);
+	color: var(--paper);
+}
+
 .hud-layer .brush-bar {
 	border: 1px solid rgb(27 24 21 / 65%);
 	border-radius: 62% 8% 55% 10% / 48% 62% 45% 60%;
 	background: rgb(27 24 21 / 14%);
 	box-shadow: inset 0 0 6px rgb(27 24 21 / 45%);
+}
+
+.hud-layer .ink-panel .brush-bar {
+	border-color: rgb(236 226 204 / 55%);
+	background: rgb(236 226 204 / 10%);
+	box-shadow: inset 0 0 6px rgb(0 0 0 / 55%);
 }
 
 /* Round action medallion on a dark brush backing. */
