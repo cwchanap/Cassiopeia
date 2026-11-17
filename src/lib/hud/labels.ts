@@ -12,7 +12,6 @@ export const HUD_HANZI_LABELS = {
 	north: '北'
 } as const;
 
-// ink-portraits.png 4x2 cells: 0 initiate, 1-5 villagers in VILLAGERS order.
 export const VILLAGER_PORTRAIT_INDEX: Record<VillagerId, number> = {
 	elder_shen: 1,
 	senior_brother_lu: 2,
