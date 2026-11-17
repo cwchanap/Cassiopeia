@@ -20,6 +20,12 @@
 		objective: string;
 		markerProgress: MarkerProgress | null;
 	} = $props();
+
+	const summary = $derived(
+		`${quest ? `${quest.title} · ` : ''}${objective}${
+			markerProgress ? ` · ${markerProgress.current}/${markerProgress.total}` : ''
+		}`
+	);
 </script>
 
 <section
@@ -45,11 +51,7 @@
 				{/each}
 			</div>
 		{/if}
-		<strong
-			>{quest ? `${quest.title} · ` : ''}{objective}{markerProgress
-				? ` · ${markerProgress.current}/${markerProgress.total}`
-				: ''}</strong
-		>
+		<strong title={variant === 'line' ? summary : undefined}>{summary}</strong>
 	</div>
 </section>
 
@@ -66,6 +68,18 @@
 	}
 	.quest-scroll.collapsed {
 		top: max(26px, env(safe-area-inset-top));
+	}
+	.quest-scroll.collapsed > div {
+		min-width: 0;
+	}
+	.quest-scroll.collapsed .eyebrow {
+		display: none;
+	}
+	.quest-scroll.collapsed strong {
+		margin-top: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.objective-mark {
 		display: grid;
