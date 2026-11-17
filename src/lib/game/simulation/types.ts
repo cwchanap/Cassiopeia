@@ -257,9 +257,12 @@ export type HudSnapshot = {
 	playerQi: number;
 	playerMaxQi: number;
 	rivalHealth: number;
+	rivalMaxHealth: number;
 	dashCooldown: number;
+	dashCooldownMax: number;
 	attackCooldown: number;
 	qiCooldown: number;
+	qiCooldownMax: number;
 	playerActionStatus: PlayerActionStatus;
 	isPaused: boolean;
 	inventory: HudInventorySnapshot;

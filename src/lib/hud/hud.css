@@ -1,0 +1,96 @@
+@font-face {
+	font-family: 'Ma Shan Zheng';
+	src: url('/fonts/wuxia/MaShanZheng-hanzi.woff2') format('woff2');
+	font-weight: 400;
+	font-style: normal;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: 'Cormorant Garamond';
+	src: url('/fonts/wuxia/CormorantGaramond.woff2') format('woff2');
+	font-weight: 300 700;
+	font-style: normal;
+	font-display: swap;
+}
+
+.hud-layer {
+	--paper: #ece2cc;
+	--paper-deep: #d9cbaa;
+	--ink: #1b1815;
+	--ink-soft: #453d33;
+	--cinnabar: #a82c22;
+	--health: #c4402f;
+	--qi: #4fa58f;
+	--wood: #3a2a1c;
+	--font-latin: 'Cormorant Garamond', Georgia, serif;
+	--font-hanzi: 'Ma Shan Zheng', 'Songti SC', STSong, SimSun, serif;
+	--font-cjk-small: 'Songti SC', STSong, SimSun, 'Ma Shan Zheng', serif;
+	font-family: var(--font-latin);
+	color: var(--ink);
+}
+
+.hud-layer .hanzi {
+	font-family: var(--font-hanzi);
+}
+
+.hud-layer .hanzi-small {
+	font-family: var(--font-cjk-small);
+}
+
+/* Brush-edged paper backing shared by vitals, bars and overlays. */
+.hud-layer .paper-panel {
+	border: 1px solid color-mix(in srgb, var(--wood) 55%, transparent);
+	border-radius: 3px 9px 4px 11px / 9px 4px 10px 5px;
+	background:
+		linear-gradient(
+			120deg,
+			color-mix(in srgb, var(--paper) 96%, transparent),
+			color-mix(in srgb, var(--paper-deep) 94%, transparent)
+		),
+		url('/images/wuxia/rice-paper.png') center / cover;
+	box-shadow:
+		0 5px 18px rgb(0 0 0 / 35%),
+		inset 0 0 22px rgb(58 42 28 / 18%);
+}
+
+.hud-layer .brush-bar {
+	border: 1px solid rgb(27 24 21 / 65%);
+	border-radius: 62% 8% 55% 10% / 48% 62% 45% 60%;
+	background: rgb(27 24 21 / 14%);
+	box-shadow: inset 0 0 6px rgb(27 24 21 / 45%);
+}
+
+/* Round action medallion on a dark brush backing. */
+.hud-layer .medallion {
+	position: relative;
+	border: 1px solid rgb(236 226 204 / 55%);
+	border-radius: 50%;
+	background: radial-gradient(circle at 35% 30%, #2a241d, var(--ink) 72%);
+	box-shadow:
+		0 3px 10px rgb(0 0 0 / 45%),
+		inset 0 0 0 2px rgb(236 226 204 / 8%);
+}
+
+.hud-layer .medallion-sweep {
+	position: absolute;
+	inset: 0;
+	border-radius: 50%;
+	background: conic-gradient(rgb(27 24 21 / 78%) calc(var(--sweep, 0) * 1turn), transparent 0);
+	pointer-events: none;
+}
+
+.hud-layer :focus-visible {
+	outline: 2px solid var(--cinnabar);
+	outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.hud-layer *,
+	.hud-layer *::before,
+	.hud-layer *::after {
+		transition-duration: 0.01ms !important;
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+	}
+}

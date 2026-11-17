@@ -2,7 +2,11 @@
 	import { createGameRuntime, type GameRuntime } from '$lib/game/runtime/createGameRuntime';
 	import { createInitialGameState, toHudSnapshot } from '$lib/game/simulation/state';
 	import type { HudSnapshot, ItemId, QuickSlotNumber } from '$lib/game/simulation/types';
+	import { hudLayout } from '$lib/hud/layout';
+	import Vitals from '$lib/hud/Vitals.svelte';
+	import TechniqueBar from '$lib/hud/TechniqueBar.svelte';
 	import type { Attachment } from 'svelte/attachments';
+	import '$lib/hud/hud.css';
 
 	let runtime: GameRuntime | null = null;
 	let bagReturnFocus: HTMLElement | null = null;
@@ -17,6 +21,10 @@
 		jade_breathing_charm: 3
 	};
 	let hud = $state<HudSnapshot>(toHudSnapshot(createInitialGameState()));
+
+	const layout = $derived(
+		hudLayout({ mode: hud.mode, isPaused: hud.isPaused, bagOpen: hud.inventory.isOpen })
+	);
 
 	const modeLabel = $derived(
 		hud.isPaused
@@ -160,10 +168,6 @@
 	function assignQuickSlot(slot: QuickSlotNumber, itemId: ItemId | null): void {
 		runtime?.assignQuickSlot(slot, itemId);
 	}
-
-	function cooldownText(value: number): string {
-		return value <= 0 ? 'Ready' : `${value.toFixed(1)}s`;
-	}
 </script>
 
 <svelte:head>
@@ -182,20 +186,6 @@
 	></span>
 {/snippet}
 
-{#snippet technique(
-	label: string,
-	key: string,
-	index: number,
-	cooldown: number,
-	available: boolean
-)}
-	<div class="technique" class:unavailable={!available} class:cooling={cooldown > 0}>
-		<div class="technique-art">{@render art(index)}<kbd>{key}</kbd></div>
-		<strong>{label}</strong>
-		<small>{hud.isPaused ? 'Paused' : available ? cooldownText(cooldown) : 'Duel only'}</small>
-	</div>
-{/snippet}
-
 <main class="game-shell" data-testid="game-shell">
 	<div
 		class="scene-host"
@@ -205,44 +195,43 @@
 	></div>
 
 	<div class="hud-layer" class:inventory-open={hud.inventory.isOpen}>
-		<section class="objective-chip" data-testid="objective-chip" aria-label="Current objective">
-			<span class="objective-mark" aria-hidden="true">!</span>
-			<div aria-live="polite">
-				<span class="eyebrow">{modeLabel}{hud.region ? ` · ${hud.region}` : ''}</span><strong
-					>{hud.quest ? `${hud.quest.title} · ` : ''}{hud.objective}{hud.markerProgress
-						? ` · ${hud.markerProgress.current}/${hud.markerProgress.total}`
-						: ''}</strong
-				>
-			</div>
-		</section>
+		{#if layout.quest !== 'hidden'}
+			<section
+				class="objective-chip paper-panel"
+				data-testid="objective-chip"
+				aria-label="Current objective"
+			>
+				<span class="objective-mark" aria-hidden="true">!</span>
+				<div aria-live="polite">
+					<span class="eyebrow">{modeLabel}{hud.region ? ` · ${hud.region}` : ''}</span><strong
+						>{hud.quest ? `${hud.quest.title} · ` : ''}{hud.objective}{hud.markerProgress
+							? ` · ${hud.markerProgress.current}/${hud.markerProgress.total}`
+							: ''}</strong
+					>
+				</div>
+			</section>
+		{/if}
 
-		<section class="status-cluster" data-testid="status-cluster" aria-label="Player status">
-			<div class="portrait">{@render art(0)}</div>
-			<div class="vitals">
-				<span class="eyebrow">Mountain sect</span>
-				<strong class="player-name">Initiate</strong>
-				<div class="resource health">
-					<span>Health</span>
-					<meter aria-label="Health" min="0" max={hud.playerMaxHealth} value={hud.playerHealth}
+		{#if layout.vitals}
+			<Vitals
+				health={hud.playerHealth}
+				maxHealth={hud.playerMaxHealth}
+				qi={hud.playerQi}
+				maxQi={hud.playerMaxQi}
+			/>
+		{/if}
+
+		{#if layout.rivalBar}
+			<section class="rival-status paper-panel" aria-label="Rival disciple">
+				<div>
+					<span class="eyebrow">Rival disciple</span><strong
+						>{hud.rivalHealth}/{hud.rivalMaxHealth}</strong
+					>
+				</div>
+				<div class="brush-bar rival-meter">
+					<meter aria-label="Rival health" min="0" max={hud.rivalMaxHealth} value={hud.rivalHealth}
 					></meter>
-					<strong>{hud.playerHealth}/{hud.playerMaxHealth}</strong>
 				</div>
-				<div class="resource qi">
-					<span>Qi</span>
-					<meter aria-label="Qi" min="0" max={hud.playerMaxQi} value={hud.playerQi}></meter>
-					<strong>{hud.playerQi}/{hud.playerMaxQi}</strong>
-				</div>
-				<div class="action-status" class:busy={hud.playerActionStatus !== 'Ready'}>
-					<span>Action</span>
-					{hud.playerActionStatus}
-				</div>
-			</div>
-		</section>
-
-		{#if hud.mode === 'duel'}
-			<section class="rival-status" aria-label="Rival disciple">
-				<div><span class="eyebrow">Rival disciple</span><strong>{hud.rivalHealth}/100</strong></div>
-				<meter aria-label="Rival health" min="0" max="100" value={hud.rivalHealth}></meter>
 			</section>
 		{/if}
 
@@ -250,59 +239,26 @@
 			{#if hud.prompt}
 				<p class="prompt" data-testid="game-prompt" aria-live="polite">{hud.prompt}</p>
 			{/if}
-			<div class="action-bar">
-				<section class="techniques" aria-label="Keyboard techniques">
-					{@render technique(
-						'Qinggong',
-						'Space',
-						1,
-						hud.dashCooldown,
-						!hud.isPaused && hud.mode !== 'dialogue'
-					)}
-					{@render technique('Strike', 'J', 2, hud.attackCooldown, hud.mode === 'duel')}
-					{@render technique('Qi burst', 'K', 3, hud.qiCooldown, hud.mode === 'duel')}
-				</section>
-				<section class="quick-slots" data-testid="quick-slots" aria-label="Quick slots">
-					{#each hud.inventory.quickSlots as slot (slot.slot)}
-						<button
-							type="button"
-							class:empty={!slot.itemId}
-							disabled={!slot.usable}
-							aria-label={`${slot.label}${slot.itemId ? `, ${slot.count} remaining` : ''}, slot ${slot.slot}`}
-							title={`${slot.label} · ${slot.slot}`}
-							data-testid={`quick-slot-${slot.slot}`}
-							onclick={() => slot.itemId && useItem(slot.itemId)}
-						>
-							<span class="slot-art"
-								>{#if slot.itemId}{@render art(itemArt[slot.itemId])}{:else}<span
-										class="empty-mark"
-										aria-hidden="true">◇</span
-									>{/if}<kbd>{slot.slot}</kbd></span
-							>
-							<strong>{slot.label}</strong>
-							<small>{slot.itemId ? `x${slot.count}` : '—'}</small>
-						</button>
-					{/each}
-					<button
-						type="button"
-						class="bag-button"
-						data-testid="bag-toggle"
-						aria-label="Open bag (I)"
-						aria-keyshortcuts="I B"
-						disabled={hud.isPaused || hud.mode === 'dialogue'}
-						onclick={toggleInventory}
-					>
-						<span class="slot-art">{@render art(6)}<kbd>I</kbd></span><strong>Bag</strong><small
-							>Open</small
-						>
-					</button>
-				</section>
-			</div>
+			{#if layout.techniques}
+				<TechniqueBar
+					mode={hud.mode}
+					isPaused={hud.isPaused}
+					dashCooldown={hud.dashCooldown}
+					dashCooldownMax={hud.dashCooldownMax}
+					qiCooldown={hud.qiCooldown}
+					qiCooldownMax={hud.qiCooldownMax}
+					playerActionStatus={hud.playerActionStatus}
+					quickSlots={hud.inventory.quickSlots}
+					{itemArt}
+					onUseItem={useItem}
+					onToggleBag={toggleInventory}
+				/>
+			{/if}
 		</div>
 		<div class="control-hint"><span><kbd>W A S D</kbd> / <kbd>Arrows</kbd> Move</span></div>
 		<div class="pause-hint"><kbd>Esc</kbd> Pause</div>
 
-		{#if hud.inventory.feedback}
+		{#if hud.inventory.feedback && layout.itemFeedback}
 			<p class="item-feedback" data-testid="item-feedback" role="status">
 				{hud.inventory.feedback}
 			</p>
@@ -310,7 +266,7 @@
 
 		{#if hud.inventory.isOpen}
 			<div
-				class="bag-panel"
+				class="bag-panel paper-panel"
 				data-testid="bag-panel"
 				role="dialog"
 				aria-modal="true"
@@ -405,7 +361,7 @@
 		{/if}
 
 		{#if hud.isPaused}
-			<section class="pause-panel" data-testid="pause-panel" aria-label="Paused">
+			<section class="pause-panel paper-panel" data-testid="pause-panel" aria-label="Paused">
 				<span class="panel-seal" aria-hidden="true">◇</span><span class="eyebrow"
 					>A moment of stillness</span
 				>
@@ -415,7 +371,7 @@
 		{/if}
 
 		{#if errorMessage}
-			<section class="fallback-panel" data-testid="fallback-panel" role="alert">
+			<section class="fallback-panel paper-panel" data-testid="fallback-panel" role="alert">
 				<strong>3D scene unavailable</strong>
 				<span>{errorMessage}</span>
 				<button type="button" onclick={() => window.location.reload()}>Retry</button>
@@ -429,9 +385,9 @@
 	:global(body) {
 		margin: 0;
 		min-height: 100%;
-		background: #101e1b;
-		color: #f5eedc;
-		font-family: 'Trebuchet MS', sans-serif;
+		background: #1b1815;
+		color: #ece2cc;
+		font-family: 'Cormorant Garamond', Georgia, serif;
 	}
 	:global(body) {
 		overflow: hidden;
@@ -440,16 +396,12 @@
 		font: inherit;
 	}
 	.game-shell {
-		--gold: #c3a76b;
-		--muted: #c5c4ac;
-		--jade: #9ad4b5;
-		--ink: #101e1b;
 		position: relative;
 		width: 100%;
 		height: 100vh;
 		height: 100dvh;
 		overflow: hidden;
-		background: var(--ink);
+		background: var(--ink, #1b1815);
 	}
 	.game-shell *,
 	.game-shell *::before,
@@ -473,9 +425,8 @@
 	}
 	.hud-layer.inventory-open {
 		pointer-events: auto;
-		background: #07120e80;
+		background: #1b181580;
 	}
-	.hud-layer.inventory-open .status-cluster,
 	.hud-layer.inventory-open .objective-chip,
 	.hud-layer.inventory-open .rival-status,
 	.hud-layer.inventory-open .bottom-hud,
@@ -486,7 +437,7 @@
 	}
 	.eyebrow {
 		display: block;
-		color: var(--gold);
+		color: var(--cinnabar);
 		font-size: 9px;
 		font-weight: 400;
 		letter-spacing: 0.2em;
@@ -496,53 +447,16 @@
 		display: inline-block;
 		min-width: 19px;
 		padding: 2px 5px;
-		border: 1px solid #c3a76b80;
+		border: 1px solid #ece2cc80;
 		border-radius: 3px;
-		background: #111f1cef;
-		color: #eee4c8;
+		background: #1b1815ef;
+		color: #ece2cc;
 		font:
-			10px 'Trebuchet MS',
-			sans-serif;
+			10px 'Cormorant Garamond',
+			Georgia,
+			serif;
 		line-height: 1.2;
 		text-align: center;
-	}
-	.status-cluster,
-	.objective-chip,
-	.action-bar,
-	.bag-panel,
-	.pause-panel,
-	.fallback-panel {
-		border: 1px solid #c3a76b90;
-		background: linear-gradient(120deg, #122720f5, #0c1714ed);
-		box-shadow:
-			0 6px 24px #0005,
-			inset 0 0 0 3px #101e1b,
-			inset 0 0 0 4px #c3a76b20;
-	}
-	.status-cluster::after,
-	.objective-chip::after,
-	.action-bar::after,
-	.bag-panel::after {
-		content: '';
-		position: absolute;
-		width: 9px;
-		height: 9px;
-		top: 3px;
-		right: 3px;
-		border-top: 2px solid var(--gold);
-		border-right: 2px solid var(--gold);
-		pointer-events: none;
-	}
-	.status-cluster {
-		position: absolute;
-		top: max(26px, env(safe-area-inset-top));
-		left: max(26px, env(safe-area-inset-left));
-		display: flex;
-		align-items: center;
-		gap: 15px;
-		width: 355px;
-		padding: 12px 17px 12px 11px;
-		border-radius: 58px 4px 4px 58px;
 	}
 	.item-art {
 		display: block;
@@ -552,148 +466,89 @@
 		background-size: 400% 200%;
 		background-repeat: no-repeat;
 	}
-	.portrait {
-		flex: 0 0 86px;
-		height: 86px;
-		overflow: hidden;
-		border: 2px solid var(--gold);
-		outline: 1px solid #c3a76b65;
-		outline-offset: 3px;
-		border-radius: 50%;
-	}
-	.vitals {
-		flex: 1;
-		min-width: 0;
-	}
-	.player-name {
-		display: block;
-		margin: 3px 0 9px;
-		font:
-			26px/1 Georgia,
-			serif;
-	}
-	.resource {
-		display: grid;
-		grid-template-columns: 37px minmax(40px, 1fr) 50px;
-		align-items: center;
-		gap: 7px;
-		margin-top: 5px;
-		font-size: 11px;
-	}
-	.resource > span {
-		color: var(--muted);
-	}
-	.resource > strong {
-		font-size: 11px;
-		font-weight: 400;
-		text-align: right;
-		font-variant-numeric: tabular-nums;
-	}
-	meter {
-		appearance: none;
-		display: block;
-		width: 100%;
-		height: 8px;
-		overflow: hidden;
-		border: 1px solid #d0ab7070;
-		border-radius: 2px;
-		background: #07130e;
-	}
-	meter::-webkit-meter-inner-element {
-		display: block;
-		height: 100%;
-	}
-	meter::-webkit-meter-bar {
-		height: 100%;
-		border: 0;
-		border-radius: 0;
-		background: #07130e;
-	}
-	meter::-webkit-meter-optimum-value {
-		background: linear-gradient(90deg, #812e2a, #d65c49);
-	}
-	meter::-moz-meter-bar {
-		background: linear-gradient(90deg, #812e2a, #d65c49);
-	}
-	.qi meter::-webkit-meter-optimum-value {
-		background: linear-gradient(90deg, #407d67, #a0d3ac);
-	}
-	.qi meter::-moz-meter-bar {
-		background: linear-gradient(90deg, #407d67, #a0d3ac);
-	}
-	.action-status {
-		display: flex;
-		align-items: center;
-		gap: 5px;
-		margin-top: 8px;
-		color: var(--jade);
-		font-size: 10px;
-	}
-	.action-status::before {
-		content: '';
-		width: 5px;
-		height: 5px;
-		border-radius: 50%;
-		background: currentColor;
-	}
-	.action-status span {
-		color: var(--muted);
-	}
-	.action-status.busy {
-		color: #edbd7e;
-	}
 	.objective-chip {
 		position: absolute;
 		top: max(26px, env(safe-area-inset-top));
 		right: max(26px, env(safe-area-inset-right));
 		display: flex;
 		align-items: center;
-		gap: 17px;
+		gap: 14px;
 		width: 276px;
-		padding: 17px 19px;
-		border-radius: 3px;
+		padding: 14px 17px;
 	}
 	.objective-mark {
 		display: grid;
 		place-items: center;
 		flex: 0 0 25px;
 		height: 25px;
-		border: 1px solid var(--gold);
-		color: #e7c889;
-		font:
-			20px Georgia,
-			serif;
+		border: 1px solid var(--cinnabar);
+		color: var(--cinnabar);
+		font: 20px var(--font-hanzi);
 		border-radius: 50% 50% 3px 3px;
 	}
 	.objective-chip strong {
 		display: block;
-		margin-top: 6px;
-		font:
-			18px/1.2 Georgia,
-			serif;
+		margin-top: 5px;
+		font: 600 18px/1.2 var(--font-latin);
 	}
 	.rival-status {
 		position: absolute;
 		top: 34px;
 		left: 50%;
-		width: 240px;
-		padding: 12px 15px;
+		width: 300px;
+		padding: 10px 15px 12px;
 		transform: translateX(-50%);
-		background: linear-gradient(90deg, #101e1b00, #101e1be0 15%, #101e1be0 85%, #101e1b00);
 	}
-	.rival-status > div {
+	.rival-status > div:first-child {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		margin-bottom: 8px;
+		margin-bottom: 7px;
 	}
 	.rival-status strong {
-		color: var(--muted);
-		font-size: 10px;
+		color: var(--ink-soft);
+		font-size: 11px;
 		font-weight: 400;
+		font-variant-numeric: tabular-nums;
 	}
-	.rival-status meter {
-		height: 6px;
+	.rival-meter {
+		height: 10px;
+		padding: 2px;
+	}
+	.rival-meter meter {
+		appearance: none;
+		display: block;
+		width: 100%;
+		height: 100%;
+		border: 0;
+		border-radius: inherit;
+		background: transparent;
+	}
+	.rival-meter meter::-webkit-meter-inner-element {
+		display: block;
+		height: 100%;
+	}
+	.rival-meter meter::-webkit-meter-bar {
+		height: 100%;
+		border: 0;
+		border-radius: inherit;
+		background: transparent;
+	}
+	.rival-meter meter::-webkit-meter-optimum-value {
+		border-radius: inherit;
+		background: linear-gradient(
+			90deg,
+			color-mix(in srgb, var(--cinnabar) 78%, var(--ink)),
+			var(--cinnabar)
+		);
+	}
+	.rival-meter meter::-moz-meter-bar {
+		border-radius: inherit;
+		background: linear-gradient(
+			90deg,
+			color-mix(in srgb, var(--cinnabar) 78%, var(--ink)),
+			var(--cinnabar)
+		);
 	}
 	.bottom-hud {
 		position: absolute;
@@ -707,13 +562,17 @@
 		width: fit-content;
 		max-width: 100%;
 		margin: 0 auto 12px;
-		padding: 9px 35px;
-		background: linear-gradient(90deg, #101e1b00, #101e1bed 14%, #101e1bed 86%, #101e1b00);
-		color: #f5eedc;
-		font:
-			16px/1.35 Georgia,
-			serif;
-		text-shadow: 0 1px 3px #000;
+		padding: 8px 32px;
+		border-radius: 3px 9px 4px 11px / 9px 4px 10px 5px;
+		background: linear-gradient(
+			90deg,
+			#ece2cc00,
+			color-mix(in srgb, var(--paper) 93%, transparent) 14%,
+			color-mix(in srgb, var(--paper) 93%, transparent) 86%,
+			#ece2cc00
+		);
+		color: var(--ink);
+		font: 600 16px/1.35 var(--font-latin);
 		text-align: center;
 	}
 	.prompt::before,
@@ -721,118 +580,9 @@
 		content: '◇';
 		display: inline-block;
 		margin: 0 12px;
-		color: var(--gold);
+		color: var(--cinnabar);
 		font-size: 10px;
 		vertical-align: middle;
-	}
-	.action-bar {
-		position: relative;
-		display: flex;
-		gap: 15px;
-		padding: 12px 18px 10px;
-		border-radius: 4px;
-	}
-	.techniques {
-		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
-		gap: 12px;
-		flex: 3;
-		padding-right: 16px;
-		border-right: 1px solid #c3a76b60;
-	}
-	.technique,
-	.quick-slots button {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 4px;
-		min-width: 0;
-		text-align: center;
-	}
-	.technique-art,
-	.slot-art {
-		position: relative;
-		display: block;
-		width: 56px;
-		height: 56px;
-		margin-bottom: 4px;
-		border: 1px solid #b6a37670;
-		border-radius: 4px;
-		background: var(--ink);
-	}
-	.technique-art {
-		border-color: #7fae9590;
-	}
-	.technique-art .item-art,
-	.slot-art .item-art {
-		border-radius: 4px;
-	}
-	.technique-art kbd,
-	.slot-art kbd {
-		position: absolute;
-		bottom: -5px;
-		left: 50%;
-		transform: translateX(-50%);
-	}
-	.technique > strong,
-	.quick-slots button > strong {
-		color: #eee5cf;
-		font:
-			12px/1.2 Georgia,
-			serif;
-		white-space: nowrap;
-	}
-	.technique > small,
-	.quick-slots small {
-		color: var(--jade);
-		font-size: 9px;
-		line-height: 1.2;
-		font-variant-numeric: tabular-nums;
-	}
-	.technique.unavailable > small {
-		color: var(--muted);
-	}
-	.technique.unavailable .item-art {
-		opacity: 0.55;
-	}
-	.technique.cooling .item-art {
-		opacity: 0.4;
-	}
-	.technique.cooling > small {
-		color: #edbd7e;
-	}
-	.quick-slots {
-		display: grid;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
-		gap: 12px;
-		flex: 4;
-		pointer-events: auto;
-	}
-	.quick-slots button {
-		border: 0;
-		padding: 0;
-		background: transparent;
-		box-shadow: none;
-	}
-	.quick-slots button:not(:disabled):hover .slot-art {
-		border-color: #efd799;
-		box-shadow: 0 0 12px #c3a76b40;
-	}
-	.quick-slots small {
-		color: var(--muted);
-	}
-	.quick-slots button:disabled {
-		opacity: 0.55;
-	}
-	.empty-mark {
-		display: grid;
-		place-items: center;
-		height: 100%;
-		color: #b7a57270;
-		font-size: 30px;
-	}
-	.empty .slot-art {
-		border-style: dashed;
 	}
 	.control-hint,
 	.pause-hint {
@@ -840,8 +590,8 @@
 		bottom: 24px;
 		padding: 8px 10px;
 		border-radius: 3px;
-		background: #101e1bcc;
-		color: #d6d0ba;
+		background: #1b1815cc;
+		color: #ece2cc;
 		font-size: 10px;
 	}
 	.control-hint {
@@ -866,9 +616,10 @@
 		margin: 0;
 		padding: 10px 20px;
 		transform: translateX(-50%);
-		border: 1px solid #bfa77a70;
-		background: #10241fef;
-		color: #e8debf;
+		border: 1px solid color-mix(in srgb, var(--wood) 55%, transparent);
+		border-radius: 3px 9px 4px 11px / 9px 4px 10px 5px;
+		background: color-mix(in srgb, var(--paper) 94%, transparent);
+		color: var(--ink);
 		font-size: 13px;
 		text-align: center;
 		box-shadow: 0 3px 18px #0003;
@@ -888,7 +639,6 @@
 		transform: translate(-50%, -50%);
 		pointer-events: auto;
 		overflow: auto;
-		border-radius: 4px;
 	}
 	.bag-panel header {
 		display: flex;
@@ -897,13 +647,11 @@
 		gap: 12px;
 		margin-bottom: 24px;
 		padding-bottom: 20px;
-		border-bottom: 1px solid #c3a76b50;
+		border-bottom: 1px solid color-mix(in srgb, var(--wood) 35%, transparent);
 	}
 	.bag-panel header h2 {
 		margin: 6px 0 0;
-		font:
-			30px Georgia,
-			serif;
+		font: 600 30px var(--font-latin);
 	}
 	.bag-grid {
 		display: grid;
@@ -917,7 +665,7 @@
 	}
 	.bag-section h2 {
 		margin: 0 0 4px;
-		color: var(--gold);
+		color: var(--cinnabar);
 		font-size: 10px;
 		font-weight: 400;
 		letter-spacing: 0.18em;
@@ -929,15 +677,16 @@
 		align-items: center;
 		gap: 10px;
 		padding: 12px;
-		border: 1px solid #c3a76b30;
-		background: #ffffff03;
+		border: 1px solid color-mix(in srgb, var(--wood) 30%, transparent);
+		border-radius: 3px;
+		background: #ffffff08;
 	}
 	.bag-art {
 		display: block;
 		grid-row: span 2;
 		width: 52px;
 		height: 52px;
-		border: 1px solid #c3a76b50;
+		border: 1px solid color-mix(in srgb, var(--wood) 40%, transparent);
 		border-radius: 4px;
 		overflow: hidden;
 	}
@@ -947,18 +696,16 @@
 		grid-column: 2 / 4;
 	}
 	.item-description strong {
-		font:
-			16px/1.25 Georgia,
-			serif;
+		font: 600 16px/1.25 var(--font-latin);
 	}
 	.item-description span,
 	.empty-list {
-		color: var(--muted);
+		color: var(--ink-soft);
 		font-size: 11px;
 		line-height: 1.5;
 	}
 	.bag-row > small {
-		color: var(--jade);
+		color: var(--ink-soft);
 		font-size: 11px;
 	}
 	.bag-row > button {
@@ -971,11 +718,11 @@
 		justify-content: flex-end;
 		gap: 6px;
 		padding-top: 8px;
-		border-top: 1px solid #c3a76b25;
+		border-top: 1px solid color-mix(in srgb, var(--wood) 20%, transparent);
 	}
 	.slot-actions span {
 		margin-right: auto;
-		color: var(--muted);
+		color: var(--ink-soft);
 		font-size: 10px;
 	}
 	.slot-actions button {
@@ -984,16 +731,16 @@
 		padding: 5px 9px;
 	}
 	.slot-actions button[aria-pressed='true'] {
-		border-color: var(--jade);
-		color: var(--jade);
-		background: #54816d30;
+		border-color: var(--cinnabar);
+		color: var(--cinnabar);
+		background: color-mix(in srgb, var(--cinnabar) 16%, transparent);
 	}
 	.equipped-list {
 		display: grid;
 		gap: 0;
 		padding: 5px 12px;
-		border-left: 2px solid #7faa9270;
-		background: #7faa920a;
+		border-left: 2px solid color-mix(in srgb, var(--qi) 60%, transparent);
+		background: color-mix(in srgb, var(--qi) 8%, transparent);
 	}
 	.equipped-row {
 		display: grid;
@@ -1003,10 +750,10 @@
 		font-size: 10px;
 	}
 	.equipped-row span {
-		color: var(--muted);
+		color: var(--ink-soft);
 	}
 	.equipped-row strong {
-		color: var(--jade);
+		color: color-mix(in srgb, var(--qi) 70%, var(--ink));
 		font-weight: 400;
 	}
 	.pause-panel,
@@ -1019,46 +766,41 @@
 		width: min(380px, calc(100% - 40px));
 		padding: 32px;
 		transform: translate(-50%, -50%);
-		border-radius: 3px;
 		pointer-events: auto;
 		text-align: center;
 	}
 	.pause-panel > strong,
 	.fallback-panel > strong {
-		font:
-			30px/1.15 Georgia,
-			serif;
+		font: 600 30px/1.15 var(--font-latin);
 	}
 	.pause-panel > span:last-child,
 	.fallback-panel > span {
-		color: var(--muted);
+		color: var(--ink-soft);
 		font-size: 12px;
 		line-height: 1.6;
 	}
 	.panel-seal {
-		color: var(--gold);
-		font:
-			42px/1 Georgia,
-			serif;
+		color: var(--cinnabar);
+		font: 42px/1 var(--font-hanzi);
 	}
 	button {
 		padding: 10px 16px;
-		border: 1px solid #c3a76b80;
-		border-radius: 2px;
-		background: #c3a76b16;
-		color: #f0dfb5;
+		border: 1px solid color-mix(in srgb, var(--wood) 55%, transparent);
+		border-radius: 3px;
+		background: color-mix(in srgb, var(--paper-deep) 40%, transparent);
+		color: var(--ink);
 		font-size: 12px;
 		cursor: pointer;
 	}
 	button:not(:disabled):hover {
-		background: #c3a76b30;
+		background: color-mix(in srgb, var(--paper-deep) 75%, transparent);
 	}
 	button:disabled {
-		color: #9da99c;
+		color: var(--ink-soft);
 		cursor: default;
 	}
 	button:focus-visible {
-		outline: 2px solid #f4db9b;
+		outline: 2px solid var(--cinnabar);
 		outline-offset: 4px;
 	}
 	.close-button {
@@ -1076,29 +818,6 @@
 		}
 	}
 	@media (max-width: 720px) {
-		.status-cluster {
-			top: max(12px, env(safe-area-inset-top));
-			left: 12px;
-			width: 310px;
-			max-width: calc(100% - 24px);
-			padding: 9px 15px 9px 9px;
-			gap: 12px;
-		}
-		.portrait {
-			flex-basis: 64px;
-			height: 64px;
-		}
-		.player-name {
-			font-size: 20px;
-			margin: 3px 0 5px;
-		}
-		.vitals > .eyebrow {
-			font-size: 8px;
-		}
-		.action-status {
-			margin-top: 6px;
-			font-size: 9px;
-		}
 		.objective-chip {
 			top: max(140px, calc(env(safe-area-inset-top) + 128px));
 			left: 15px;
@@ -1124,37 +843,6 @@
 		.bottom-hud {
 			bottom: max(12px, env(safe-area-inset-bottom));
 			max-width: calc(100% - 20px);
-		}
-		.action-bar {
-			gap: 8px;
-			padding: 9px 10px 8px;
-		}
-		.techniques {
-			gap: 6px;
-			padding-right: 8px;
-		}
-		.quick-slots {
-			gap: 6px;
-		}
-		.technique-art,
-		.slot-art {
-			width: min(100%, 48px);
-			height: auto;
-			aspect-ratio: 1;
-		}
-		.technique > strong,
-		.quick-slots button > strong {
-			font-size: 10px;
-		}
-		.technique > small,
-		.quick-slots small {
-			font-size: 8px;
-		}
-		.technique-art kbd,
-		.slot-art kbd {
-			font-size: 8px;
-			padding: 1px 3px;
-			min-width: 15px;
 		}
 		.prompt {
 			font-size: 13px;
@@ -1207,10 +895,6 @@
 		}
 	}
 	@media (max-height: 540px) and (min-width: 600px) {
-		.status-cluster {
-			transform: scale(0.8);
-			transform-origin: top left;
-		}
 		.objective-chip {
 			top: 16px;
 			left: auto;
@@ -1222,14 +906,6 @@
 		.bottom-hud {
 			width: 570px;
 			bottom: 8px;
-		}
-		.technique-art,
-		.slot-art {
-			width: 40px;
-			height: 40px;
-		}
-		.action-bar {
-			padding: 8px 12px;
 		}
 		.prompt {
 			margin-bottom: 6px;

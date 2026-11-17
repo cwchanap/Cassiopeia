@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialGameState, stepGame, toHudSnapshot } from './state';
 import {
+	DASH_COOLDOWN,
 	DASH_DISTANCE,
 	distance,
 	INTERACT_RANGE,
 	LIGHT_ATTACK_TIMING,
+	QI_BURST_COOLDOWN,
 	QI_BURST_COST,
 	QI_BURST_TIMING,
 	RIVAL_ATTACK_COOLDOWN,
@@ -1246,5 +1248,16 @@ describe('partial-progress reload', () => {
 		]);
 		expect(state.quest).toEqual({ stepIndex: 3, stepProgress: 0 });
 		expect(state.items.inventory.lesser_healing_pill).toBe(5);
+	});
+});
+
+describe('HUD cooldown and rival maxima', () => {
+	it('exposes rivalMaxHealth and cooldown maxima for HUD sweep ratios', () => {
+		const state = createInitialGameState();
+		const hud = toHudSnapshot(state);
+
+		expect(hud.rivalMaxHealth).toBe(state.rival.maxHealth);
+		expect(hud.dashCooldownMax).toBe(DASH_COOLDOWN);
+		expect(hud.qiCooldownMax).toBe(QI_BURST_COOLDOWN);
 	});
 });
