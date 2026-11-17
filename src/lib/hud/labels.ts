@@ -12,6 +12,12 @@ export const HUD_HANZI_LABELS = {
 	north: '北'
 } as const;
 
+export const REGION_TITLES: Record<string, string> = {
+	'Whispering Bamboo Shrine': '竹语祠',
+	'Cloudrest Monastery': '云栖寺',
+	'Jadebank Market': '玉津集'
+};
+
 export const VILLAGER_PORTRAIT_INDEX: Record<VillagerId, number> = {
 	elder_shen: 1,
 	senior_brother_lu: 2,

@@ -35,4 +35,11 @@ describe('Wuxia MVP route', () => {
 		expect(page.getByRole('meter', { name: 'Rival health' }).all()).toHaveLength(0);
 		expect(page.getByTestId('damage-number').all()).toHaveLength(0);
 	});
+
+	it('shows no arrival banner while the spawn region is unnamed', async () => {
+		render(Page);
+
+		await expect.element(page.getByTestId('objective-chip')).toBeInTheDocument();
+		expect(page.getByTestId('place-banner').all()).toHaveLength(0);
+	});
 });

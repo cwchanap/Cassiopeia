@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { QUEST_STEPS } from '$lib/game/simulation/villageContent';
-import { HUD_HANZI_LABELS } from './labels';
+import worldLayout from '$lib/game/world-layout.json';
+import { HUD_HANZI_LABELS, REGION_TITLES } from './labels';
 
 const FONTS_DIR = resolve(import.meta.dirname, '../../../static/fonts/wuxia');
 const CJK = /[㐀-鿿]/g;
@@ -46,6 +47,19 @@ describe('wuxia hanzi font subset', () => {
 		for (const ch of needed) {
 			expect(manifest, `manifest missing ${ch}`).toContain(ch);
 			expect(coverage.has(ch), `subset font missing ${ch}`).toBe(true);
+		}
+	});
+
+	it('covers the Chinese display title of every named world region', () => {
+		const names = (worldLayout.regions as { name: string }[]).map((region) => region.name);
+		expect(names.length).toBeGreaterThan(0);
+		for (const name of names) {
+			const title = REGION_TITLES[name];
+			expect(title, `missing Chinese title for region ${name}`).toBeTruthy();
+			for (const ch of cjkChars(title)) {
+				expect(manifest, `manifest missing ${ch}`).toContain(ch);
+				expect(coverage.has(ch), `subset font missing ${ch}`).toBe(true);
+			}
 		}
 	});
 
