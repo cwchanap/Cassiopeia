@@ -152,7 +152,7 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 }, testInfo) => {
 	// Software WebGL can drop below 5 fps; the capped simulation step then advances only a
 	// fraction of a game second per wall second, so keep wall-clock limits generous.
-	test.setTimeout(420000);
+	test.setTimeout(600000);
 	await page.goto('/');
 	await page.evaluate(() => localStorage.clear());
 	await page.reload();

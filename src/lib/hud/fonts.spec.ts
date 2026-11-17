@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -22,6 +23,14 @@ const coverage = new Set(
 );
 
 describe('wuxia hanzi font subset', () => {
+	it('binds the committed coverage dump to the shipped woff2 binary', () => {
+		const expected = readFileSync(resolve(FONTS_DIR, 'hanzi-subset.sha256'), 'utf-8').trim();
+		const actual = createHash('sha256')
+			.update(readFileSync(resolve(FONTS_DIR, 'MaShanZheng-hanzi.woff2')))
+			.digest('hex');
+		expect(actual).toBe(expected);
+	});
+
 	it('covers every CJK glyph in authored quest titles', () => {
 		const needed = QUEST_STEPS.flatMap((step) => cjkChars(step.title));
 		expect(needed.length).toBeGreaterThan(0);
