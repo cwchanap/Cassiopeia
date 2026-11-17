@@ -13,31 +13,32 @@
 		duration?: number;
 	} = $props();
 
-	let dismissedRegion = $state<string | null>(null);
-	const title = $derived(
-		region !== null && region !== dismissedRegion ? REGION_TITLES[region] : undefined
-	);
+	let expired = $state(false);
+	const title = $derived(region !== null && !expired ? REGION_TITLES[region] : undefined);
 
-	const dismissAfter: Attachment<HTMLDivElement> = () => {
+	const announce: Attachment<HTMLElement> = () => {
+		expired = false;
 		const timer = setTimeout(() => {
-			dismissedRegion = region;
+			expired = true;
 		}, duration);
 		return () => clearTimeout(timer);
 	};
 </script>
 
 {#key region}
-	{#if title && visible}
-		<div
-			class="place-banner"
-			data-testid="place-banner"
-			transition:fade={{ duration: 400 }}
-			{@attach dismissAfter}
-		>
-			<span class="place-hanzi hanzi" lang="zh">{title}</span>
-			<span class="place-name">{region}</span>
-		</div>
-	{/if}
+	<div style:display="contents" {@attach announce}>
+		{#if title}
+			<div
+				class="place-banner"
+				class:obscured={!visible}
+				data-testid="place-banner"
+				transition:fade={{ duration: 400 }}
+			>
+				<span class="place-hanzi hanzi" lang="zh">{title}</span>
+				<span class="place-name">{region}</span>
+			</div>
+		{/if}
+	</div>
 {/key}
 
 <style>
@@ -62,6 +63,9 @@
 		color: var(--paper);
 		text-align: center;
 		text-shadow: 0 2px 8px rgb(0 0 0 / 65%);
+	}
+	.place-banner.obscured {
+		visibility: hidden;
 	}
 	.place-hanzi {
 		font-size: 46px;
