@@ -54,6 +54,36 @@ describe('WorldAnchors', () => {
 		await expect.element(page.getByTestId('quest-anchor')).toBeInTheDocument();
 	});
 
+	it('keeps an interaction prompt available when there is no unobstructed position', async () => {
+		const host = document.createElement('div');
+		host.style.cssText = 'position:relative;width:960px;height:640px';
+		const obstacle = document.createElement('div');
+		obstacle.dataset.testid = 'mini-map';
+		obstacle.style.cssText = 'position:absolute;inset:0';
+		host.appendChild(obstacle);
+		document.body.appendChild(host);
+
+		const { unmount } = await render(WorldAnchors, {
+			target: host,
+			props: {
+				frame: frameAt(),
+				villagers: [],
+				target: null,
+				interact: { id: elder.id, name: elder.name, position: elder.position },
+				prompt: 'Press E to speak with Elder Shen'
+			}
+		});
+		try {
+			const prompt = host.querySelector<HTMLElement>('[data-testid="game-prompt"]')!;
+			expect(prompt).not.toBeNull();
+			expect(getComputedStyle(prompt).visibility).toBe('visible');
+			expect(prompt.textContent).toBe('Press E to speak with Elder Shen');
+		} finally {
+			await unmount();
+			host.remove();
+		}
+	});
+
 	it('anchors the E prompt at the projected interact position through follow lag and resize', async () => {
 		const bell = SHRINE_BELL.position;
 		const villagerPosition = { x: bell.x + 3, z: bell.z + 1 };

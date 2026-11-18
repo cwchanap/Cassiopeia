@@ -1,13 +1,36 @@
 import { page } from 'vitest/browser';
 import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
-import { getVillager } from '$lib/game/simulation/villageContent';
+import { getVillager, QUEST_STEPS } from '$lib/game/simulation/villageContent';
 import DialogueScroll from './DialogueScroll.svelte';
 
 const elder = getVillager('elder_shen');
 const lu = getVillager('senior_brother_lu');
 
 describe('DialogueScroll', () => {
+	it('shows the current quest context during dialogue and removes it after completion', async () => {
+		const dialogue = {
+			villagerId: 'elder_shen' as const,
+			speaker: elder.name,
+			line: elder.questLines[0],
+			lineIndex: 0,
+			lineCount: elder.questLines.length
+		};
+		const quest = {
+			stepIndex: 0,
+			title: QUEST_STEPS[0].title,
+			instruction: QUEST_STEPS[0].instruction
+		};
+		const { rerender } = render(DialogueScroll, { props: { dialogue, quest } });
+
+		const context = page.getByTestId('dialogue-quest-context');
+		await expect.element(context).toHaveTextContent(quest.title);
+		await expect.element(context).toHaveTextContent('Step 1 of 5');
+
+		await rerender({ dialogue, quest: null });
+		expect(context.all()).toHaveLength(0);
+	});
+
 	it('shows the speaker, line, progress dots and E Continue hint on the prompt', async () => {
 		render(DialogueScroll, {
 			props: {

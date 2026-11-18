@@ -192,6 +192,12 @@
 		background-size: 400% 200%;
 		background-repeat: no-repeat;
 	}
+	.technique-art .item-art {
+		filter: invert(1) sepia(0.65) hue-rotate(105deg) saturate(0.8) brightness(0.9) contrast(1.15);
+	}
+	.slot-art .item-art {
+		filter: invert(1) hue-rotate(180deg) saturate(0.9) brightness(0.9) contrast(1.08);
+	}
 	.technique-art,
 	.slot-art {
 		display: block;
@@ -241,7 +247,7 @@
 		font-variant-numeric: tabular-nums;
 	}
 	.technique.unavailable .item-art {
-		opacity: 0.55;
+		opacity: 0.72;
 	}
 	.technique.unavailable > strong {
 		color: color-mix(in srgb, var(--paper) 55%, transparent);

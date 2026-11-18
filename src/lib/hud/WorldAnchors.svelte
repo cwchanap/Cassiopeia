@@ -11,6 +11,8 @@
 		HudVillager,
 		Vec2
 	} from '$lib/game/simulation/types';
+	import type { Attachment } from 'svelte/attachments';
+	import { avoidHud } from './avoidHud';
 
 	let {
 		frame,
@@ -44,9 +46,50 @@
 	const promptAnchor = $derived(
 		interact && prompt ? { interact, prompt, screen: project(interact.position, 1.6) } : null
 	);
+
+	const placeLabels: Attachment<HTMLDivElement> = (node) => {
+		$effect(() => {
+			if (!frame || (!heads.length && !promptAnchor?.screen)) return;
+			const parent = node.parentElement;
+			if (!parent) return;
+			const origin = node.getBoundingClientRect();
+			const obstacles = Array.from(
+				parent.querySelectorAll(
+					'[data-testid="mini-map"], [data-testid="objective-chip"], [data-testid="status-cluster"]'
+				)
+			).map((element) => {
+				const rect = element.getBoundingClientRect();
+				return {
+					left: rect.left - origin.left,
+					top: rect.top - origin.top,
+					right: rect.right - origin.left,
+					bottom: rect.bottom - origin.top
+				};
+			});
+			// Read all label sizes before applying offsets to avoid repeated layout passes.
+			const labels = Array.from(node.querySelectorAll<HTMLElement>('.name-tag, .prompt-tag')).map(
+				(element) => {
+					const x = parseFloat(element.style.left);
+					const y = parseFloat(element.style.top);
+					const width = element.offsetWidth;
+					const height = element.offsetHeight;
+					return {
+						element,
+						bounds: { left: x - width / 2, right: x + width / 2, top: y - height, bottom: y }
+					};
+				}
+			);
+			for (const { element, bounds } of labels) {
+				const offset = avoidHud(bounds, frame.viewport, obstacles);
+				element.style.transform = offset
+					? `translate(calc(-50% + ${offset.x}px), calc(-100% + ${offset.y}px))`
+					: '';
+			}
+		});
+	};
 </script>
 
-<div class="world-anchors" data-testid="world-anchors">
+<div class="world-anchors" data-testid="world-anchors" {@attach placeLabels}>
 	{#each heads as { villager, screen } (villager.id)}
 		<span
 			class="anchor-tag name-tag"
@@ -102,12 +145,15 @@
 		text-shadow: 0 1px 4px rgb(27 24 21 / 60%);
 	}
 	.prompt-tag {
+		max-width: calc(100% - 20px);
 		padding: 4px 10px;
 		border: 1px solid color-mix(in srgb, var(--paper) 35%, transparent);
 		border-radius: 2px;
 		background: rgb(27 24 21 / 94%);
 		color: var(--paper);
 		font: 600 13px/1.3 var(--font-latin);
+		text-align: center;
+		white-space: normal;
 		box-shadow: 0 2px 8px rgb(0 0 0 / 35%);
 	}
 </style>

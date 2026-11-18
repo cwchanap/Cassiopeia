@@ -27,11 +27,15 @@
 		}`
 	);
 	const titleParts = $derived(quest?.title.match(/^(\S+)\s+(.+)$/));
+	let detailPinned = $state(false);
 </script>
 
-{#snippet title()}
+{#snippet title(duel = false)}
 	{#if titleParts}
-		<span class="step-hanzi hanzi" lang="zh">{titleParts[1]}</span>&#32;{titleParts[2]}
+		<span class="step-hanzi hanzi" lang="zh">{titleParts[1]}</span>&#32;{titleParts[2]}{duel &&
+		quest?.stepIndex === 4
+			? ' with the rival'
+			: ''}
 	{:else}
 		{quest?.title ?? objective}
 	{/if}
@@ -67,10 +71,22 @@
 				<span class="step-count">Step {quest ? quest.stepIndex + 1 : 5} of 5</span>
 			</div>
 		{:else}
-			<strong title={summary}>{@render title()}</strong>
+			<strong title={summary}>
+				<button
+					type="button"
+					class="quest-detail-trigger"
+					aria-describedby="duel-objective"
+					aria-pressed={detailPinned}
+					onclick={() => (detailPinned = !detailPinned)}
+				>
+					{@render title(true)}
+				</button>
+			</strong>
+			<span id="duel-objective" class="objective-detail" class:pinned={detailPinned} role="tooltip"
+				>{objective}</span
+			>
 			{#if quest}
 				<span class="step-count">Step {quest.stepIndex + 1} of 5</span>
-				<span class="sr-only">{objective}</span>
 			{/if}
 		{/if}
 	</div>
@@ -125,6 +141,43 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	.quest-detail-trigger {
+		max-width: 100%;
+		overflow: hidden;
+		border: 0;
+		padding: 0;
+		background: transparent;
+		color: inherit;
+		font: 600 14px/1.15 var(--font-latin-cjk);
+		text-align: left;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		pointer-events: auto;
+	}
+	.quest-detail-trigger:focus-visible {
+		outline: 2px solid var(--cinnabar);
+		outline-offset: -2px;
+	}
+	.objective-detail {
+		position: absolute;
+		top: calc(100% + 6px);
+		right: 0;
+		left: 0;
+		z-index: 2;
+		visibility: hidden;
+		padding: 8px 10px;
+		border: 1px solid var(--wood);
+		background: var(--paper);
+		color: var(--ink);
+		font: 600 13px/1.3 var(--font-latin);
+		box-shadow: 0 2px 8px rgb(0 0 0 / 30%);
+	}
+	.collapsed
+		strong:has(.quest-detail-trigger:hover, .quest-detail-trigger:focus)
+		+ .objective-detail,
+	.objective-detail.pinned {
+		visibility: visible;
 	}
 	.sr-only {
 		position: absolute;

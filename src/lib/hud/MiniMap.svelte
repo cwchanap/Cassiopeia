@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { HudQuestTarget, Vec2 } from '$lib/game/simulation/types';
+	import { avoidHud } from './avoidHud';
 	import { HUD_HANZI_LABELS } from './labels';
 	import {
 		mapStatics,
@@ -43,13 +44,50 @@
 		)
 	);
 	const marker = $derived(mapTarget(target?.position ?? null, playerPosition));
+	const distanceLabel = $derived(marker?.onRim ? `${marker.metres}m` : '');
+	const badgeWidth = $derived(Math.max(30, distanceLabel.length * 7 + 8));
+	const badgeRadius = $derived(
+		Math.max(0, Math.min(29, RADIUS - Math.hypot(badgeWidth / 2, 8) - 2))
+	);
 	const north = $derived({
 		x: northDirection().x * (RADIUS - 10),
 		y: northDirection().y * (RADIUS - 10)
 	});
+	const badgePosition = $derived.by(() => {
+		if (!marker?.onRim) return null;
+		const x = marker.x * SCALE * (badgeRadius / RADIUS);
+		const y = marker.y * SCALE * (badgeRadius / RADIUS);
+		const edge = RADIUS + 8;
+		const offset = avoidHud(
+			{
+				left: edge + x - badgeWidth / 2,
+				top: edge + y - 8,
+				right: edge + x + badgeWidth / 2,
+				bottom: edge + y + 8
+			},
+			{ width: edge * 2, height: edge * 2 },
+			[
+				{ left: edge - 5, top: edge - 5, right: edge + 5, bottom: edge + 5 },
+				{
+					left: edge + north.x - 8,
+					top: edge + north.y - 11,
+					right: edge + north.x + 8,
+					bottom: edge + north.y + 5
+				}
+			]
+		);
+		return { x: x + (offset?.x ?? 0), y: y + (offset?.y ?? 0) };
+	});
 </script>
 
-<div class="mini-map" data-testid="mini-map" role="img" aria-label="Village minimap">
+<div
+	class="mini-map"
+	data-testid="mini-map"
+	role="img"
+	aria-label={marker?.onRim
+		? `Village minimap, quest target ${marker.metres} metres away`
+		: 'Village minimap'}
+>
 	<svg viewBox={`${-RADIUS - 8} ${-RADIUS - 8} ${2 * (RADIUS + 8)} ${2 * (RADIUS + 8)}`}>
 		<defs>
 			<clipPath id="mini-map-clip">
@@ -92,14 +130,15 @@
 			>
 				<path d="M0 -4.5 L7 0 L0 4.5 Z"></path>
 			</g>
-			<text
-				class="map-rim-label"
-				data-testid="map-rim-metres"
-				x={marker.x * SCALE * ((RADIUS - 20) / RADIUS)}
-				y={marker.y * SCALE * ((RADIUS - 20) / RADIUS)}
-				text-anchor="middle"
-				dominant-baseline="central">{marker.metres}m</text
-			>
+			<g class="map-distance" transform={`translate(${badgePosition?.x} ${badgePosition?.y})`}>
+				<rect x={-badgeWidth / 2} y="-8" width={badgeWidth} height="16" rx="3"></rect>
+				<text
+					class="map-rim-label"
+					data-testid="map-rim-metres"
+					text-anchor="middle"
+					dominant-baseline="central">{distanceLabel}</text
+				>
+			</g>
 		{/if}
 		<circle class="map-north-badge" cx={north.x} cy={north.y - 3} r="8"></circle>
 		<text class="map-north hanzi-small" x={north.x} y={north.y} text-anchor="middle"
@@ -155,12 +194,12 @@
 	.map-rim path {
 		fill: var(--cinnabar);
 	}
-	.map-rim-label {
+	.map-distance rect {
 		fill: var(--cinnabar);
-		font: 600 8px var(--font-latin);
-		paint-order: stroke;
-		stroke: var(--paper);
-		stroke-width: 2.5px;
+	}
+	.map-rim-label {
+		fill: var(--paper);
+		font: 600 14px var(--font-latin);
 	}
 	.map-north-badge {
 		fill: var(--ink);

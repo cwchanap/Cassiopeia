@@ -25,8 +25,9 @@ The four attachments on HPA-792 are the visual acceptance references:
 1. **hud-1-explore.jpg** — top-left round initiate portrait and brush health/qi bars;
    upper-right round map with north and quest markers; hanging quest scroll below the map;
    five step dots, overhead villager name and E prompt; bottom-center round medallions.
-2. **hud-2-dialogue.jpg** — ordinary HUD elements hide; a wide paper handscroll at the
-   bottom shows portrait, speaker, English line, progress marks, and "E Continue".
+2. **hud-2-dialogue.jpg** — ordinary HUD elements hide; a slim quest-context strip and
+   dark wash frame a wide bottom handscroll with portrait, speaker, English line, progress
+   marks, and "E Continue".
 3. **hud-3-duel.jpg** — retain player vitals, replace the narrow enemy meter with a broad
    top-center rival bar; collapse the quest scroll to one line, hide minimap, show damage
    numbers above fighters; display cooldown sweep for Qi burst.
@@ -76,15 +77,18 @@ pixel-locked screenshots: text, positioning and fades should work with live stat
   bridges, buildings and region outlines. Transform world directions through
   the **inverse of the existing fixed camera basis**; north remains marked 北.
   Show the live quest target. When outside the circular view, clamp it to
-  the rim, point outward, and show straight-line metres. No fog, zoom, baked
-  texture or new map rendering engine.
+  the rim, point outward, and show straight-line metres in a legible badge that
+  avoids the player and north markers. No fog, zoom, baked texture or new map
+  rendering engine.
 - **World anchors:** display villager names over visible heads, a quest
   diamond over the active goal, and an E prompt only for the current
   interactable target in range. HudInteractTarget includes its actual
   position, so bell and villager prompts need no quest-target lookup.
   Use CSS pixels from the **real smoothed** camera frame, hide off-frustum
-  anchors and keep them non-clickable. The anchored prompt displays the
-  existing hud.prompt interaction text, not a competing instruction.
+  anchors and keep them non-clickable. Offset names and prompts only when
+  needed to keep them clear of HUD panels or viewport edges. The anchored
+  prompt displays the existing hud.prompt interaction text, not a competing
+  instruction.
 - **Techniques and bag:** round medallions on a dark brush backing for Space
   Qinggong, J Strike, K Qi burst, quick slots 1–3, and I/B Bag. Strike and
   Qi burst dim outside duels. Qinggong and Qi burst have cooldown sweeps
@@ -98,15 +102,17 @@ pixel-locked screenshots: text, positioning and fades should work with live stat
 
 **Dialogue**
 
-Only a wide bottom paper handscroll remains: the matching HPA-793 portrait,
-English speaker name, currently authored line, progress dots and E Continue.
-Hide the other HUD and world tags. The existing dialogue simulation remains
-the sole progression authority; Esc pause still works.
+A wide bottom paper handscroll shows the matching HPA-793 portrait, English
+speaker name, currently authored line, progress dots and E Continue. A slim
+top strip retains the current quest title and step, with a dark wash behind
+the handscroll. Hide the ordinary exploration HUD and world tags. The existing
+dialogue simulation remains the sole progression authority; Esc pause still works.
 
 **Duel**
 
 Retain player vitals, put a wide Senior Brother Lu health meter at top center,
-collapse the quest scroll to one line, hide minimap and ordinary village tags,
+collapse the quest scroll to one line with full details available on hover and
+keyboard focus, hide minimap and ordinary village tags,
 and show floating damage amounts on actually resolved hits. Render the rival
 meter from rivalHealth/**rivalMaxHealth**, not a hardcoded 100. Damage
 numbers remain visible during exploration for their existing 0.65-second
