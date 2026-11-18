@@ -288,7 +288,7 @@
 		</div>
 		<div class="pause-hint" hidden={hud.mode === 'dialogue'}><kbd>Esc</kbd> Pause</div>
 
-		{#if hud.inventory.feedback && layout.itemFeedback}
+		{#if hud.inventory.feedback && (layout.itemFeedback || hud.inventory.feedbackIsRejection)}
 			<p class="item-feedback" data-testid="item-feedback" role="status">
 				{hud.inventory.feedback}
 			</p>

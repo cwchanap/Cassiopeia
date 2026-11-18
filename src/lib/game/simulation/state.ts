@@ -121,6 +121,7 @@ export function createInitialGameState(
 		inventoryOpen: false,
 		itemFeedback: null,
 		itemFeedbackRemaining: 0,
+		itemFeedbackIsRejection: false,
 		interactTarget: null,
 		markerProgress: null
 	};
@@ -253,7 +254,8 @@ export function toHudSnapshot(state: GameState): HudSnapshot {
 			state.items,
 			state.inventoryOpen,
 			state.itemFeedback,
-			state.paused
+			state.paused,
+			state.itemFeedbackIsRejection
 		)
 	};
 }
@@ -472,9 +474,10 @@ function handlePlayerAttacks(state: GameState, input: InputSnapshot): void {
 	}
 }
 
-function setItemFeedback(state: GameState, feedback: string | null): void {
+function setItemFeedback(state: GameState, feedback: string | null, isRejection = false): void {
 	state.itemFeedback = feedback;
 	state.itemFeedbackRemaining = feedback ? ITEM_FEEDBACK_DURATION : 0;
+	state.itemFeedbackIsRejection = feedback !== null && isRejection;
 }
 
 function updateItemFeedback(state: GameState, deltaTime: number): void {
@@ -484,7 +487,7 @@ function updateItemFeedback(state: GameState, deltaTime: number): void {
 
 	state.itemFeedbackRemaining = Math.max(0, state.itemFeedbackRemaining - deltaTime);
 	if (state.itemFeedbackRemaining === 0) {
-		state.itemFeedback = null;
+		setItemFeedback(state, null);
 	}
 }
 
@@ -492,7 +495,7 @@ function processInventoryCommands(state: GameState, commands: InventoryCommand[]
 	for (const command of commands) {
 		if (command.type === 'toggleInventory') {
 			if (bagOpenBlocked(state)) {
-				setItemFeedback(state, 'Cannot open the bag right now');
+				setItemFeedback(state, 'Cannot open the bag right now', true);
 				continue;
 			}
 			state.inventoryOpen = !state.inventoryOpen;
@@ -508,7 +511,7 @@ function processInventoryCommands(state: GameState, commands: InventoryCommand[]
 
 		if (command.type === 'useItem') {
 			if (state.paused) {
-				setItemFeedback(state, 'Cannot use items right now');
+				setItemFeedback(state, 'Cannot use items right now', true);
 				continue;
 			}
 			useInventoryItem(state, command.itemId);
@@ -517,7 +520,7 @@ function processInventoryCommands(state: GameState, commands: InventoryCommand[]
 
 		if (command.type === 'equipItem') {
 			if (state.paused) {
-				setItemFeedback(state, 'Cannot equip items right now');
+				setItemFeedback(state, 'Cannot equip items right now', true);
 				continue;
 			}
 			setItemFeedback(state, equipItem(state.items, command.itemId));
@@ -526,7 +529,7 @@ function processInventoryCommands(state: GameState, commands: InventoryCommand[]
 		}
 
 		if (state.paused) {
-			setItemFeedback(state, 'Cannot assign quick slots right now');
+			setItemFeedback(state, 'Cannot assign quick slots right now', true);
 			continue;
 		}
 
@@ -543,7 +546,7 @@ function processInventoryCommands(state: GameState, commands: InventoryCommand[]
 function processInventoryInput(state: GameState, input: InputSnapshot): void {
 	if (input.toggleInventory) {
 		if (bagOpenBlocked(state)) {
-			setItemFeedback(state, 'Cannot open the bag right now');
+			setItemFeedback(state, 'Cannot open the bag right now', true);
 			return;
 		}
 		state.inventoryOpen = !state.inventoryOpen;

@@ -195,6 +195,7 @@ export type HudInventorySnapshot = {
 	equipmentSlots: HudEquipmentSlot[];
 	quickSlots: HudQuickSlot[];
 	feedback: string | null;
+	feedbackIsRejection: boolean;
 	lastRewardText: string | null;
 };
 
@@ -217,6 +218,7 @@ export type GameState = {
 	inventoryOpen: boolean;
 	itemFeedback: string | null;
 	itemFeedbackRemaining: number;
+	itemFeedbackIsRejection: boolean;
 	interactTarget: InteractTarget | null;
 	markerProgress: MarkerProgress | null;
 };
