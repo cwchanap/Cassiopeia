@@ -19,7 +19,7 @@ describe('PlaceBanner', () => {
 		await rerender({ region: 'Jadebank Market', duration: SHORT });
 		const banner = page.getByTestId('place-banner');
 		await expect.element(banner).toBeInTheDocument();
-		await expect.element(banner).toHaveTextContent('玉津集');
+		await expect.element(banner).toHaveTextContent('玉岸集');
 		await expect.element(banner).toHaveTextContent('Jadebank Market');
 
 		await expect.element(banner).not.toBeInTheDocument();
@@ -49,7 +49,7 @@ describe('PlaceBanner', () => {
 		await rerender({ region: null, duration: SHORT });
 		await rerender({ region: 'Jadebank Market', duration: SHORT });
 		await expect.element(banner).toBeInTheDocument();
-		await expect.element(banner).toHaveTextContent('玉津集');
+		await expect.element(banner).toHaveTextContent('玉岸集');
 	});
 
 	it('re-announces a region after visiting another (A to B to A)', async () => {

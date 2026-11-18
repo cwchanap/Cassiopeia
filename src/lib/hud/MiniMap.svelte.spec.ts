@@ -9,6 +9,7 @@ const rimDirections = [
 	{ name: 'west', x: -1, y: 0 },
 	{ name: 'north', x: 0, y: -1 },
 	{ name: 'north-east', x: Math.SQRT1_2, y: -Math.SQRT1_2 },
+	{ name: 'north-north-east', x: 0.6, y: -0.8 },
 	{ name: 'south-west', x: -Math.SQRT1_2, y: Math.SQRT1_2 }
 ];
 
@@ -17,6 +18,10 @@ function expectInside(outer: DOMRect, inner: DOMRect, slack = 0.75) {
 	expect(inner.right).toBeLessThanOrEqual(outer.right + slack);
 	expect(inner.top).toBeGreaterThanOrEqual(outer.top - slack);
 	expect(inner.bottom).toBeLessThanOrEqual(outer.bottom + slack);
+}
+
+function overlaps(a: DOMRect, b: DOMRect): boolean {
+	return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
 }
 
 describe('MiniMap rim target', () => {
@@ -41,6 +46,16 @@ describe('MiniMap rim target', () => {
 			expect(label).not.toBeNull();
 			expect(label!.textContent).toBe('500m');
 			expectInside(svgBox, label!.getBoundingClientRect());
+			const badge = container.querySelector<SVGGraphicsElement>('.map-distance rect');
+			expect(badge).not.toBeNull();
+			expectInside(svgBox, badge!.getBoundingClientRect());
+			const player = container.querySelector<SVGGraphicsElement>('.map-player')!;
+			const north = container.querySelector<SVGGraphicsElement>('.map-north-badge')!;
+			expect(overlaps(badge!.getBoundingClientRect(), player.getBoundingClientRect())).toBe(false);
+			expect(overlaps(badge!.getBoundingClientRect(), north.getBoundingClientRect())).toBe(false);
+			expect(container.querySelector('[role="img"]')?.getAttribute('aria-label')).toContain(
+				'500 metres away'
+			);
 			const ctm = label!.getScreenCTM();
 			expect(ctm!.b).toBeCloseTo(0);
 			expect(ctm!.c).toBeCloseTo(0);

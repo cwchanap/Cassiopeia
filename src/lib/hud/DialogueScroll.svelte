@@ -1,8 +1,8 @@
 <script lang="ts">
-	import type { HudDialogue } from '$lib/game/simulation/types';
+	import type { HudDialogue, HudQuestStep } from '$lib/game/simulation/types';
 	import { HUD_HANZI_LABELS, VILLAGER_PORTRAIT_INDEX } from './labels';
 
-	let { dialogue }: { dialogue: HudDialogue } = $props();
+	let { dialogue, quest = null }: { dialogue: HudDialogue; quest?: HudQuestStep | null } = $props();
 
 	const portraitIndex = $derived(VILLAGER_PORTRAIT_INDEX[dialogue.villagerId]);
 	const lineIndices = $derived(Array.from({ length: dialogue.lineCount }, (_, i) => i));
@@ -11,6 +11,12 @@
 	);
 </script>
 
+{#if quest}
+	<div class="dialogue-context" data-testid="dialogue-quest-context">
+		<strong>{quest.title}</strong><span>Step {quest.stepIndex + 1} of 5</span>
+	</div>
+{/if}
+<div class="dialogue-wash" aria-hidden="true"></div>
 <section
 	class="dialogue-scroll paper-panel"
 	data-testid="dialogue-scroll"
@@ -43,6 +49,31 @@
 </section>
 
 <style>
+	.dialogue-context {
+		position: absolute;
+		top: 0;
+		right: 0;
+		left: 0;
+		display: flex;
+		align-items: baseline;
+		gap: 12px;
+		padding: max(10px, env(safe-area-inset-top)) 26px 10px;
+		background: rgb(27 24 21 / 88%);
+		color: var(--paper);
+		font: 600 14px/1.2 var(--font-latin-cjk);
+	}
+	.dialogue-context span {
+		color: color-mix(in srgb, var(--paper) 75%, transparent);
+		font-size: 11px;
+	}
+	.dialogue-wash {
+		position: absolute;
+		right: 0;
+		bottom: 0;
+		left: 0;
+		height: 170px;
+		background: linear-gradient(transparent, rgb(27 24 21 / 78%));
+	}
 	.dialogue-scroll.paper-panel {
 		position: absolute;
 		bottom: max(26px, env(safe-area-inset-bottom));

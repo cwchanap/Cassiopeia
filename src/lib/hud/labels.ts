@@ -15,7 +15,7 @@ export const HUD_HANZI_LABELS = {
 export const REGION_TITLES: Record<string, string> = {
 	'Whispering Bamboo Shrine': '竹语祠',
 	'Cloudrest Monastery': '云栖寺',
-	'Jadebank Market': '玉津集'
+	'Jadebank Market': '玉岸集'
 };
 
 export const VILLAGER_PORTRAIT_INDEX: Record<VillagerId, number> = {

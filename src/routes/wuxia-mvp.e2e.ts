@@ -216,6 +216,15 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	await expect(page.getByTestId('mini-map')).toBeVisible();
 	await expect(page.getByTestId('map-target')).toBeVisible();
 	await expect(page.getByTestId('world-anchors')).toBeVisible();
+	const qinName = page.getByTestId('world-anchor').filter({ hasText: 'Auntie Qin' });
+	await expect(qinName).toBeVisible();
+	await expect(async () => {
+		const nameBox = (await qinName.boundingBox())!;
+		const mapBox = (await page.getByTestId('mini-map').boundingBox())!;
+		const overlapX = nameBox.x < mapBox.x + mapBox.width && mapBox.x < nameBox.x + nameBox.width;
+		const overlapY = nameBox.y < mapBox.y + mapBox.height && mapBox.y < nameBox.y + nameBox.height;
+		expect(overlapX && overlapY).toBe(false);
+	}).toPass({ timeout: 15000 });
 	await expect(page.locator('.control-hint')).toBeVisible();
 	await expect(page.locator('.pause-hint')).toBeVisible();
 	expect(await page.locator('[data-testid="game-prompt"]').count()).toBeLessThanOrEqual(1);
@@ -300,6 +309,9 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	await expect(prompt).toBeInViewport();
 	await expect(prompt).toContainText('Elder Shen:');
 	await expect(page.getByTestId('dialogue-scroll')).toBeVisible();
+	await expect(page.getByTestId('dialogue-quest-context')).toContainText('拜师 Pay Respects');
+	await expect(page.getByTestId('dialogue-quest-context')).toContainText('Step 1 of 5');
+	await expect(page.getByTestId('objective-chip')).toHaveCount(0);
 	await expect(page.getByTestId('mini-map')).toHaveCount(0);
 	await expect(page.getByTestId('status-cluster')).toHaveCount(0);
 	await expect(page.locator('.control-hint')).toBeHidden();
@@ -449,6 +461,13 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	await expect(page.getByRole('meter', { name: 'Rival health' })).toBeVisible();
 	await expect(page.getByTestId('mini-map')).toHaveCount(0);
 	await expect(objectiveChip).toContainText('win the spar');
+	const duelObjective = objectiveChip.getByRole('button', { name: /Spar with the rival/ });
+	await duelObjective.focus();
+	await expect(page.getByRole('tooltip')).toHaveText(
+		'Speak with Senior Brother Lu and win the spar'
+	);
+	await page.getByTestId('scene-host').focus();
+	await expect(page.getByRole('tooltip')).toHaveCount(0);
 	const expectDuelChromeSeparated = async (topRow: boolean) => {
 		const boxes = await Promise.all(
 			['status-cluster', 'rival-status', 'objective-chip'].map(async (sel) => {
@@ -480,6 +499,12 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	for (const width of [320, 390, 720, 721, 800, 937, 938, 960, 1100, 1180]) {
 		await page.setViewportSize({ width, height: width === 1180 ? 720 : 640 });
 		await expectDuelChromeSeparated(width >= 938);
+		await expect(async () => {
+			const fits = await duelObjective.evaluate(
+				(element) => element.scrollWidth <= element.clientWidth
+			);
+			expect(fits, `duel title must not truncate at ${width}px`).toBe(true);
+		}).toPass({ timeout: 15000 });
 	}
 	await page.setViewportSize({ width: 960, height: 640 });
 	await attachHudShot(page, testInfo, 'hud-3-duel');
@@ -792,11 +817,20 @@ test('announces the Jadebank Market arrival banner via the z = 0 bridge route', 
 		);
 	}
 	await testInfo.attach('hud-4-arrival', { path: arrival.shot, contentType: 'image/png' });
-	expect(arrival.hanzi).toBe('玉津集');
+	expect(arrival.hanzi).toBe('玉岸集');
 	expect(arrival.name).toBe('Jadebank Market');
 	expect(arrival.opacity).toBeGreaterThanOrEqual(0.8);
 	await expect(page.getByTestId('mini-map')).toBeVisible();
 	await expect(page.getByTestId('map-rim-target')).toBeVisible();
 	const metres = (await page.getByTestId('map-rim-metres').textContent()) ?? '';
 	expect(Number(/([\d.]+)m/.exec(metres)?.[1])).toBeGreaterThan(20);
+	await expect(page.getByRole('img', { name: /quest target \d+ metres away/ })).toBeVisible();
+	await page.setViewportSize({ width: 390, height: 640 });
+	await expect(async () => {
+		const effectiveFontSize = await page.getByTestId('map-rim-metres').evaluate((element) => {
+			const text = element as SVGGraphicsElement;
+			return parseFloat(getComputedStyle(text).fontSize) * (text.getScreenCTM()?.a ?? 0);
+		});
+		expect(effectiveFontSize).toBeGreaterThanOrEqual(10);
+	}).toPass({ timeout: 15000 });
 });

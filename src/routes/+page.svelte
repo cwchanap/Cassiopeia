@@ -255,7 +255,7 @@
 		{/if}
 
 		{#if layout.dialogue && hud.dialogue}
-			<DialogueScroll dialogue={hud.dialogue} />
+			<DialogueScroll dialogue={hud.dialogue} quest={hud.quest} />
 		{/if}
 
 		<PlaceBanner region={hud.region} visible={layout.banner} />
