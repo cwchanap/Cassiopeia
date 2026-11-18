@@ -33,6 +33,6 @@ export function hudLayout({ mode, isPaused, bagOpen }: HudLayoutInput): HudLayou
 		dialogue: mode === 'dialogue' && !overlay,
 		banner: mode === 'explore' && !overlay,
 		damageNumbers: mode !== 'dialogue' && !overlay,
-		itemFeedback: true
+		itemFeedback: mode !== 'dialogue' && !isPaused
 	};
 }

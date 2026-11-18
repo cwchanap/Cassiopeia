@@ -348,7 +348,8 @@ export function formatReward(reward: ItemReward | null): string | null {
 export function createHudInventorySnapshot(
 	progress: ItemProgress,
 	isOpen: boolean,
-	feedback: string | null
+	feedback: string | null,
+	isPaused = false
 ): HudInventorySnapshot {
 	const items = Object.entries(progress.inventory)
 		.filter((entry): entry is [ItemId, number] => isItemId(entry[0]) && entry[1] > 0)
@@ -369,7 +370,9 @@ export function createHudInventorySnapshot(
 					)
 				: null
 		})),
-		quickSlots: ([1, 2, 3] as QuickSlotNumber[]).map((slot) => toHudQuickSlot(progress, slot)),
+		quickSlots: ([1, 2, 3] as QuickSlotNumber[]).map((slot) =>
+			toHudQuickSlot(progress, slot, isPaused)
+		),
 		feedback,
 		lastRewardText: formatReward(progress.lastReward)
 	};
@@ -393,7 +396,11 @@ function toHudInventoryItem(
 	};
 }
 
-function toHudQuickSlot(progress: ItemProgress, slot: QuickSlotNumber): HudQuickSlot {
+function toHudQuickSlot(
+	progress: ItemProgress,
+	slot: QuickSlotNumber,
+	isPaused: boolean
+): HudQuickSlot {
 	const itemId = progress.quickSlots[slot];
 	if (!itemId) {
 		return {
@@ -412,7 +419,7 @@ function toHudQuickSlot(progress: ItemProgress, slot: QuickSlotNumber): HudQuick
 		itemId,
 		label: item.shortName,
 		count,
-		usable: count > 0
+		usable: !isPaused && count > 0
 	};
 }
 

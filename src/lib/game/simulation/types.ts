@@ -216,6 +216,7 @@ export type GameState = {
 	items: ItemProgress;
 	inventoryOpen: boolean;
 	itemFeedback: string | null;
+	itemFeedbackRemaining: number;
 	interactTarget: InteractTarget | null;
 	markerProgress: MarkerProgress | null;
 };

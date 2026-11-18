@@ -62,6 +62,7 @@ type PendingHit = {
 };
 
 const QUEST_COMPLETE_OBJECTIVE = 'First day complete — free roam';
+export const ITEM_FEEDBACK_DURATION = 3;
 
 function idleCombatAction(): CombatActionState {
 	return {
@@ -119,6 +120,7 @@ export function createInitialGameState(
 		items,
 		inventoryOpen: false,
 		itemFeedback: null,
+		itemFeedbackRemaining: 0,
 		interactTarget: null,
 		markerProgress: null
 	};
@@ -135,9 +137,6 @@ export function stepGame(
 ): void {
 	const dt = Math.min(Math.max(deltaTime, 0), 0.05);
 
-	processInventoryCommands(state, commands);
-	processInventoryInput(state, input);
-
 	if (input.pause) {
 		if (state.inventoryOpen) {
 			state.inventoryOpen = false;
@@ -150,7 +149,19 @@ export function stepGame(
 		return;
 	}
 
-	if (state.inventoryOpen || state.paused) {
+	processInventoryCommands(state, commands);
+	processInventoryInput(state, input);
+
+	if (state.paused) {
+		updatePrompt(state);
+		return;
+	}
+
+	if (!state.inventoryOpen) {
+		updateItemFeedback(state, dt);
+	}
+
+	if (state.inventoryOpen) {
 		updatePrompt(state);
 		return;
 	}
@@ -238,7 +249,12 @@ export function toHudSnapshot(state: GameState): HudSnapshot {
 		qiCooldownMax: QI_BURST_COOLDOWN,
 		playerActionStatus: getPlayerActionStatus(state.player.combatAction),
 		isPaused: state.paused,
-		inventory: createHudInventorySnapshot(state.items, state.inventoryOpen, state.itemFeedback)
+		inventory: createHudInventorySnapshot(
+			state.items,
+			state.inventoryOpen,
+			state.itemFeedback,
+			state.paused
+		)
 	};
 }
 
@@ -379,7 +395,7 @@ function finishDialogue(state: GameState, villagerId: VillagerId): void {
 			state.quest = advanceQuest(state.quest, { type: 'dialogueComplete', villagerId });
 			if (step.grant && stepProgressBefore === 0 && state.quest.stepProgress === 1) {
 				grantItem(state.items, step.grant.itemId, step.grant.count);
-				state.itemFeedback = `Received ${formatReward(step.grant)}`;
+				setItemFeedback(state, `Received ${formatReward(step.grant)}`);
 			}
 			break;
 		}
@@ -436,9 +452,7 @@ function respawnPlayer(state: GameState): void {
 	state.player.attackCooldown = 0;
 	state.player.qiCooldown = 0;
 	state.player.combatAction = idleCombatAction();
-	// Damage records survive so the rival's killing blow still floats its number;
-	// positional effects (dash puffs, qi auras) would only linger at the duel site.
-	state.effects = state.effects.filter((effect) => effect.damage !== undefined);
+	state.effects = [];
 }
 
 function handlePlayerAttacks(state: GameState, input: InputSnapshot): void {
@@ -458,27 +472,43 @@ function handlePlayerAttacks(state: GameState, input: InputSnapshot): void {
 	}
 }
 
+function setItemFeedback(state: GameState, feedback: string | null): void {
+	state.itemFeedback = feedback;
+	state.itemFeedbackRemaining = feedback ? ITEM_FEEDBACK_DURATION : 0;
+}
+
+function updateItemFeedback(state: GameState, deltaTime: number): void {
+	if (!state.itemFeedback || deltaTime <= 0) {
+		return;
+	}
+
+	state.itemFeedbackRemaining = Math.max(0, state.itemFeedbackRemaining - deltaTime);
+	if (state.itemFeedbackRemaining === 0) {
+		state.itemFeedback = null;
+	}
+}
+
 function processInventoryCommands(state: GameState, commands: InventoryCommand[]): void {
 	for (const command of commands) {
 		if (command.type === 'toggleInventory') {
 			if (bagOpenBlocked(state)) {
-				state.itemFeedback = 'Cannot open the bag right now';
+				setItemFeedback(state, 'Cannot open the bag right now');
 				continue;
 			}
 			state.inventoryOpen = !state.inventoryOpen;
-			state.itemFeedback = state.inventoryOpen ? 'Bag opened' : 'Bag closed';
+			setItemFeedback(state, state.inventoryOpen ? 'Bag opened' : 'Bag closed');
 			continue;
 		}
 
 		if (command.type === 'closeInventory') {
 			state.inventoryOpen = false;
-			state.itemFeedback = 'Bag closed';
+			setItemFeedback(state, 'Bag closed');
 			continue;
 		}
 
 		if (command.type === 'useItem') {
 			if (state.paused) {
-				state.itemFeedback = 'Cannot use items right now';
+				setItemFeedback(state, 'Cannot use items right now');
 				continue;
 			}
 			useInventoryItem(state, command.itemId);
@@ -486,12 +516,21 @@ function processInventoryCommands(state: GameState, commands: InventoryCommand[]
 		}
 
 		if (command.type === 'equipItem') {
-			state.itemFeedback = equipItem(state.items, command.itemId);
+			if (state.paused) {
+				setItemFeedback(state, 'Cannot equip items right now');
+				continue;
+			}
+			setItemFeedback(state, equipItem(state.items, command.itemId));
 			refreshPlayerStats(state);
 			continue;
 		}
 
-		state.itemFeedback = assignQuickSlot(state.items, command.slot, command.itemId);
+		if (state.paused) {
+			setItemFeedback(state, 'Cannot assign quick slots right now');
+			continue;
+		}
+
+		setItemFeedback(state, assignQuickSlot(state.items, command.slot, command.itemId));
 		if (command.itemId !== null && state.items.quickSlots[command.slot] === command.itemId) {
 			state.quest = advanceQuest(state.quest, {
 				type: 'quickSlotAssigned',
@@ -504,11 +543,11 @@ function processInventoryCommands(state: GameState, commands: InventoryCommand[]
 function processInventoryInput(state: GameState, input: InputSnapshot): void {
 	if (input.toggleInventory) {
 		if (bagOpenBlocked(state)) {
-			state.itemFeedback = 'Cannot open the bag right now';
+			setItemFeedback(state, 'Cannot open the bag right now');
 			return;
 		}
 		state.inventoryOpen = !state.inventoryOpen;
-		state.itemFeedback = state.inventoryOpen ? 'Bag opened' : 'Bag closed';
+		setItemFeedback(state, state.inventoryOpen ? 'Bag opened' : 'Bag closed');
 	}
 }
 
@@ -523,7 +562,7 @@ function handleQuickSlotUse(state: GameState, slot: InputSnapshot['quickSlot']):
 
 	const itemId = state.items.quickSlots[slot];
 	if (!itemId) {
-		state.itemFeedback = `Slot ${slot} is empty`;
+		setItemFeedback(state, `Slot ${slot} is empty`);
 		return;
 	}
 
@@ -540,7 +579,7 @@ function useInventoryItem(state: GameState, itemId: ItemId): void {
 
 	state.player.health = result.resources.health;
 	state.player.qi = result.resources.qi;
-	state.itemFeedback = result.feedback;
+	setItemFeedback(state, result.feedback);
 }
 
 function refreshPlayerStats(state: GameState): void {
@@ -731,7 +770,7 @@ function updateRival(state: GameState, deltaTime: number): void {
 function resolveEndState(state: GameState): void {
 	if (state.rival.health <= 0) {
 		const reward = grantVictoryReward(state.items);
-		state.itemFeedback = `Won: ${formatReward(reward)}`;
+		setItemFeedback(state, `Won: ${formatReward(reward)}`);
 		state.quest = advanceQuest(state.quest, { type: 'duelWon' });
 		state.player.combatAction = idleCombatAction();
 		resetRivalToPost(state);
@@ -745,7 +784,7 @@ function resolveEndState(state: GameState): void {
 	if (state.player.health <= 0) {
 		respawnPlayer(state);
 		resetRivalToPost(state);
-		state.itemFeedback = 'Defeated — find your breath and speak with Lu again';
+		setItemFeedback(state, 'Defeated — find your breath and speak with Lu again');
 		state.mode = { kind: 'explore' };
 	}
 }
