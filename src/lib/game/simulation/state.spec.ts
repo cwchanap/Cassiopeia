@@ -264,6 +264,8 @@ describe('wuxia simulation state', () => {
 
 		stepGame(state, { ...idleInput, toggleInventory: true }, frame);
 		expect(state.inventoryOpen).toBe(false);
+		expect(state.itemFeedback).toBe('Cannot open the bag right now');
+		expect(toHudSnapshot(state).inventory.feedbackIsRejection).toBe(true);
 		stepGame(state, idleInput, 0, [{ type: 'toggleInventory' }]);
 		expect(state.inventoryOpen).toBe(false);
 
@@ -279,12 +281,15 @@ describe('wuxia simulation state', () => {
 
 		stepGame(state, { ...idleInput, toggleInventory: true }, frame);
 		expect(state.inventoryOpen).toBe(false);
+		expect(state.itemFeedback).toBe('Cannot open the bag right now');
+		expect(toHudSnapshot(state).inventory.feedbackIsRejection).toBe(true);
 		stepGame(state, idleInput, 0, [{ type: 'toggleInventory' }]);
 		expect(state.inventoryOpen).toBe(false);
 
 		state.paused = false;
 		stepGame(state, { ...idleInput, toggleInventory: true }, frame);
 		expect(state.inventoryOpen).toBe(true);
+		expect(toHudSnapshot(state).inventory.feedbackIsRejection).toBe(false);
 	});
 
 	it('starts the spar on the last line of Lu’s dialogue and refills the duel', () => {
@@ -683,6 +688,7 @@ describe('wuxia simulation state', () => {
 		expect(state.items.quickSlots[3]).toBeNull();
 		expect(state.quest).toEqual({ stepIndex: 2, stepProgress: 1 });
 		expect(state.itemFeedback).toBe('Cannot assign quick slots right now');
+		expect(toHudSnapshot(state).inventory.feedbackIsRejection).toBe(true);
 
 		stepGame(state, { ...idleInput, pause: true }, frame);
 		expect(state.paused).toBe(false);

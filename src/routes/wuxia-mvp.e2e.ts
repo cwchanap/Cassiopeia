@@ -467,8 +467,17 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	await expect(prompt).toContainText('Senior Brother Lu:');
 	await expect(prompt).toContainText('Elder Shen sent you?');
 
+	// A blocked bag shortcut must explain itself over the dialogue scroll and pause panel.
+	await page.keyboard.press('i');
+	await expect(page.getByTestId('item-feedback')).toHaveText('Cannot open the bag right now');
+	await expect(page.getByTestId('bag-panel')).toHaveCount(0);
+	await expect(prompt).toContainText('Senior Brother Lu:');
+
 	await page.keyboard.press('Escape');
 	await expect(page.getByTestId('pause-panel')).toBeVisible();
+	await page.keyboard.press('i');
+	await expect(page.getByTestId('item-feedback')).toHaveText('Cannot open the bag right now');
+	await expect(page.getByTestId('bag-panel')).toHaveCount(0);
 	await page.keyboard.press('Escape');
 	await expect(page.getByTestId('pause-panel')).toBeHidden();
 	await expect(prompt).toContainText('Senior Brother Lu:');

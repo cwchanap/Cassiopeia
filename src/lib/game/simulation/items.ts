@@ -349,7 +349,8 @@ export function createHudInventorySnapshot(
 	progress: ItemProgress,
 	isOpen: boolean,
 	feedback: string | null,
-	isPaused = false
+	isPaused = false,
+	feedbackIsRejection = false
 ): HudInventorySnapshot {
 	const items = Object.entries(progress.inventory)
 		.filter((entry): entry is [ItemId, number] => isItemId(entry[0]) && entry[1] > 0)
@@ -374,6 +375,7 @@ export function createHudInventorySnapshot(
 			toHudQuickSlot(progress, slot, isPaused)
 		),
 		feedback,
+		feedbackIsRejection,
 		lastRewardText: formatReward(progress.lastReward)
 	};
 }
