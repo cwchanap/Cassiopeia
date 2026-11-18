@@ -9,8 +9,14 @@ export const HUD_HANZI_LABELS = {
 	qiBurst: '气劲',
 	bag: '行囊',
 	dialogue: '对话',
+	enemy: '敌',
 	north: '北'
 } as const;
+
+export const VILLAGER_TITLES: Partial<Record<VillagerId, string>> = {
+	elder_shen: '沈长老',
+	senior_brother_lu: '陆师兄'
+};
 
 export const REGION_TITLES: Record<string, string> = {
 	'Whispering Bamboo Shrine': '竹语祠',

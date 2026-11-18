@@ -12,7 +12,7 @@
 		Vec2
 	} from '$lib/game/simulation/types';
 	import type { Attachment } from 'svelte/attachments';
-	import { avoidHud } from './avoidHud';
+	import { avoidHud, type HudRect } from './avoidHud';
 
 	let {
 		frame,
@@ -49,13 +49,13 @@
 
 	const placeLabels: Attachment<HTMLDivElement> = (node) => {
 		$effect(() => {
-			if (!frame || (!heads.length && !promptAnchor?.screen)) return;
+			if (!frame || (!heads.length && !questMarker && !promptAnchor?.screen)) return;
 			const parent = node.parentElement;
 			if (!parent) return;
 			const origin = node.getBoundingClientRect();
 			const obstacles = Array.from(
 				parent.querySelectorAll(
-					'[data-testid="mini-map"], [data-testid="objective-chip"], [data-testid="status-cluster"]'
+					'[data-testid="mini-map"], [data-testid="objective-chip"], [data-testid="status-cluster"], .action-bar'
 				)
 			).map((element) => {
 				const rect = element.getBoundingClientRect();
@@ -67,23 +67,68 @@
 				};
 			});
 			// Read all label sizes before applying offsets to avoid repeated layout passes.
-			const labels = Array.from(node.querySelectorAll<HTMLElement>('.name-tag, .prompt-tag')).map(
-				(element) => {
-					const x = parseFloat(element.style.left);
-					const y = parseFloat(element.style.top);
-					const width = element.offsetWidth;
-					const height = element.offsetHeight;
-					return {
-						element,
-						bounds: { left: x - width / 2, right: x + width / 2, top: y - height, bottom: y }
-					};
-				}
-			);
+			const labels = Array.from(
+				node.querySelectorAll<HTMLElement>('.name-tag, .quest-tag, .prompt-tag')
+			).map((element) => {
+				const x = parseFloat(element.style.left);
+				const y = parseFloat(element.style.top);
+				const width = element.offsetWidth;
+				const height = element.offsetHeight;
+				return {
+					element,
+					bounds: { left: x - width / 2, right: x + width / 2, top: y - height, bottom: y }
+				};
+			});
+			const promptBounds = labels.find(({ element }) =>
+				element.classList.contains('prompt-tag')
+			)?.bounds;
+			const names: Record<string, HudRect | undefined> = {};
 			for (const { element, bounds } of labels) {
-				const offset = avoidHud(bounds, frame.viewport, obstacles);
+				const isQuest = element.classList.contains('quest-tag');
+				const isPrompt = element.classList.contains('prompt-tag');
+				const name = isQuest
+					? names[target?.id ?? '']
+					: isPrompt
+						? names[interact?.id ?? '']
+						: undefined;
+				let preferred = { x: 0, y: 0 };
+				if (name && isQuest) {
+					preferred = {
+						x: name.left - bounds.right - 4,
+						y: (name.top + name.bottom - bounds.top - bounds.bottom) / 2
+					};
+				} else if (name && isPrompt) {
+					preferred = {
+						x: (name.left + name.right - bounds.left - bounds.right) / 2,
+						y: name.bottom - bounds.top + 4
+					};
+				} else if (promptBounds && element.dataset.villagerId === interact?.id) {
+					// Leave room for the prompt without covering the projected head.
+					preferred.y = promptBounds.top - promptBounds.bottom - 4;
+				}
+				const shifted = {
+					left: bounds.left + preferred.x,
+					top: bounds.top + preferred.y,
+					right: bounds.right + preferred.x,
+					bottom: bounds.bottom + preferred.y
+				};
+				const adjustment = avoidHud(shifted, frame.viewport, obstacles);
+				const offset = adjustment
+					? { x: preferred.x + adjustment.x, y: preferred.y + adjustment.y }
+					: null;
 				element.style.transform = offset
 					? `translate(calc(-50% + ${offset.x}px), calc(-100% + ${offset.y}px))`
 					: '';
+				if (offset) {
+					const placed = {
+						left: bounds.left + offset.x,
+						top: bounds.top + offset.y,
+						right: bounds.right + offset.x,
+						bottom: bounds.bottom + offset.y
+					};
+					obstacles.push(placed);
+					if (element.dataset.villagerId) names[element.dataset.villagerId] = placed;
+				}
 			}
 		});
 	};
@@ -94,6 +139,7 @@
 		<span
 			class="anchor-tag name-tag"
 			data-testid="world-anchor"
+			data-villager-id={villager.id}
 			style:left={`${screen!.x}px`}
 			style:top={`${screen!.y}px`}>{villager.name}</span
 		>

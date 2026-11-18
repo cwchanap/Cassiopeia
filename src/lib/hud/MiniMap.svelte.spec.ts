@@ -49,6 +49,14 @@ describe('MiniMap rim target', () => {
 			const badge = container.querySelector<SVGGraphicsElement>('.map-distance rect');
 			expect(badge).not.toBeNull();
 			expectInside(svgBox, badge!.getBoundingClientRect());
+			if (['east', 'south', 'west', 'north'].includes(direction.name)) {
+				if (!arrow || !badge) throw new Error('Missing map arrow or distance badge');
+				const a = arrow.getBoundingClientRect();
+				const b = badge.getBoundingClientRect();
+				const gapX = Math.max(0, a.left - b.right, b.left - a.right);
+				const gapY = Math.max(0, a.top - b.bottom, b.top - a.bottom);
+				expect(Math.hypot(gapX, gapY)).toBeLessThan(5);
+			}
 			const player = container.querySelector<SVGGraphicsElement>('.map-player')!;
 			const north = container.querySelector<SVGGraphicsElement>('.map-north-badge')!;
 			expect(overlaps(badge!.getBoundingClientRect(), player.getBoundingClientRect())).toBe(false);
