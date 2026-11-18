@@ -114,7 +114,7 @@
 			<button
 				type="button"
 				class:empty={!slot.itemId}
-				disabled={!slot.usable}
+				disabled={!slot.usable || isPaused}
 				aria-label={`${slot.label}${slot.itemId ? `, ${slot.count} remaining` : ''}, slot ${slot.slot}`}
 				title={`${slot.label} · ${slot.slot}`}
 				data-testid={`quick-slot-${slot.slot}`}

@@ -436,7 +436,9 @@ function respawnPlayer(state: GameState): void {
 	state.player.attackCooldown = 0;
 	state.player.qiCooldown = 0;
 	state.player.combatAction = idleCombatAction();
-	state.effects = [];
+	// Damage records survive so the rival's killing blow still floats its number;
+	// positional effects (dash puffs, qi auras) would only linger at the duel site.
+	state.effects = state.effects.filter((effect) => effect.damage !== undefined);
 }
 
 function handlePlayerAttacks(state: GameState, input: InputSnapshot): void {
@@ -475,6 +477,10 @@ function processInventoryCommands(state: GameState, commands: InventoryCommand[]
 		}
 
 		if (command.type === 'useItem') {
+			if (state.paused) {
+				state.itemFeedback = 'Cannot use items right now';
+				continue;
+			}
 			useInventoryItem(state, command.itemId);
 			continue;
 		}

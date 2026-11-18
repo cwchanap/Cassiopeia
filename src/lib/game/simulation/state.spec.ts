@@ -646,6 +646,18 @@ describe('wuxia simulation state', () => {
 		expect(state.items.inventory.lesser_healing_pill).toBe(2);
 	});
 
+	it('rejects useItem commands while paused', () => {
+		const state = setupDuel();
+		state.player.health = 50;
+		state.paused = true;
+
+		stepGame(state, idleInput, 0, [{ type: 'useItem', itemId: 'lesser_healing_pill' }]);
+
+		expect(state.player.health).toBe(50);
+		expect(state.items.inventory.lesser_healing_pill).toBe(3);
+		expect(state.itemFeedback).toBe('Cannot use items right now');
+	});
+
 	it('grants one victory reward, completes the quest and returns Lu to his post for free roam', () => {
 		const state = setupDuel();
 		state.rival.health = 1;
@@ -704,6 +716,13 @@ describe('wuxia simulation state', () => {
 		expect(state.player.qi).toBe(state.player.maxQi);
 		expect(state.rival.position).toEqual(lu.position);
 		expect(state.rival.active).toBe(false);
+		// The killing blow keeps its damage number through the respawn, matching
+		// the victory path's preserved final hit.
+		expect(
+			toHudSnapshot(state).damageNumbers.some(
+				(record) => record.target === 'player' && record.damage > 0
+			)
+		).toBe(true);
 
 		state.player.position = { x: lu.position.x + 0.5, z: lu.position.z };
 		stepGame(state, { ...idleInput, interact: true }, frame);
