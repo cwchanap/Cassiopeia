@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createInitialGameState, stepGame, toHudSnapshot } from './state';
+import { createInitialGameState, ITEM_FEEDBACK_DURATION, stepGame, toHudSnapshot } from './state';
 import {
 	DASH_COOLDOWN,
 	DASH_DISTANCE,
@@ -646,16 +646,70 @@ describe('wuxia simulation state', () => {
 		expect(state.items.inventory.lesser_healing_pill).toBe(2);
 	});
 
-	it('rejects useItem commands while paused', () => {
+	it('rejects all item commands while paused and in the same frame as pause', () => {
 		const state = setupDuel();
+		state.quest = { stepIndex: 2, stepProgress: 1 };
+		state.mode = { kind: 'explore' };
+		state.rival.active = false;
 		state.player.health = 50;
-		state.paused = true;
+		state.items.inventory.tempered_practice_sword = 1;
+
+		stepGame(state, { ...idleInput, pause: true }, frame, [
+			{ type: 'useItem', itemId: 'lesser_healing_pill' },
+			{ type: 'equipItem', itemId: 'tempered_practice_sword' },
+			{ type: 'assignQuickSlot', slot: 3, itemId: 'lesser_healing_pill' }
+		]);
+
+		expect(state.paused).toBe(true);
+		expect(state.player.health).toBe(50);
+		expect(state.items.inventory.lesser_healing_pill).toBe(3);
+		expect(state.items.equipment.weapon).toBe('training_sword');
+		expect(state.items.quickSlots[3]).toBeNull();
+		expect(state.quest).toEqual({ stepIndex: 2, stepProgress: 1 });
+		expect(toHudSnapshot(state).inventory.quickSlots[0].usable).toBe(false);
 
 		stepGame(state, idleInput, 0, [{ type: 'useItem', itemId: 'lesser_healing_pill' }]);
-
 		expect(state.player.health).toBe(50);
 		expect(state.items.inventory.lesser_healing_pill).toBe(3);
 		expect(state.itemFeedback).toBe('Cannot use items right now');
+
+		stepGame(state, idleInput, 0, [{ type: 'equipItem', itemId: 'tempered_practice_sword' }]);
+		expect(state.items.equipment.weapon).toBe('training_sword');
+		expect(state.itemFeedback).toBe('Cannot equip items right now');
+
+		stepGame(state, idleInput, 0, [
+			{ type: 'assignQuickSlot', slot: 3, itemId: 'lesser_healing_pill' }
+		]);
+		expect(state.items.quickSlots[3]).toBeNull();
+		expect(state.quest).toEqual({ stepIndex: 2, stepProgress: 1 });
+		expect(state.itemFeedback).toBe('Cannot assign quick slots right now');
+
+		stepGame(state, { ...idleInput, pause: true }, frame);
+		expect(state.paused).toBe(false);
+		expect(toHudSnapshot(state).inventory.quickSlots[0].usable).toBe(true);
+	});
+
+	it('expires item feedback after its duration without aging while paused or in the bag', () => {
+		const state = createInitialGameState();
+
+		stepGame(state, { ...idleInput, toggleInventory: true }, frame);
+		expect(state.itemFeedback).toBe('Bag opened');
+		advance(state, ITEM_FEEDBACK_DURATION + 1);
+		expect(state.itemFeedback).toBe('Bag opened');
+
+		stepGame(state, { ...idleInput, toggleInventory: true }, frame);
+		expect(state.itemFeedback).toBe('Bag closed');
+
+		stepGame(state, { ...idleInput, pause: true }, frame);
+		advance(state, ITEM_FEEDBACK_DURATION + 1);
+		expect(state.itemFeedback).toBe('Bag closed');
+
+		stepGame(state, { ...idleInput, pause: true }, frame);
+		advance(state, ITEM_FEEDBACK_DURATION - 0.5);
+		expect(state.itemFeedback).toBe('Bag closed');
+
+		advance(state, 0.6);
+		expect(state.itemFeedback).toBeNull();
 	});
 
 	it('grants one victory reward, completes the quest and returns Lu to his post for free roam', () => {
@@ -703,11 +757,16 @@ describe('wuxia simulation state', () => {
 		expect(toHudSnapshot(state).playerActionStatus).toBe('Ready');
 	});
 
-	it('respawns the player on defeat and offers the rematch through Lu’s dialogue', () => {
+	it('respawns the player on defeat, clears duel effects, and offers the rematch through Lu’s dialogue', () => {
 		const state = setupDuel();
+		state.player.position = { x: 4, z: 3 };
+		state.rival.position = { x: 4.8, z: 3 };
 		state.player.health = 1;
 
-		advance(state, RIVAL_STRIKE_TIMING.startup + RIVAL_STRIKE_TIMING.active + frame);
+		stepGame(state, idleInput, frame);
+		advance(state, RIVAL_STRIKE_TIMING.startup - QI_BURST_TIMING.startup);
+		stepGame(state, { ...idleInput, qiBurst: true }, frame);
+		advance(state, QI_BURST_TIMING.startup + frame);
 
 		expect(state.mode).toEqual({ kind: 'explore' });
 		expect(state.quest.stepIndex).toBe(4);
@@ -716,13 +775,8 @@ describe('wuxia simulation state', () => {
 		expect(state.player.qi).toBe(state.player.maxQi);
 		expect(state.rival.position).toEqual(lu.position);
 		expect(state.rival.active).toBe(false);
-		// The killing blow keeps its damage number through the respawn, matching
-		// the victory path's preserved final hit.
-		expect(
-			toHudSnapshot(state).damageNumbers.some(
-				(record) => record.target === 'player' && record.damage > 0
-			)
-		).toBe(true);
+		expect(state.effects).toEqual([]);
+		expect(toHudSnapshot(state).damageNumbers).toEqual([]);
 
 		state.player.position = { x: lu.position.x + 0.5, z: lu.position.z };
 		stepGame(state, { ...idleInput, interact: true }, frame);

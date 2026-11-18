@@ -550,6 +550,37 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	await page.keyboard.press('Escape');
 	await expect(page.getByTestId('pause-panel')).toBeHidden();
 
+	await page.evaluate(() => {
+		const seen: { text: string; onRival: boolean }[] = [];
+		const record = (node: Node) => {
+			if (!(node instanceof Element)) return;
+			const targets = node.matches('[data-testid="damage-number"]')
+				? [node]
+				: Array.from(node.querySelectorAll('[data-testid="damage-number"]'));
+			for (const el of targets) {
+				seen.push({
+					text: el.textContent ?? '',
+					onRival: el.classList.contains('on-rival')
+				});
+			}
+		};
+		const observer = new MutationObserver((mutations) => {
+			for (const mutation of mutations) {
+				for (const node of mutation.addedNodes) {
+					record(node);
+				}
+			}
+		});
+		const root = document.querySelector('[data-testid="game-shell"]') ?? document.body;
+		observer.observe(root, { childList: true, subtree: true });
+		(window as unknown as Record<string, unknown>).__duelDamageObserver = {
+			disconnect() {
+				observer.disconnect();
+				return seen;
+			}
+		};
+	});
+
 	// The rival can stagger the player before the first burst, consuming that key press.
 	await expect(async () => {
 		await page.keyboard.press('k');
@@ -570,41 +601,47 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	// Each rendered frame advances at most 50 ms of game time, so under software WebGL
 	// the duel can lag wall time several-fold. Keep attacking while the rival's health
 	// keeps dropping; only a sustained stall or the overall deadline fails the journey.
-	const rivalMeter = page.getByRole('meter', { name: 'Rival health' });
-	// The meter only exists during the duel; once it is gone the end state is showing.
-	// The read must not linger on a removed meter: a long attach wait after the
-	// killing blow outlives the 0.65 s damage record and flakes the assertion below.
-	const readRivalHealth = async () => {
-		if (!(await rivalMeter.isVisible().catch(() => false))) {
-			return null;
-		}
-		const value = await rivalMeter.getAttribute('value', { timeout: 250 }).catch(() => null);
-		return value === null ? null : Number(value);
-	};
+	const readRivalHealth = () =>
+		page.evaluate(() => {
+			const meter = document.querySelector('meter[aria-label="Rival health"]');
+			if (!meter) return null;
+			const value = meter.getAttribute('value');
+			return value === null ? null : Number(value);
+		});
 	const duelDeadline = Date.now() + 150000;
 	let rivalHealth = 100;
 	let lastProgress = Date.now();
 	let presses = 0;
 
-	while (await rivalMeter.isVisible().catch(() => false)) {
+	while (true) {
+		const health = await readRivalHealth();
+		if (health === null) {
+			break;
+		}
+		if (health < rivalHealth) {
+			rivalHealth = health;
+			lastProgress = Date.now();
+		} else if (Date.now() - lastProgress > 30000) {
+			throw new Error(`Duel stalled with the rival at ${rivalHealth}/100 health`);
+		}
 		if (Date.now() > duelDeadline) {
 			throw new Error(`Duel timed out with the rival at ${rivalHealth}/100 health`);
 		}
 		// Every fourth press spends regenerated qi on a burst instead of a light strike.
 		await page.keyboard.press(presses % 4 === 3 ? 'k' : 'j');
 		presses += 1;
-		const health = await readRivalHealth();
-		if (health !== null && health < rivalHealth) {
-			rivalHealth = health;
-			lastProgress = Date.now();
-		} else if (Date.now() - lastProgress > 30000) {
-			throw new Error(`Duel stalled with the rival at ${rivalHealth}/100 health`);
-		}
 		await page.waitForTimeout(150);
 	}
 
+	const seenDamageNumbers = await page.evaluate(() => {
+		const tracker = (window as unknown as Record<string, { disconnect(): unknown }>)
+			.__duelDamageObserver;
+		delete (window as unknown as Record<string, unknown>).__duelDamageObserver;
+		return tracker.disconnect() as { text: string; onRival: boolean }[];
+	});
+
 	await expect(page.getByTestId('objective-chip')).toContainText('free roam');
-	await expect(page.getByTestId('damage-number').first()).toBeVisible();
+	expect(seenDamageNumbers.some((entry) => entry.onRival && /^-\d+$/.test(entry.text))).toBe(true);
 	await expect(page.getByTestId('item-feedback')).toContainText('Won:');
 	const rewardPrompt = await page.getByTestId('item-feedback').innerText();
 	const rewardMatch = rewardPrompt.match(/Won: (?<name>.+?) x(?<count>\d+)/);
