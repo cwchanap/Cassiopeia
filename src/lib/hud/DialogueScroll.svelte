@@ -1,10 +1,11 @@
 <script lang="ts">
 	import type { HudDialogue, HudQuestStep } from '$lib/game/simulation/types';
-	import { HUD_HANZI_LABELS, VILLAGER_PORTRAIT_INDEX } from './labels';
+	import { HUD_HANZI_LABELS, VILLAGER_PORTRAIT_INDEX, VILLAGER_TITLES } from './labels';
 
 	let { dialogue, quest = null }: { dialogue: HudDialogue; quest?: HudQuestStep | null } = $props();
 
 	const portraitIndex = $derived(VILLAGER_PORTRAIT_INDEX[dialogue.villagerId]);
+	const speakerTitle = $derived(VILLAGER_TITLES[dialogue.villagerId]);
 	const lineIndices = $derived(Array.from({ length: dialogue.lineCount }, (_, i) => i));
 	const portraitPosition = $derived(
 		`${((portraitIndex % 4) * 100) / 3}% ${portraitIndex < 4 ? 0 : 100}%`
@@ -29,8 +30,12 @@
 		style:background-position={portraitPosition}
 	></div>
 	<div class="dialogue-text" data-testid="game-prompt" role="status">
-		<span class="eyebrow">{HUD_HANZI_LABELS.dialogue}</span>
-		<strong class="speaker">{dialogue.speaker}:</strong>
+		<div class="speaker-heading">
+			<span class="speaker-title hanzi" lang="zh" aria-hidden="true"
+				>{speakerTitle ?? HUD_HANZI_LABELS.dialogue}</span
+			>
+			<strong class="speaker">{dialogue.speaker}:</strong>
+		</div>
 		<p class="line">{dialogue.line}</p>
 	</div>
 	<div class="dialogue-tail">
@@ -124,16 +129,18 @@
 		grid-row: 1;
 		min-width: 0;
 	}
-	.eyebrow {
-		display: block;
-		color: var(--cinnabar);
-		font-family: var(--font-cjk-small);
-		font-size: 12px;
-		letter-spacing: 0.2em;
+	.speaker-heading {
+		display: flex;
+		align-items: baseline;
+		gap: 10px;
+	}
+	.speaker-title {
+		color: var(--ink);
+		font-size: 22px;
+		line-height: 1;
 	}
 	.speaker {
 		display: block;
-		margin-top: 3px;
 		font: 600 20px/1.15 var(--font-latin);
 	}
 	.line {
@@ -198,6 +205,9 @@
 		}
 		.speaker {
 			font-size: 17px;
+		}
+		.speaker-title {
+			font-size: 18px;
 		}
 		.line {
 			font-size: 13px;

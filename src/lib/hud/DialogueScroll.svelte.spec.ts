@@ -73,6 +73,8 @@ describe('DialogueScroll', () => {
 
 		const portrait = container.querySelector<HTMLElement>('[data-testid="dialogue-portrait"]')!;
 		expect(portrait.style.backgroundPosition).toBe('33.3333% 0%');
+		expect(container.querySelector('.speaker-title')?.textContent?.trim()).toBe('沈长老');
+		expect(container.querySelector('.speaker-title')?.getAttribute('aria-hidden')).toBe('true');
 
 		await rerender({
 			dialogue: {
@@ -86,6 +88,7 @@ describe('DialogueScroll', () => {
 
 		const moved = container.querySelector<HTMLElement>('[data-testid="dialogue-portrait"]')!;
 		expect(moved.style.backgroundPosition).toBe('33.3333% 100%');
+		expect(container.querySelector('.speaker-title')?.textContent?.trim()).toBe('对话');
 	});
 
 	it('renders Senior Brother Lu with his portrait cell for the duel intro', async () => {
@@ -103,6 +106,7 @@ describe('DialogueScroll', () => {
 
 		const portrait = container.querySelector<HTMLElement>('[data-testid="dialogue-portrait"]')!;
 		expect(portrait.style.backgroundPosition).toBe('66.6667% 0%');
+		expect(container.querySelector('.speaker-title')?.textContent?.trim()).toBe('陆师兄');
 		await expect.element(page.getByTestId('game-prompt')).toHaveTextContent(`${lu.name}:`);
 	});
 });

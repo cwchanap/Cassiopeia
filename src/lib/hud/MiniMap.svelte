@@ -47,7 +47,15 @@
 	const distanceLabel = $derived(marker?.onRim ? `${marker.metres}m` : '');
 	const badgeWidth = $derived(Math.max(30, distanceLabel.length * 7 + 8));
 	const badgeRadius = $derived(
-		Math.max(0, Math.min(29, RADIUS - Math.hypot(badgeWidth / 2, 8) - 2))
+		marker?.onRim
+			? Math.max(
+					0,
+					RADIUS -
+						Math.abs((marker.x * SCALE) / RADIUS) * (badgeWidth / 2) -
+						Math.abs((marker.y * SCALE) / RADIUS) * 8 -
+						1
+				)
+			: 0
 	);
 	const north = $derived({
 		x: northDirection().x * (RADIUS - 10),

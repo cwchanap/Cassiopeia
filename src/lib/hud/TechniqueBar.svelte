@@ -322,15 +322,15 @@
 		}
 		.technique > strong,
 		.quick-slots button > strong {
-			font-size: 10px;
+			font-size: 11px;
 		}
 		.technique > small,
 		.quick-slots small {
-			font-size: 8px;
+			font-size: 10px;
 		}
 		.technique-art kbd,
 		.slot-art kbd {
-			font-size: 8px;
+			font-size: 10px;
 			padding: 1px 3px;
 			min-width: 15px;
 		}

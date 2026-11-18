@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { QUEST_STEPS } from '$lib/game/simulation/villageContent';
 import worldLayout from '$lib/game/world-layout.json';
-import { HUD_HANZI_LABELS, REGION_TITLES } from './labels';
+import { HUD_HANZI_LABELS, REGION_TITLES, VILLAGER_TITLES } from './labels';
 
 const FONTS_DIR = resolve(import.meta.dirname, '../../../static/fonts/wuxia');
 const CJK = /[㐀-鿿]/g;
@@ -51,7 +51,9 @@ describe('wuxia hanzi font subset', () => {
 	});
 
 	it('covers every fixed HUD hanzi label', () => {
-		const needed = Object.values(HUD_HANZI_LABELS).flatMap(cjkChars);
+		const needed = [...Object.values(HUD_HANZI_LABELS), ...Object.values(VILLAGER_TITLES)].flatMap(
+			cjkChars
+		);
 		expect(needed.length).toBeGreaterThan(0);
 		for (const ch of needed) {
 			expect(manifest, `manifest missing ${ch}`).toContain(ch);

@@ -54,7 +54,7 @@
 	.vitals::before {
 		position: absolute;
 		z-index: -1;
-		inset: 8px 0 8px 42px;
+		inset: -3px 0 -3px 42px;
 		background: linear-gradient(105deg, rgb(27 24 21 / 96%), rgb(27 24 21 / 91%));
 		clip-path: polygon(0 3%, 85% 0, 100% 12%, 98% 48%, 100% 88%, 87% 100%, 0 97%);
 		content: '';

@@ -305,10 +305,29 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 
 	await walkFramesToPrompt(['w'], 'Press E to speak with Elder Shen');
 
+	await expect(async () => {
+		const boxes = await page.evaluate(() => {
+			const name = document.querySelector('[data-villager-id="elder_shen"]');
+			const marker = document.querySelector('[data-testid="quest-anchor"]');
+			const interaction = document.querySelector('[data-testid="game-prompt"]');
+			if (!name || !marker || !interaction) throw new Error('Missing Elder Shen labels');
+			const nameBox = name.getBoundingClientRect();
+			return {
+				nameLeft: nameBox.left,
+				nameBottom: nameBox.bottom,
+				markerRight: marker.getBoundingClientRect().right,
+				promptTop: interaction.getBoundingClientRect().top
+			};
+		});
+		expect(boxes.markerRight).toBeLessThanOrEqual(boxes.nameLeft + 1);
+		expect(boxes.promptTop).toBeGreaterThanOrEqual(boxes.nameBottom - 1);
+	}).toPass({ timeout: 15000 });
+
 	await page.keyboard.press('e');
 	await expect(prompt).toBeInViewport();
 	await expect(prompt).toContainText('Elder Shen:');
 	await expect(page.getByTestId('dialogue-scroll')).toBeVisible();
+	await expect(page.locator('.dialogue-scroll .speaker-title')).toHaveText('沈长老');
 	await expect(page.getByTestId('dialogue-quest-context')).toContainText('拜师 Pay Respects');
 	await expect(page.getByTestId('dialogue-quest-context')).toContainText('Step 1 of 5');
 	await expect(page.getByTestId('objective-chip')).toHaveCount(0);
@@ -459,6 +478,7 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	await page.keyboard.press('e');
 	await expect(prompt).toHaveCount(0);
 	await expect(page.getByRole('meter', { name: 'Rival health' })).toBeVisible();
+	await expect(page.locator('.rival-status .rival-seal')).toHaveText('敌');
 	await expect(page.getByTestId('mini-map')).toHaveCount(0);
 	await expect(objectiveChip).toContainText('win the spar');
 	const duelObjective = objectiveChip.getByRole('button', { name: /Spar with the rival/ });

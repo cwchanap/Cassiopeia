@@ -4,6 +4,7 @@
 	import type { HudSnapshot, ItemId, QuickSlotNumber } from '$lib/game/simulation/types';
 	import type { WuxiaProjectionFrame } from '$lib/game/render/createWuxiaScene';
 	import { hudLayout } from '$lib/hud/layout';
+	import { HUD_HANZI_LABELS } from '$lib/hud/labels';
 	import Vitals from '$lib/hud/Vitals.svelte';
 	import TechniqueBar from '$lib/hud/TechniqueBar.svelte';
 	import QuestScroll from '$lib/hud/QuestScroll.svelte';
@@ -247,6 +248,7 @@
 						>{hud.rivalHealth}/{hud.rivalMaxHealth}</strong
 					>
 				</div>
+				<span class="rival-seal hanzi" lang="zh" aria-hidden="true">{HUD_HANZI_LABELS.enemy}</span>
 				<div class="brush-bar rival-meter">
 					<meter aria-label="Rival health" min="0" max={hud.rivalMaxHealth} value={hud.rivalHealth}
 					></meter>
@@ -514,15 +516,19 @@
 		clip-path: polygon(1% 8%, 12% 0, 88% 4%, 100% 16%, 98% 52%, 100% 84%, 88% 100%, 2% 95%, 0 50%);
 		content: '';
 	}
-	.rival-status::after {
+	.rival-seal {
 		position: absolute;
 		top: 10px;
 		left: -3px;
+		display: grid;
+		place-items: center;
 		width: 19px;
 		height: 19px;
 		border-radius: 2px;
 		background: var(--cinnabar);
-		content: '';
+		color: var(--paper);
+		font-size: 15px;
+		line-height: 1;
 		transform: rotate(-5deg);
 	}
 	.rival-status .eyebrow {
