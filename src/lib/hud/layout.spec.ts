@@ -32,7 +32,7 @@ describe('hudLayout', () => {
 		});
 	});
 
-	it('hides everything but the dialogue scroll in dialogue', () => {
+	it('hides the HUD behind the dialogue scroll but keeps item feedback', () => {
 		const l = layout('dialogue');
 		expect(l.dialogue).toBe(true);
 		expect(l.vitals).toBe(false);
@@ -43,7 +43,7 @@ describe('hudLayout', () => {
 		expect(l.rivalBar).toBe(false);
 		expect(l.banner).toBe(false);
 		expect(l.damageNumbers).toBe(false);
-		expect(l.itemFeedback).toBe(false);
+		expect(l.itemFeedback).toBe(true);
 	});
 
 	it('keeps vitals and the rival bar in a duel, with the quest as one line', () => {
@@ -104,7 +104,7 @@ describe('hudLayout', () => {
 				expect(l.anchors).toBe(false);
 				expect(l.banner).toBe(false);
 				expect(l.damageNumbers).toBe(false);
-				expect(l.itemFeedback).toBe(false);
+				expect(l.itemFeedback).toBe(true);
 				expect(l.quest).toBeNull();
 			}
 			if (input.mode === 'dialogue' && !input.isPaused && !input.bagOpen) {

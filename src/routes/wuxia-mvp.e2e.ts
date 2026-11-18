@@ -572,11 +572,15 @@ test('plays through the first day quest, duel, reward, and free roam', async ({
 	// keeps dropping; only a sustained stall or the overall deadline fails the journey.
 	const rivalMeter = page.getByRole('meter', { name: 'Rival health' });
 	// The meter only exists during the duel; once it is gone the end state is showing.
-	const readRivalHealth = () =>
-		rivalMeter
-			.getAttribute('value', { timeout: 2000 })
-			.then((value) => Number(value))
-			.catch(() => null);
+	// The read must not linger on a removed meter: a long attach wait after the
+	// killing blow outlives the 0.65 s damage record and flakes the assertion below.
+	const readRivalHealth = async () => {
+		if (!(await rivalMeter.isVisible().catch(() => false))) {
+			return null;
+		}
+		const value = await rivalMeter.getAttribute('value', { timeout: 250 }).catch(() => null);
+		return value === null ? null : Number(value);
+	};
 	const duelDeadline = Date.now() + 150000;
 	let rivalHealth = 100;
 	let lastProgress = Date.now();
