@@ -32,7 +32,12 @@
 	let frame = $state<WuxiaProjectionFrame | null>(null);
 
 	const layout = $derived(
-		hudLayout({ mode: hud.mode, isPaused: hud.isPaused, bagOpen: hud.inventory.isOpen })
+		hudLayout({
+			mode: hud.mode,
+			isPaused: hud.isPaused,
+			bagOpen: hud.inventory.isOpen,
+			feedbackIsRejection: hud.inventory.feedbackIsRejection
+		})
 	);
 
 	const modeLabel = $derived(
@@ -288,7 +293,7 @@
 		</div>
 		<div class="pause-hint" hidden={hud.mode === 'dialogue'}><kbd>Esc</kbd> Pause</div>
 
-		{#if hud.inventory.feedback && (layout.itemFeedback || hud.inventory.feedbackIsRejection)}
+		{#if hud.inventory.feedback && layout.itemFeedback}
 			<p class="item-feedback" data-testid="item-feedback" role="status">
 				{hud.inventory.feedback}
 			</p>

@@ -4,6 +4,7 @@ export type HudLayoutInput = {
 	mode: GameModeKind;
 	isPaused: boolean;
 	bagOpen: boolean;
+	feedbackIsRejection: boolean;
 };
 
 export type QuestScrollMode = 'full' | 'line' | null;
@@ -21,7 +22,12 @@ export type HudLayout = {
 	itemFeedback: boolean;
 };
 
-export function hudLayout({ mode, isPaused, bagOpen }: HudLayoutInput): HudLayout {
+export function hudLayout({
+	mode,
+	isPaused,
+	bagOpen,
+	feedbackIsRejection
+}: HudLayoutInput): HudLayout {
 	const overlay = isPaused || bagOpen;
 	return {
 		vitals: mode !== 'dialogue' && !bagOpen,
@@ -33,6 +39,6 @@ export function hudLayout({ mode, isPaused, bagOpen }: HudLayoutInput): HudLayou
 		dialogue: mode === 'dialogue' && !overlay,
 		banner: mode === 'explore' && !overlay,
 		damageNumbers: mode !== 'dialogue' && !overlay,
-		itemFeedback: mode !== 'dialogue' && !isPaused
+		itemFeedback: feedbackIsRejection || (mode !== 'dialogue' && !isPaused)
 	};
 }

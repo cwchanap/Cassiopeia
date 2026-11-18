@@ -2,17 +2,27 @@ import { describe, expect, it } from 'vitest';
 import { hudLayout, type HudLayoutInput } from './layout';
 import type { GameModeKind } from '$lib/game/simulation/types';
 
-const cases: { mode: GameModeKind; isPaused: boolean; bagOpen: boolean }[] = [];
+const cases: {
+	mode: GameModeKind;
+	isPaused: boolean;
+	bagOpen: boolean;
+	feedbackIsRejection: boolean;
+}[] = [];
 for (const mode of ['explore', 'dialogue', 'duel'] as const) {
 	for (const isPaused of [false, true]) {
 		for (const bagOpen of [false, true]) {
-			cases.push({ mode, isPaused, bagOpen });
+			cases.push({ mode, isPaused, bagOpen, feedbackIsRejection: false });
 		}
 	}
 }
 
-function layout(mode: GameModeKind, isPaused = false, bagOpen = false) {
-	return hudLayout({ mode, isPaused, bagOpen } satisfies HudLayoutInput);
+function layout(
+	mode: GameModeKind,
+	isPaused = false,
+	bagOpen = false,
+	feedbackIsRejection = false
+) {
+	return hudLayout({ mode, isPaused, bagOpen, feedbackIsRejection } satisfies HudLayoutInput);
 }
 
 describe('hudLayout', () => {
@@ -79,6 +89,12 @@ describe('hudLayout', () => {
 		expect(l.damageNumbers).toBe(false);
 		expect(l.map).toBe(false);
 		expect(l.banner).toBe(false);
+	});
+
+	it('lets blocked-action rejections override the dialogue scroll and overlays', () => {
+		expect(layout('dialogue', false, false, true).itemFeedback).toBe(true);
+		expect(layout('explore', true, false, true).itemFeedback).toBe(true);
+		expect(layout('explore', false, true, true).itemFeedback).toBe(true);
 	});
 
 	it('hides the dialogue scroll when paused or bagged', () => {
