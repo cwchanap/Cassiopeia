@@ -1,7 +1,11 @@
-import { INTERNAL_ARTS } from './content';
+import { EXTERNAL_ARTS, INTERNAL_ARTS, MOVES } from './content';
 import {
+	affectedCells,
+	cellDistance,
 	CARDINAL_FACINGS,
 	computeReachableCells,
+	facingStep,
+	legalAimCells,
 	sameCell,
 	TERRAIN_BY_CHAR,
 	terrainAt
@@ -13,6 +17,8 @@ import type {
 	BattleEvent,
 	BattleFighter,
 	BattleMap,
+	BattleMoveTarget,
+	BattleOutcome,
 	BattlePillId,
 	BattleRejectionReason,
 	BattleSetup,
@@ -21,11 +27,45 @@ import type {
 	Cell,
 	Facing,
 	FighterSetup,
+	MoveDefinition,
+	MoveId,
 	ReachableCell
 } from './types';
 
 /** Fixed Gather qi before the internal art's gather bonus. */
 const GATHER_QI = 20;
+
+/** One division for every hit: base, power and five integer percentage factors. */
+const DAMAGE_DENOMINATOR = 10 * 100 ** 5;
+const FRONT_FACING_PERCENT = 100;
+const SIDE_FACING_PERCENT = 125;
+const REAR_FACING_PERCENT = 150;
+const BAMBOO_COVER_PERCENT = 75;
+const GUARD_PERCENT = 50;
+const COUNTER_ATTACK_PERCENT = 50;
+
+export type DamageFactors = {
+	baseDamage: number;
+	power: number;
+	facingPercent: number;
+	coverPercent: number;
+	guardPercent: number;
+	passivePercent: number;
+	attackPercent: number;
+};
+
+/** Single pure damage formula shared by every primary hit and every counter. */
+export function computeDamage(factors: DamageFactors): number {
+	const numerator =
+		factors.baseDamage *
+		factors.power *
+		factors.facingPercent *
+		factors.coverPercent *
+		factors.guardPercent *
+		factors.passivePercent *
+		factors.attackPercent;
+	return Math.max(1, Math.floor(numerator / DAMAGE_DENOMINATOR));
+}
 
 /** Validates authored setup, copies it and starts round one with its first turn. */
 export function createBattle(setup: BattleSetup): BattleCreation {
@@ -167,9 +207,22 @@ export function applyBattleCommand(
 			finishTurn(next, actor, command.facing, events);
 			return { accepted: true, state: next, events };
 		}
-		case 'useMove':
-			// Slice 3 replaces this stub with ownership, geometry and damage resolution.
-			return reject('invalidAim');
+		case 'useMove': {
+			const move = MOVES[command.moveId];
+			if (!move || move.externalArtId !== actor.externalArtId) {
+				return reject('moveNotOwned');
+			}
+			if (actor.qi < move.qiCost) {
+				return reject('insufficientQi');
+			}
+			const target = moveTargets(next, actor, move).find((entry) =>
+				sameCell(entry.aim, command.aim)
+			);
+			if (!target) {
+				return reject('invalidAim');
+			}
+			return resolveAttack(next, actor, move, target);
+		}
 		case 'useItem':
 			// Slice 4 replaces this stub with shared-bag validation and pill use.
 			return reject('invalidItem');
@@ -218,6 +271,42 @@ export function getReachableCells(state: BattleState, fighterId?: string): Reach
 	return reachableFrom(state, fighter);
 }
 
+/**
+ * Legal aims for the active fighter's move, each with the affected cells and the living enemies
+ * they cover. Uses the same geometry and hostile filter as command validation, so every returned
+ * aim is accepted by `useMove` on the unchanged state. Empty when the state or move is unusable.
+ */
+export function getMoveTargets(state: BattleState, moveId: MoveId): BattleMoveTarget[] {
+	if (state.outcome !== 'ongoing' || state.hasActed) {
+		return [];
+	}
+	const actor = activeFighter(state);
+	if (!actor) {
+		return [];
+	}
+	const move = MOVES[moveId];
+	if (!move || move.externalArtId !== actor.externalArtId || actor.qi < move.qiCost) {
+		return [];
+	}
+	return moveTargets(state, actor, move);
+}
+
+function moveTargets(
+	state: BattleState,
+	actor: BattleFighter,
+	move: MoveDefinition
+): BattleMoveTarget[] {
+	const targets: BattleMoveTarget[] = [];
+	for (const aim of legalAimCells(state.map, actor.cell, move.targeting)) {
+		const cells = affectedCells(state.map, actor.cell, aim, move.targeting);
+		const targetIds = hostileIdsIn(state, actor, cells);
+		if (targetIds.length > 0) {
+			targets.push({ aim, cells, targetIds });
+		}
+	}
+	return targets;
+}
+
 function reachableFrom(state: BattleState, fighter: BattleFighter): ReachableCell[] {
 	return computeReachableCells(
 		state.map,
@@ -227,6 +316,192 @@ function reachableFrom(state: BattleState, fighter: BattleFighter): ReachableCel
 			.filter((other) => other.health > 0 && other.id !== fighter.id)
 			.map((other) => ({ ...other.cell }))
 	);
+}
+
+function hostileIdsIn(state: BattleState, actor: BattleFighter, cells: readonly Cell[]): string[] {
+	const ids: string[] = [];
+	for (const cell of cells) {
+		const fighter = state.fighters.find(
+			(candidate) =>
+				candidate.health > 0 && candidate.side !== actor.side && sameCell(candidate.cell, cell)
+		);
+		if (fighter) {
+			ids.push(fighter.id);
+		}
+	}
+	return ids;
+}
+
+/**
+ * The single resolution path for a validated attack: debit qi once, hit every living defender in
+ * pattern order, evaluate the outcome, then let each surviving Guard counter once. A non-terminal
+ * counter kill finishes the dead fighter's turn through the normal turn transition.
+ */
+function resolveAttack(
+	state: BattleState,
+	actor: BattleFighter,
+	move: MoveDefinition,
+	target: BattleMoveTarget
+): BattleCommandResult {
+	const events: BattleEvent[] = [];
+	const qiBefore = actor.qi;
+	actor.qi = qiBefore - move.qiCost;
+	state.hasActed = true;
+	events.push({
+		type: 'attacked',
+		actorId: actor.id,
+		moveId: move.id,
+		aim: { ...target.aim },
+		cells: target.cells.map((cell) => ({ ...cell })),
+		qiBefore,
+		qiAfter: actor.qi
+	});
+
+	const defenders = target.targetIds.map((fighterId) => fighterIn(state, fighterId));
+	for (const defender of defenders) {
+		resolveHit(state, events, actor, defender, {
+			baseDamage: move.baseDamage,
+			attackPercent: 100,
+			ignoreGuard: move.ignoreGuard
+		});
+	}
+
+	if (finishIfTerminal(state, events)) {
+		return { accepted: true, state, events };
+	}
+
+	// An ignoreGuard strike bypasses both Guard's reduction and its counter.
+	if (!move.ignoreGuard) {
+		for (const defender of defenders) {
+			if (defender.health === 0 || !canCounter(defender, actor)) {
+				continue;
+			}
+			const basic = MOVES[EXTERNAL_ARTS[defender.externalArtId].moves.basic];
+			events.push({
+				type: 'countered',
+				actorId: defender.id,
+				targetId: actor.id,
+				moveId: basic.id
+			});
+			resolveHit(state, events, defender, actor, {
+				baseDamage: basic.baseDamage,
+				attackPercent: COUNTER_ATTACK_PERCENT,
+				ignoreGuard: false,
+				facingPercent: FRONT_FACING_PERCENT
+			});
+			if (finishIfTerminal(state, events)) {
+				return { accepted: true, state, events };
+			}
+			if (actor.health === 0) {
+				break;
+			}
+		}
+	}
+
+	if (actor.health === 0) {
+		// Terminal hero and last-enemy deaths already ended the battle above.
+		finishTurn(state, actor, actor.facing, events);
+	}
+	return { accepted: true, state, events };
+}
+
+type HitOptions = {
+	baseDamage: number;
+	attackPercent: number;
+	ignoreGuard: boolean;
+	/** Counters always read as front, whatever the recipient's stored facing is. */
+	facingPercent?: number;
+};
+
+function resolveHit(
+	state: BattleState,
+	events: BattleEvent[],
+	source: BattleFighter,
+	target: BattleFighter,
+	options: HitOptions
+): void {
+	const facingPercent = options.facingPercent ?? facingPercentFor(target, source.cell);
+	const coverPercent = coverPercentFor(state, source.cell, target.cell);
+	const guardPercent = target.guarding && !options.ignoreGuard ? GUARD_PERCENT : 100;
+	const passivePercent = INTERNAL_ARTS[target.internalArtId].damageTakenPercent;
+	const calculated = computeDamage({
+		baseDamage: options.baseDamage,
+		power: source.power,
+		facingPercent,
+		coverPercent,
+		guardPercent,
+		passivePercent,
+		attackPercent: options.attackPercent
+	});
+	const healthBefore = target.health;
+	const applied = Math.min(calculated, healthBefore);
+	target.health = healthBefore - applied;
+	events.push({
+		type: 'damaged',
+		sourceId: source.id,
+		targetId: target.id,
+		calculated,
+		applied,
+		facingPercent,
+		coverPercent,
+		guardPercent,
+		passivePercent,
+		attackPercent: options.attackPercent,
+		healthBefore,
+		healthAfter: target.health
+	});
+	if (target.health === 0) {
+		events.push({ type: 'defeated', fighterId: target.id });
+	}
+}
+
+/** A surviving Guard counters an adjacent attacker from front or side, never from the rear. */
+function canCounter(defender: BattleFighter, attacker: BattleFighter): boolean {
+	return (
+		defender.guarding &&
+		cellDistance(defender.cell, attacker.cell) === 1 &&
+		facingPercentFor(defender, attacker.cell) !== REAR_FACING_PERCENT
+	);
+}
+
+/** Front, side or rear from the defender's own facing and the attacker's position. */
+function facingPercentFor(defender: BattleFighter, attackerCell: Cell): number {
+	const forward = facingStep(defender.facing);
+	const dx = attackerCell.x - defender.cell.x;
+	const dz = attackerCell.z - defender.cell.z;
+	const ahead = dx * forward.x + dz * forward.z;
+	const lateral = dx * forward.z - dz * forward.x;
+	if (Math.abs(ahead) > Math.abs(lateral)) {
+		return ahead > 0 ? FRONT_FACING_PERCENT : REAR_FACING_PERCENT;
+	}
+	return SIDE_FACING_PERCENT;
+}
+
+/** Bamboo only covers a defender the attacker cannot reach in one step. */
+function coverPercentFor(state: BattleState, sourceCell: Cell, targetCell: Cell): number {
+	return terrainAt(state.map, targetCell) === 'bamboo' && cellDistance(sourceCell, targetCell) > 1
+		? BAMBOO_COVER_PERCENT
+		: 100;
+}
+
+function finishIfTerminal(state: BattleState, events: BattleEvent[]): boolean {
+	const outcome = battleOutcome(state);
+	if (outcome === 'ongoing') {
+		return false;
+	}
+	state.outcome = outcome;
+	events.push({ type: 'battleEnded', outcome });
+	return true;
+}
+
+/** Hero defeat takes precedence over victory when both conditions hold. */
+function battleOutcome(state: BattleState): BattleOutcome {
+	if (fighterIn(state, state.heroId).health === 0) {
+		return 'defeat';
+	}
+	return state.fighters.some((fighter) => fighter.side === 'enemy' && fighter.health > 0)
+		? 'ongoing'
+		: 'victory';
 }
 
 /**
