@@ -103,14 +103,16 @@ export function applyBattleCommand(
 		return reject(check.reason);
 	}
 
+	const phase = validatePhase(state, command);
+	if (phase) {
+		return reject(phase);
+	}
+
 	const next = copyState(state);
 	const actor = fighterIn(next, command.actorId);
 
 	switch (command.type) {
 		case 'move': {
-			if (next.hasActed || next.hasMoved) {
-				return reject('wrongPhase');
-			}
 			if (!isStandable(next.map, command.cell) || sameCell(command.cell, actor.cell)) {
 				return reject('invalidCell');
 			}
@@ -136,9 +138,6 @@ export function applyBattleCommand(
 			};
 		}
 		case 'guard': {
-			if (next.hasActed) {
-				return reject('wrongPhase');
-			}
 			actor.guarding = true;
 			next.hasActed = true;
 			return {
@@ -148,9 +147,6 @@ export function applyBattleCommand(
 			};
 		}
 		case 'gatherQi': {
-			if (next.hasActed) {
-				return reject('wrongPhase');
-			}
 			const qiBefore = actor.qi;
 			actor.qi = Math.min(
 				actor.maxQi,
@@ -164,9 +160,6 @@ export function applyBattleCommand(
 			};
 		}
 		case 'endTurn': {
-			if (!next.hasActed) {
-				return reject('wrongPhase');
-			}
 			if (!CARDINAL_FACINGS.includes(command.facing)) {
 				return reject('invalidFacing');
 			}
@@ -176,10 +169,10 @@ export function applyBattleCommand(
 		}
 		case 'useMove':
 			// Slice 3 replaces this stub with ownership, geometry and damage resolution.
-			return next.hasActed ? reject('wrongPhase') : reject('invalidAim');
+			return reject('invalidAim');
 		case 'useItem':
 			// Slice 4 replaces this stub with shared-bag validation and pill use.
-			return next.hasActed ? reject('wrongPhase') : reject('invalidItem');
+			return reject('invalidItem');
 	}
 }
 
@@ -192,12 +185,17 @@ export function getTurnOrder(state: BattleState): BattleTurnOrder {
 	const active = activeFighter(state);
 	const order = state.turnOrder.filter((id) => livingFighter(state, id) !== undefined);
 	const acted = new Set(state.turnOrder.slice(0, state.turnIndex));
+	const actedIds = order.filter((id) => acted.has(id));
+	// A fighter that has taken its action is still active while choosing facing.
+	if (active && state.hasActed && !actedIds.includes(active.id)) {
+		actedIds.push(active.id);
+	}
 
 	return {
 		round: state.round,
 		activeId: active?.id ?? null,
 		order,
-		actedIds: order.filter((id) => acted.has(id)),
+		actedIds,
 		nextRound: initiativeOrder(state)
 	};
 }
@@ -289,6 +287,21 @@ function validateActiveActor(state: BattleState, actorId: string): ActorCheck {
 	return { ok: true };
 }
 
+/** One phase gate for every command, applied before any state copy or command work. */
+function validatePhase(state: BattleState, command: BattleCommand): BattleRejectionReason | null {
+	switch (command.type) {
+		case 'move':
+			return state.hasActed || state.hasMoved ? 'wrongPhase' : null;
+		case 'endTurn':
+			return state.hasActed ? null : 'wrongPhase';
+		case 'guard':
+		case 'gatherQi':
+		case 'useMove':
+		case 'useItem':
+			return state.hasActed ? 'wrongPhase' : null;
+	}
+}
+
 function initiativeOrder(state: BattleState): string[] {
 	return state.fighters
 		.map((fighter, setupIndex) => ({ fighter, setupIndex }))
@@ -330,8 +343,7 @@ function movementBudget(fighter: BattleFighter): number {
 
 function copyState(state: BattleState): BattleState {
 	return {
-		// Authored terrain never changes during a battle, so the parsed map is shared.
-		map: state.map,
+		map: copyMap(state.map),
 		fighters: state.fighters.map((fighter) => ({ ...fighter, cell: { ...fighter.cell } })),
 		heroId: state.heroId,
 		squadBag: { ...state.squadBag },
@@ -341,6 +353,14 @@ function copyState(state: BattleState): BattleState {
 		hasMoved: state.hasMoved,
 		hasActed: state.hasActed,
 		outcome: state.outcome
+	};
+}
+
+function copyMap(map: BattleMap): BattleMap {
+	return {
+		width: map.width,
+		height: map.height,
+		terrain: map.terrain.map((row) => [...row])
 	};
 }
 

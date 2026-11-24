@@ -143,7 +143,7 @@ export type BattleTurnOrder = {
 	activeId: string | null;
 	/** This round's snapshot restricted to living fighters, including the active one. */
 	order: string[];
-	/** Living fighters in `order` that already finished their turn this round. */
+	/** Living fighters in `order` that already took their action this round. */
 	actedIds: string[];
 	/** Initiative order for the next round from currently living fighters; empty when terminal. */
 	nextRound: string[];
