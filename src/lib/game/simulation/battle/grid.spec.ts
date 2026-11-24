@@ -72,8 +72,12 @@ describe('terrain lookup and cell geometry', () => {
 		expect(inBounds(map, cell(0, -1))).toBe(false);
 		expect(inBounds(map, cell(2, 2))).toBe(false);
 		expect(inBounds(map, cell(0, 3))).toBe(false);
+		expect(inBounds(map, { x: 0.5, z: 1 })).toBe(false);
+		expect(inBounds(map, { x: 1, z: 1.5 })).toBe(false);
 		expect(terrainAt(map, cell(2, 1))).toBeNull();
 		expect(terrainAt(map, cell(0, 3))).toBeNull();
+		expect(terrainAt(map, { x: 0.5, z: 1 })).toBeNull();
+		expect(terrainAt(map, { x: 1, z: 1.5 })).toBeNull();
 		expect(cellDistance(cell(0, 0), cell(2, 1))).toBe(3);
 		expect(cellDistance(cell(2, 1), cell(0, 0))).toBe(3);
 		expect(cellDistance(cell(1, 1), cell(1, 1))).toBe(0);
@@ -271,6 +275,19 @@ describe('single-cell targeting', () => {
 		expect(affectedCells(map, cell(2, 2), cell(-1, 2), darts)).toEqual([]);
 	});
 
+	it('rejects fractional aims on both axes instead of indexing outside the terrain grid', () => {
+		const map = mapFromRows(['...', '...', '...']);
+		const darts: MoveTargeting = { shape: 'single', range: 3 };
+
+		expect(affectedCells(map, cell(1, 0), { x: 1, z: 1.5 }, darts)).toEqual([]);
+		expect(affectedCells(map, cell(2, 1), { x: 0.5, z: 1 }, darts)).toEqual([]);
+		expect(affectedCells(map, cell(1, 1), { x: 1.5, z: 1 }, adjacent)).toEqual([]);
+		expect(affectedCells(map, cell(2, 1), { x: 0.5, z: 1 }, { shape: 'line', length: 2 })).toEqual(
+			[]
+		);
+		expect(affectedCells(map, cell(1, 1), { x: 1, z: 0.5 }, arc)).toEqual([]);
+	});
+
 	it('rejects aims beyond the darts range and counts obstacles as blocking even at aim', () => {
 		const map = mapFromRows(['.......', '.......', '.......']);
 		const darts: MoveTargeting = { shape: 'single', range: 3 };
@@ -348,12 +365,22 @@ describe('arc targeting', () => {
 		]);
 	});
 
-	it('clips cells at the edges and around obstacles, including the centre', () => {
+	it('clips flank cells at the edges and around obstacles while the centre stays clear', () => {
+		const atEdge = mapFromRows(['.....', '.#...', '.....']);
+		const blockedFlank = mapFromRows(['..#..', '.....', '.....']);
+
+		expect(affectedCells(atEdge, cell(0, 0), cell(1, 0), arc)).toEqual([cell(1, 0)]);
+		expect(affectedCells(blockedFlank, cell(1, 1), cell(1, 0), arc)).toEqual([
+			cell(1, 0),
+			cell(0, 0)
+		]);
+	});
+
+	it('rejects an arc whose aim cell is blocked', () => {
 		const map = mapFromRows(['.....', '.#...', '.....']);
 
-		expect(affectedCells(map, cell(0, 0), cell(1, 0), arc)).toEqual([cell(1, 0)]);
-		expect(affectedCells(map, cell(0, 1), cell(1, 1), arc)).toEqual([cell(1, 0), cell(1, 2)]);
-		expect(legalAimCells(map, cell(0, 1), arc)).toContainEqual(cell(1, 1));
+		expect(affectedCells(map, cell(0, 1), cell(1, 1), arc)).toEqual([]);
+		expect(legalAimCells(map, cell(0, 1), arc)).toEqual([cell(0, 0), cell(0, 2)]);
 	});
 
 	it('rejects non-adjacent and out-of-bounds aims', () => {

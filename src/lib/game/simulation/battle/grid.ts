@@ -35,7 +35,15 @@ export function cellDistance(a: Cell, b: Cell): number {
 }
 
 export function inBounds(map: BattleMap, cell: Cell): boolean {
-	return cell.x >= 0 && cell.x < map.width && cell.z >= 0 && cell.z < map.height;
+	// Fractional coordinates are never grid cells and must not index a terrain row.
+	return (
+		Number.isInteger(cell.x) &&
+		Number.isInteger(cell.z) &&
+		cell.x >= 0 &&
+		cell.x < map.width &&
+		cell.z >= 0 &&
+		cell.z < map.height
+	);
 }
 
 /** Returns the terrain at a cell, or null when the cell is outside the map. */
@@ -224,7 +232,12 @@ function arcAffectedCells(map: BattleMap, origin: Cell, aim: Cell): Cell[] {
 		return [];
 	}
 
-	// A blocked centre is clipped like any other obstacle cell; the flanking cells still sweep.
+	// A blocked aim is invalid; only flanking obstacle cells are clipped from the sweep.
+	const aimTerrain = terrainAt(map, aim);
+	if (aimTerrain === null || aimTerrain === 'obstacle') {
+		return [];
+	}
+
 	const cells: Cell[] = [{ ...aim }];
 	for (const lateral of [TURN_LEFT[facing], TURN_RIGHT[facing]]) {
 		cells.push(stepCell(aim, lateral));
