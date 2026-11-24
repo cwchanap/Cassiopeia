@@ -250,3 +250,50 @@ describe('starter battle terrain', () => {
 		expect([...characters].sort()).toEqual(['#', '.', 'T', '~'].sort());
 	});
 });
+
+describe('protected rules catalogs', () => {
+	it('freezes the exported catalogs and every nested definition', () => {
+		expect(Object.isFrozen(MOVES)).toBe(true);
+		expect(Object.isFrozen(EXTERNAL_ARTS)).toBe(true);
+		expect(Object.isFrozen(INTERNAL_ARTS)).toBe(true);
+
+		for (const move of Object.values(MOVES)) {
+			expect(Object.isFrozen(move)).toBe(true);
+			expect(Object.isFrozen(move.targeting)).toBe(true);
+		}
+		for (const art of Object.values(EXTERNAL_ARTS)) {
+			expect(Object.isFrozen(art)).toBe(true);
+			expect(Object.isFrozen(art.moves)).toBe(true);
+		}
+		for (const art of Object.values(INTERNAL_ARTS)) {
+			expect(Object.isFrozen(art)).toBe(true);
+		}
+	});
+
+	it('rejects consumer writes so unchanged state keeps its results', () => {
+		expect(() => {
+			// @ts-expect-error move catalogs are readonly
+			MOVES.sword_cut = MOVES.palm_strike;
+		}).toThrow(TypeError);
+		expect(() => {
+			// @ts-expect-error nested move definitions are readonly
+			MOVES.sword_cut.qiCost += 1;
+		}).toThrow(TypeError);
+		expect(() => {
+			// @ts-expect-error move-slot records are readonly
+			EXTERNAL_ARTS.sect_sword_form.moves.basic = 'palm_strike';
+		}).toThrow(TypeError);
+		expect(() => {
+			// @ts-expect-error internal art definitions are readonly
+			INTERNAL_ARTS.iron_body.maxQi = 1;
+		}).toThrow(TypeError);
+
+		expect(MOVES.sword_cut).toMatchObject({ id: 'sword_cut', qiCost: 0, baseDamage: 12 });
+		expect(EXTERNAL_ARTS.sect_sword_form.moves).toEqual({
+			basic: 'sword_cut',
+			technique: 'piercing_thrust',
+			finisher: 'cloud_sweep'
+		});
+		expect(INTERNAL_ARTS.iron_body).toMatchObject({ maxQi: 70 });
+	});
+});

@@ -45,34 +45,34 @@ export type MoveId =
 export type MoveSlot = 'basic' | 'technique' | 'finisher';
 
 export type MoveTargeting =
-	| { shape: 'single'; range: number }
-	| { shape: 'line'; length: number }
-	| { shape: 'arc' };
+	| { readonly shape: 'single'; readonly range: number }
+	| { readonly shape: 'line'; readonly length: number }
+	| { readonly shape: 'arc' };
 
 export type MoveDefinition = {
-	id: MoveId;
-	name: string;
-	externalArtId: ExternalArtId;
-	baseDamage: number;
-	qiCost: number;
-	targeting: MoveTargeting;
-	ignoreGuard: boolean;
+	readonly id: MoveId;
+	readonly name: string;
+	readonly externalArtId: ExternalArtId;
+	readonly baseDamage: number;
+	readonly qiCost: number;
+	readonly targeting: MoveTargeting;
+	readonly ignoreGuard: boolean;
 };
 
 export type ExternalArtDefinition = {
-	id: ExternalArtId;
-	name: string;
-	moves: Record<MoveSlot, MoveId>;
+	readonly id: ExternalArtId;
+	readonly name: string;
+	readonly moves: Readonly<Record<MoveSlot, MoveId>>;
 };
 
 export type InternalArtDefinition = {
-	id: InternalArtId;
-	name: string;
-	maxQi: number;
-	qiRegen: number;
-	gatherBonus: number;
-	damageTakenPercent: number;
-	moveBonus: number;
+	readonly id: InternalArtId;
+	readonly name: string;
+	readonly maxQi: number;
+	readonly qiRegen: number;
+	readonly gatherBonus: number;
+	readonly damageTakenPercent: number;
+	readonly moveBonus: number;
 };
 
 export type FighterTemplate = {
@@ -141,7 +141,7 @@ export type BattleTurnOrder = {
 	round: number;
 	/** The living active fighter, or null once the battle has ended. */
 	activeId: string | null;
-	/** This round's snapshot restricted to living fighters, including the active one. */
+	/** This round's snapshot restricted to living fighters; terminal states keep the final snapshot. */
 	order: string[];
 	/** Living fighters in `order` that already took their action this round. */
 	actedIds: string[];
