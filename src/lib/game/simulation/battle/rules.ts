@@ -1,4 +1,6 @@
+import { ITEM_CATALOG } from '../items';
 import { EXTERNAL_ARTS, INTERNAL_ARTS, MOVES } from './content';
+import type { ConsumableEffect } from '../types';
 import {
 	affectedCells,
 	cellDistance,
@@ -16,6 +18,8 @@ import type {
 	BattleCreation,
 	BattleEvent,
 	BattleFighter,
+	BattleForecastHit,
+	BattleForecastResult,
 	BattleMap,
 	BattleMoveTarget,
 	BattleOutcome,
@@ -34,6 +38,12 @@ import type {
 
 /** Fixed Gather qi before the internal art's gather bonus. */
 const GATHER_QI = 20;
+
+/** The closed shared-bag pill set; the restoration effects come from ITEM_CATALOG. */
+const BATTLE_PILLS: Readonly<Record<BattlePillId, true>> = {
+	lesser_healing_pill: true,
+	lesser_qi_pill: true
+};
 
 /** One division for every hit: base, power and five integer percentage factors. */
 const DAMAGE_DENOMINATOR = 10 * 100 ** 5;
@@ -220,9 +230,48 @@ export function applyBattleCommand(
 			}
 			return resolveAttack(next, actor, owned.move, target);
 		}
-		case 'useItem':
-			// Slice 4 replaces this stub with shared-bag validation and pill use.
-			return reject('invalidItem');
+		case 'useItem': {
+			const pill = resolvePill(next, actor, command.pillId, command.targetId);
+			if (!pill.ok) {
+				return reject(pill.reason);
+			}
+
+			const { effect, target } = pill;
+			const resourceBefore = effect.resource === 'health' ? target.health : target.qi;
+			const maximum = effect.resource === 'health' ? target.maxHealth : target.maxQi;
+			const resourceAfter = Math.min(maximum, resourceBefore + effect.amount);
+			if (effect.resource === 'health') {
+				target.health = resourceAfter;
+			} else {
+				target.qi = resourceAfter;
+			}
+
+			const bagCount = (next.squadBag[command.pillId] ?? 0) - 1;
+			if (bagCount > 0) {
+				next.squadBag[command.pillId] = bagCount;
+			} else {
+				delete next.squadBag[command.pillId];
+			}
+			next.hasActed = true;
+
+			return {
+				accepted: true,
+				state: next,
+				events: [
+					{
+						type: 'itemUsed',
+						actorId: actor.id,
+						targetId: target.id,
+						pillId: command.pillId,
+						resource: effect.resource,
+						amount: resourceAfter - resourceBefore,
+						resourceBefore,
+						resourceAfter,
+						bagCount
+					}
+				]
+			};
+		}
 	}
 }
 
@@ -286,6 +335,94 @@ export function getMoveTargets(state: BattleState, moveId: MoveId): BattleMoveTa
 		return [];
 	}
 	return moveTargets(state, actor, owned.move);
+}
+
+/**
+ * Exact action resolution preview. It calls the same non-mutating reducer as `useMove`, so a
+ * rejection is the command's own reason and an accepted forecast projects that result's events and
+ * state: per-hit mitigation and HP, the attack's qi delta and the resulting turn or handoff.
+ */
+export function forecastMove(
+	state: BattleState,
+	actorId: string,
+	moveId: MoveId,
+	aim: Cell
+): BattleForecastResult {
+	const result = applyBattleCommand(state, { type: 'useMove', actorId, moveId, aim });
+	if (!result.accepted) {
+		return { accepted: false, reason: result.reason };
+	}
+
+	const attacked = result.events.find(
+		(event): event is Extract<BattleEvent, { type: 'attacked' }> => event.type === 'attacked'
+	);
+	if (!attacked) {
+		throw new Error('accepted attack emitted no attacked event');
+	}
+
+	const hits: BattleForecastHit[] = [];
+	const counters: BattleForecastHit[] = [];
+	let counterMoveId: MoveId | null = null;
+	for (const event of result.events) {
+		if (event.type === 'countered') {
+			counterMoveId = event.moveId;
+			continue;
+		}
+		if (event.type !== 'damaged') {
+			continue;
+		}
+		if (event.sourceId === actorId) {
+			hits.push(forecastHit(event, attacked.moveId));
+			continue;
+		}
+		if (!counterMoveId) {
+			throw new Error('counter damage without a countered event');
+		}
+		counters.push(forecastHit(event, counterMoveId));
+	}
+
+	// Read the original actor's HP and the action's own qi delta, never the next fighter's
+	// turn-start regeneration after an automatic handoff.
+	const actor = fighterIn(result.state, actorId);
+	return {
+		accepted: true,
+		forecast: {
+			actorId,
+			moveId,
+			aim: { ...aim },
+			qiCost: attacked.qiBefore - attacked.qiAfter,
+			qiBefore: attacked.qiBefore,
+			qiAfter: attacked.qiAfter,
+			hits,
+			counters,
+			actorHealthAfter: actor.health,
+			actorDefeated: actor.health === 0,
+			outcome: result.state.outcome,
+			activeFighterId: getTurnOrder(result.state).activeId,
+			round: result.state.round
+		}
+	};
+}
+
+function forecastHit(
+	event: Extract<BattleEvent, { type: 'damaged' }>,
+	moveId: MoveId
+): BattleForecastHit {
+	return {
+		sourceId: event.sourceId,
+		targetId: event.targetId,
+		moveId,
+		calculated: event.calculated,
+		applied: event.applied,
+		facingPercent: event.facingPercent,
+		coverPercent: event.coverPercent,
+		guardPercent: event.guardPercent,
+		passivePercent: event.passivePercent,
+		attackPercent: event.attackPercent,
+		healthBefore: event.healthBefore,
+		healthAfter: event.healthAfter,
+		defeated: event.healthAfter === 0
+	};
 }
 
 type OwnedMove = { ok: true; move: MoveDefinition } | { ok: false; reason: BattleRejectionReason };
@@ -586,6 +723,48 @@ function validatePhase(state: BattleState, command: BattleCommand): BattleReject
 		case 'useItem':
 			return state.hasActed ? 'wrongPhase' : null;
 	}
+}
+
+type ResolvedPill =
+	| { ok: true; effect: ConsumableEffect; target: BattleFighter }
+	| { ok: false; reason: BattleRejectionReason };
+
+/**
+ * Squad shared-bag gate. The enemy side owns no bag; the acting squad fighter may spend a pill on
+ * itself or a living adjacent squad ally, and the target must still be below its resource maximum.
+ */
+function resolvePill(
+	state: BattleState,
+	actor: BattleFighter,
+	pillId: BattlePillId,
+	targetId: string
+): ResolvedPill {
+	if (actor.side !== 'squad' || BATTLE_PILLS[pillId] !== true) {
+		return { ok: false, reason: 'invalidItem' };
+	}
+	if ((state.squadBag[pillId] ?? 0) < 1) {
+		return { ok: false, reason: 'invalidItem' };
+	}
+
+	const target = livingFighter(state, targetId);
+	if (
+		!target ||
+		target.side !== 'squad' ||
+		(target.id !== actor.id && cellDistance(actor.cell, target.cell) > 1)
+	) {
+		return { ok: false, reason: 'invalidTarget' };
+	}
+
+	const effect = ITEM_CATALOG[pillId].consumable;
+	if (!effect) {
+		throw new Error(`battle pill is not consumable: ${pillId}`);
+	}
+	const current = effect.resource === 'health' ? target.health : target.qi;
+	const maximum = effect.resource === 'health' ? target.maxHealth : target.maxQi;
+	if (current >= maximum) {
+		return { ok: false, reason: 'resourceFull' };
+	}
+	return { ok: true, effect, target };
 }
 
 function initiativeOrder(state: BattleState): string[] {
