@@ -612,8 +612,26 @@ describe('HPA-1311 candidate-state contract', () => {
 		const snapshot = JSON.parse(JSON.stringify(created.state));
 		const candidates = getReachableCells(created.state).filter((entry) => entry.cost > 0);
 
-		expect(candidates.length).toBeGreaterThan(0);
-		for (const entry of candidates) {
+		const approachEntry = candidates.find((entry) => entry.cell.x === 3 && entry.cell.z === 1);
+		expect(approachEntry).toMatchObject({ cell: { x: 3, z: 1 }, cost: 4 });
+
+		// The known approach cell must accept an attack from its moved state, not merely preserve
+		// a rejection, and must match the applied command exactly.
+		const approach = accept(
+			applyBattleCommand(created.state, { type: 'move', actorId: 'hero', cell: { x: 3, z: 1 } })
+		).state;
+		const approachForecast = forecastOf(forecastMove(approach, 'hero', 'sword_cut', LU_CELL));
+
+		expect(approachForecast.hits.map((hit) => hit.targetId)).toEqual(['lu']);
+		expectForecastToMirror(
+			approachForecast,
+			accept(applyBattleCommand(approach, useMove('hero', 'sword_cut', LU_CELL)))
+		);
+
+		// Every other planned move keeps forecast/command reason parity on the same input.
+		const others = candidates.filter((entry) => !(entry.cell.x === 3 && entry.cell.z === 1));
+		let rejected = 0;
+		for (const entry of others) {
 			const moved = accept(
 				applyBattleCommand(created.state, { type: 'move', actorId: 'hero', cell: entry.cell })
 			).state;
@@ -621,16 +639,19 @@ describe('HPA-1311 candidate-state contract', () => {
 			const command = applyBattleCommand(moved, useMove('hero', 'sword_cut', LU_CELL));
 
 			expect(forecast.accepted).toBe(command.accepted);
-			if (!forecast.accepted && !command.accepted) {
-				expect(forecast.reason).toBe(command.reason);
-			}
-			if (forecast.accepted) {
+			if (forecast.accepted && command.accepted) {
 				expect(getMoveTargets(moved, 'sword_cut').map((target) => target.aim)).toContainEqual(
 					LU_CELL
 				);
-				expectForecastToMirror(forecast.forecast, accept(command));
+				expectForecastToMirror(forecast.forecast, command);
+				continue;
+			}
+			if (!forecast.accepted && !command.accepted) {
+				expect(forecast.reason).toBe(command.reason);
+				rejected += 1;
 			}
 		}
+		expect(rejected).toBeGreaterThan(0);
 		expect(created.state).toEqual(snapshot);
 
 		// HPA-1311 scores range with the same geometry the resolver uses instead of re-deriving it.
