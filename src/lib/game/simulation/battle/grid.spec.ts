@@ -285,6 +285,12 @@ describe('single-cell targeting', () => {
 		expect(affectedCells(map, cell(2, 1), { x: 0.5, z: 1 }, { shape: 'line', length: 2 })).toEqual(
 			[]
 		);
+		expect(
+			affectedCells(map, cell(1, 1), { x: 1.5, z: 1.5 }, { shape: 'line', length: 2 })
+		).toEqual([]);
+		expect(
+			affectedCells(map, cell(0, 0), { x: 0.5, z: 0.5 }, { shape: 'line', length: 2 })
+		).toEqual([]);
 		expect(affectedCells(map, cell(1, 1), { x: 1, z: 0.5 }, arc)).toEqual([]);
 	});
 

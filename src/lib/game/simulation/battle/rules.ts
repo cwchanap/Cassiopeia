@@ -3,6 +3,7 @@ import { EXTERNAL_ARTS, INTERNAL_ARTS, MOVES } from './content';
 import type { ConsumableEffect } from '../types';
 import {
 	affectedCells,
+	canEnterTerrain,
 	cellDistance,
 	CARDINAL_FACINGS,
 	computeReachableCells,
@@ -173,7 +174,7 @@ export function applyBattleCommand(
 				return reject('unreachable');
 			}
 
-			actor.cell = { ...command.cell };
+			actor.cell = canonicalCell(command.cell);
 			next.hasMoved = true;
 			return {
 				accepted: true,
@@ -275,12 +276,11 @@ export function applyBattleCommand(
 	}
 }
 
-/** Living initiative this round and the next round recomputed from current survivors. */
+/**
+ * Living initiative this round and the next round recomputed from current survivors. A terminal
+ * state keeps its final-round living snapshot and acted markers but has no active or next turn.
+ */
 export function getTurnOrder(state: BattleState): BattleTurnOrder {
-	if (state.outcome !== 'ongoing') {
-		return { round: state.round, activeId: null, order: [], actedIds: [], nextRound: [] };
-	}
-
 	const active = activeFighter(state);
 	const order = state.turnOrder.filter((id) => livingFighter(state, id) !== undefined);
 	const acted = new Set(state.turnOrder.slice(0, state.turnIndex));
@@ -290,12 +290,13 @@ export function getTurnOrder(state: BattleState): BattleTurnOrder {
 		actedIds.push(active.id);
 	}
 
+	const ongoing = state.outcome === 'ongoing';
 	return {
 		round: state.round,
-		activeId: active?.id ?? null,
+		activeId: ongoing ? (active?.id ?? null) : null,
 		order,
 		actedIds,
-		nextRound: initiativeOrder(state)
+		nextRound: ongoing ? initiativeOrder(state) : []
 	};
 }
 
@@ -389,7 +390,7 @@ export function forecastMove(
 		forecast: {
 			actorId,
 			moveId,
-			aim: { ...aim },
+			aim: { ...attacked.aim },
 			qiCost: attacked.qiBefore - attacked.qiAfter,
 			qiBefore: attacked.qiBefore,
 			qiAfter: attacked.qiAfter,
@@ -873,10 +874,18 @@ function createFighter(placement: FighterSetup): BattleFighter {
 		agility: template.agility,
 		externalArtId: template.externalArtId,
 		internalArtId: template.internalArtId,
-		cell: { ...placement.cell },
+		cell: canonicalCell(placement.cell),
 		facing: placement.facing,
 		guarding: false
 	};
+}
+
+/**
+ * Canonical public-boundary cell: only the two integer coordinates, never extra properties or
+ * negative zero. Callers validate the cell before it reaches this copy.
+ */
+function canonicalCell(cell: Cell): Cell {
+	return { x: cell.x + 0, z: cell.z + 0 };
 }
 
 function copyBag(
@@ -890,7 +899,8 @@ function copyBag(
 		if (!Number.isInteger(count) || count < 0) {
 			throw new Error(`invalid starting bag count for ${pillId}`);
 		}
-		if (count > 0) {
+		// Unknown inventory keys are validated above but never enter the battle bag.
+		if (count > 0 && BATTLE_PILLS[pillId as BattlePillId] === true) {
 			copy[pillId as BattlePillId] = count;
 		}
 	}
@@ -898,8 +908,7 @@ function copyBag(
 }
 
 function isStandable(map: BattleMap, cell: Cell): boolean {
-	const terrain = terrainAt(map, cell);
-	return terrain === 'ground' || terrain === 'bamboo';
+	return canEnterTerrain(terrainAt(map, cell));
 }
 
 function reject(reason: BattleRejectionReason): BattleCommandResult {

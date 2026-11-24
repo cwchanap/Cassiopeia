@@ -458,12 +458,12 @@ function playJourney(jsonRoundTrip: boolean): Transcript {
 	]);
 	expect(eventsOfType(finishing.events, 'turnEnded')).toEqual([]);
 
-	// Terminal state: no turn, no queries and no accepted command.
+	// Terminal state: the final round's living snapshot stays, with no active or next turn.
 	expect(getTurnOrder(state)).toEqual({
 		round: 6,
 		activeId: null,
-		order: [],
-		actedIds: [],
+		order: ['hero', 'ally'],
+		actedIds: ['hero'],
 		nextRound: []
 	});
 	expect(getReachableCells(state)).toEqual([]);

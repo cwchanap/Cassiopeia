@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { SECT_HERO_TEMPLATE, SENIOR_BROTHER_LU_TEMPLATE } from './content';
-import { applyBattleCommand, createBattle, getReachableCells, getTurnOrder } from './rules';
+import {
+	applyBattleCommand,
+	createBattle,
+	forecastMove,
+	getReachableCells,
+	getTurnOrder
+} from './rules';
 import type {
 	BattleCommand,
 	BattleCommandResult,
@@ -673,6 +679,76 @@ describe('reachable cells', () => {
 				}).accepted
 			).toBe(true);
 		}
+	});
+});
+
+describe('grid and public data boundary', () => {
+	it('rejects a fractional diagonal line aim that the grid also refuses', () => {
+		const { state } = createBattle(starter());
+
+		expect(
+			applyBattleCommand(state, {
+				type: 'useMove',
+				actorId: 'hero',
+				moveId: 'piercing_thrust',
+				aim: { x: 0.5, z: 0.5 }
+			})
+		).toEqual({ accepted: false, reason: 'invalidAim' });
+	});
+
+	it('strips caller metadata, aliases and negative zero at the public boundary', () => {
+		const spawned = setup(
+			[
+				{
+					...placement('hero', { x: 0, z: 0 }, { facing: 'E' }),
+					cell: { x: -0, z: 0, label: 'spawn' } as Cell
+				},
+				placement('lu', { x: 2, z: 0 }, { side: 'enemy', facing: 'W' })
+			],
+			{
+				squadBag: {
+					lesser_healing_pill: 1,
+					training_sword: 2
+				} as unknown as BattleSetup['squadBag']
+			}
+		);
+		const created = createBattle(spawned);
+
+		expect(created.state.fighters[0].cell).toEqual({ x: 0, z: 0 });
+		expect('label' in created.state.fighters[0].cell).toBe(false);
+		expect(Object.is(created.state.fighters[0].cell.x, -0)).toBe(false);
+		expect(created.state.squadBag).toEqual({ lesser_healing_pill: 1 });
+		expect(JSON.parse(JSON.stringify(created))).toEqual(created);
+
+		const moved = accept(
+			applyBattleCommand(created.state, {
+				type: 'move',
+				actorId: 'hero',
+				cell: { x: 1, z: 0, label: 'move' } as Cell
+			})
+		);
+		expect(moved.state.fighters[0].cell).toEqual({ x: 1, z: 0 });
+		expect(JSON.parse(JSON.stringify(moved))).toEqual(moved);
+
+		const taggedAim = { x: 2, z: 0, label: 'aim' } as Cell;
+		const forecast = forecastMove(moved.state, 'hero', 'sword_cut', taggedAim);
+		expect(forecast.accepted).toBe(true);
+		if (!forecast.accepted) {
+			throw new Error(`expected an accepted forecast, got ${forecast.reason}`);
+		}
+		expect(forecast.forecast.aim).toEqual({ x: 2, z: 0 });
+		expect(JSON.parse(JSON.stringify(forecast))).toEqual(forecast);
+
+		const attacked = accept(
+			applyBattleCommand(moved.state, {
+				type: 'useMove',
+				actorId: 'hero',
+				moveId: 'sword_cut',
+				aim: taggedAim
+			})
+		);
+		expect(attacked.events[0]).toMatchObject({ type: 'attacked', aim: { x: 2, z: 0 } });
+		expect(JSON.parse(JSON.stringify(attacked))).toEqual(attacked);
 	});
 });
 

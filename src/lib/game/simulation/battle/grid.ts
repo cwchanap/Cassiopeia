@@ -174,59 +174,28 @@ export function affectedCells(
 function singleAffectedCells(map: BattleMap, origin: Cell, aim: Cell, range: number): Cell[] {
 	const dx = aim.x - origin.x;
 	const dz = aim.z - origin.z;
-	if (dx !== 0 && dz !== 0) {
+	if (!Number.isInteger(dx) || !Number.isInteger(dz) || (dx === 0) === (dz === 0)) {
 		return [];
 	}
 
 	const distance = Math.abs(dx) + Math.abs(dz);
-	if (distance < 1 || distance > range) {
+	if (distance > range) {
 		return [];
 	}
 
-	const aimTerrain = terrainAt(map, aim);
-	if (aimTerrain === null || aimTerrain === 'obstacle') {
-		return [];
-	}
-
-	const stepX = Math.sign(dx);
-	const stepZ = Math.sign(dz);
-	for (let offset = 1; offset < distance; offset++) {
-		const between = terrainAt(map, {
-			x: origin.x + stepX * offset,
-			z: origin.z + stepZ * offset
-		});
-		if (between === null || between === 'obstacle') {
-			return [];
-		}
-	}
-
-	return [{ ...aim }];
+	const cells = rayCells(map, origin, { x: Math.sign(dx), z: Math.sign(dz) }, distance);
+	return cells.length === distance ? [cells[distance - 1]] : [];
 }
 
 function lineAffectedCells(map: BattleMap, origin: Cell, aim: Cell, length: number): Cell[] {
-	if (cellDistance(origin, aim) !== 1) {
+	const facing = facingFromStep(aim.x - origin.x, aim.z - origin.z);
+	if (!facing) {
 		return [];
 	}
-
-	const stepX = Math.sign(aim.x - origin.x);
-	const stepZ = Math.sign(aim.z - origin.z);
-	const cells: Cell[] = [];
-	for (let distance = 1; distance <= length; distance++) {
-		const cell = { x: origin.x + stepX * distance, z: origin.z + stepZ * distance };
-		const terrain = terrainAt(map, cell);
-		if (terrain === null || terrain === 'obstacle') {
-			break;
-		}
-		cells.push(cell);
-	}
-	return cells;
+	return rayCells(map, origin, FACING_STEPS[facing], length);
 }
 
 function arcAffectedCells(map: BattleMap, origin: Cell, aim: Cell): Cell[] {
-	if (cellDistance(origin, aim) !== 1) {
-		return [];
-	}
-
 	const facing = facingFromStep(aim.x - origin.x, aim.z - origin.z);
 	if (!facing) {
 		return [];
@@ -238,7 +207,7 @@ function arcAffectedCells(map: BattleMap, origin: Cell, aim: Cell): Cell[] {
 		return [];
 	}
 
-	const cells: Cell[] = [{ ...aim }];
+	const cells: Cell[] = [stepCell(origin, facing)];
 	for (const lateral of [TURN_LEFT[facing], TURN_RIGHT[facing]]) {
 		cells.push(stepCell(aim, lateral));
 	}
@@ -247,6 +216,23 @@ function arcAffectedCells(map: BattleMap, origin: Cell, aim: Cell): Cell[] {
 		const terrain = terrainAt(map, cell);
 		return terrain !== null && terrain !== 'obstacle';
 	});
+}
+
+/**
+ * Cells along a cardinal ray, stopping before the first obstacle or map edge. Shared by single
+ * and line attacks so both clip on exactly the same blockers and let the ray cross water.
+ */
+function rayCells(map: BattleMap, origin: Cell, step: Cell, length: number): Cell[] {
+	const cells: Cell[] = [];
+	for (let distance = 1; distance <= length; distance++) {
+		const cell = { x: origin.x + step.x * distance, z: origin.z + step.z * distance };
+		const terrain = terrainAt(map, cell);
+		if (terrain === null || terrain === 'obstacle') {
+			return cells;
+		}
+		cells.push(cell);
+	}
+	return cells;
 }
 
 function stepCell(cell: Cell, facing: Facing): Cell {
@@ -272,6 +258,11 @@ function enterCost(terrain: Terrain | null): number | null {
 		return 2;
 	}
 	return null;
+}
+
+/** The movement rule's passability: setup and movement destinations must both use this. */
+export function canEnterTerrain(terrain: Terrain | null): boolean {
+	return enterCost(terrain) !== null;
 }
 
 function cellKey(cell: Cell): string {

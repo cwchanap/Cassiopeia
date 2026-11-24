@@ -8,7 +8,20 @@ import type {
 	MoveId
 } from './types';
 
-export const MOVES: Record<MoveId, MoveDefinition> = {
+/** Freezes a rules catalog through every nested definition so consumers cannot rewrite rules. */
+function deepFreeze<T>(value: T): T {
+	if (typeof value === 'object' && value !== null) {
+		for (const nested of Object.values(value)) {
+			deepFreeze(nested);
+		}
+		Object.freeze(value);
+	}
+	return value;
+}
+
+export const MOVES: Readonly<Record<MoveId, MoveDefinition>> = deepFreeze<
+	Record<MoveId, MoveDefinition>
+>({
 	sword_cut: {
 		id: 'sword_cut',
 		name: 'Sword Cut',
@@ -117,9 +130,11 @@ export const MOVES: Record<MoveId, MoveDefinition> = {
 		targeting: { shape: 'single', range: 4 },
 		ignoreGuard: false
 	}
-};
+});
 
-export const EXTERNAL_ARTS: Record<ExternalArtId, ExternalArtDefinition> = {
+export const EXTERNAL_ARTS: Readonly<Record<ExternalArtId, ExternalArtDefinition>> = deepFreeze<
+	Record<ExternalArtId, ExternalArtDefinition>
+>({
 	sect_sword_form: {
 		id: 'sect_sword_form',
 		name: 'Sect Sword Form',
@@ -140,9 +155,11 @@ export const EXTERNAL_ARTS: Record<ExternalArtId, ExternalArtDefinition> = {
 		name: 'Willow Darts',
 		moves: { basic: 'dart_toss', technique: 'twin_darts', finisher: 'falling_willow' }
 	}
-};
+});
 
-export const INTERNAL_ARTS: Record<InternalArtId, InternalArtDefinition> = {
+export const INTERNAL_ARTS: Readonly<Record<InternalArtId, InternalArtDefinition>> = deepFreeze<
+	Record<InternalArtId, InternalArtDefinition>
+>({
 	sect_breathing: {
 		id: 'sect_breathing',
 		name: 'Sect Breathing Method',
@@ -170,7 +187,7 @@ export const INTERNAL_ARTS: Record<InternalArtId, InternalArtDefinition> = {
 		damageTakenPercent: 100,
 		moveBonus: 1
 	}
-};
+});
 
 export const SECT_HERO_TEMPLATE: FighterTemplate = {
 	maxHealth: 100,

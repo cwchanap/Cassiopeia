@@ -304,6 +304,13 @@ describe('invalid authored setup', () => {
 		{
 			name: 'a fractional pill count',
 			setup: () => setup(starter().fighters, { squadBag: { lesser_qi_pill: 1.5 } })
+		},
+		{
+			name: 'a negative unknown bag count',
+			setup: () =>
+				setup(starter().fighters, {
+					squadBag: { training_sword: -1 } as unknown as BattleSetup['squadBag']
+				})
 		}
 	];
 
@@ -491,13 +498,13 @@ describe('initiative and turn order', () => {
 		});
 	});
 
-	it('has no active or next turn once the battle is over', () => {
+	it('keeps the final-round snapshot but has no active or next turn once the battle is over', () => {
 		const { state } = createBattle(starter());
 
 		expect(getTurnOrder({ ...state, outcome: 'victory' })).toEqual({
 			round: 1,
 			activeId: null,
-			order: [],
+			order: ['hero', 'lu'],
 			actedIds: [],
 			nextRound: []
 		});
