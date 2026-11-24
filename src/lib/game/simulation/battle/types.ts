@@ -130,6 +130,25 @@ export type BattleState = {
 	outcome: BattleOutcome;
 };
 
+/** Result of battle construction: the initial state and its round/turn-start events. */
+export type BattleCreation = {
+	state: BattleState;
+	events: BattleEvent[];
+};
+
+/** Living initiative for the current round plus the next round recomputed from survivors. */
+export type BattleTurnOrder = {
+	round: number;
+	/** The living active fighter, or null once the battle has ended. */
+	activeId: string | null;
+	/** This round's snapshot restricted to living fighters, including the active one. */
+	order: string[];
+	/** Living fighters in `order` that already finished their turn this round. */
+	actedIds: string[];
+	/** Initiative order for the next round from currently living fighters; empty when terminal. */
+	nextRound: string[];
+};
+
 export type ReachableCell = {
 	cell: Cell;
 	cost: number;
@@ -158,6 +177,7 @@ export type BattleRejectionReason =
 	| 'wrongActor'
 	| 'wrongPhase'
 	| 'invalidCell'
+	| 'invalidFacing'
 	| 'unreachable'
 	| 'invalidAim'
 	| 'moveNotOwned'
