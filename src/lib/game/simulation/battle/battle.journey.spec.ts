@@ -10,21 +10,19 @@ import {
 	MOVES,
 	SECT_HERO_TEMPLATE,
 	SENIOR_BROTHER_LU_TEMPLATE,
-	STARTER_BATTLE_TERRAIN
+	STARTER_BATTLE_TERRAIN,
+	type BattleCommand,
+	type BattleEvent,
+	type BattleFighter,
+	type BattleForecast,
+	type BattleForecastResult,
+	type BattleRejectionReason,
+	type BattleSetup,
+	type BattleState,
+	type Cell,
+	type Facing,
+	type MoveId
 } from './index';
-import type {
-	BattleCommand,
-	BattleEvent,
-	BattleFighter,
-	BattleForecast,
-	BattleForecastResult,
-	BattleRejectionReason,
-	BattleSetup,
-	BattleState,
-	Cell,
-	Facing,
-	MoveId
-} from './types';
 
 /** Gather qi before the internal art bonus, as authored by the spec. */
 const GATHER_QI = 20;
@@ -231,6 +229,7 @@ function playJourney(jsonRoundTrip: boolean): Transcript {
 		)
 	});
 	expect(allyGather.qiAfter).toBe(allyQiBefore.maxQi);
+	expect(fighter(state, 'ally').qi).toBe(allyGather.qiAfter);
 
 	const allyEnd = endTurn('ally', 'N');
 	expect(eventsOfType(allyEnd, 'turnEnded')).toEqual([
@@ -392,6 +391,8 @@ function playJourney(jsonRoundTrip: boolean): Transcript {
 		bagCount: 1
 	});
 	expect(healEvent.amount).toBe(healEvent.resourceAfter - healEvent.resourceBefore);
+	expect(fighter(state, 'ally').health).toBe(healEvent.resourceAfter);
+	expect(fighter(state, 'ally').health).toBe(fighter(state, 'ally').maxHealth);
 	expect(state.squadBag).toEqual({ lesser_healing_pill: 1, lesser_qi_pill: 1 });
 	endTurn('ally', 'N');
 
@@ -416,6 +417,8 @@ function playJourney(jsonRoundTrip: boolean): Transcript {
 		qiAfter: Math.min(fighter(state, 'hero').maxQi, heroTurnStartQi + GATHER_QI + gatherBonus)
 	});
 	expect(heroGather.qiAfter - heroGather.qiBefore).toBe(GATHER_QI + gatherBonus);
+	expect(fighter(state, 'hero').qi).toBe(heroGather.qiAfter);
+	expect(fighter(state, 'hero').qi).toBe(heroTurnStartQi + GATHER_QI + gatherBonus);
 	endTurn('hero', 'E');
 
 	// Round 5 — ally: front strike as Lu faces south.
