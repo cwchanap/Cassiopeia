@@ -229,6 +229,7 @@ export type BattleEvent =
 			amount: number;
 			resourceBefore: number;
 			resourceAfter: number;
+			/** Remaining count of this pill in the shared bag after the use. */
 			bagCount: number;
 	  }
 	| {
@@ -263,6 +264,8 @@ export type BattleForecast = {
 	actorId: string;
 	moveId: MoveId;
 	aim: Cell;
+	/** Qi the attack event debited, excluding any later turn-start regeneration. */
+	qiCost: number;
 	qiBefore: number;
 	qiAfter: number;
 	/** Primary hits in resolution order. */
