@@ -208,20 +208,17 @@ export function applyBattleCommand(
 			return { accepted: true, state: next, events };
 		}
 		case 'useMove': {
-			const move = MOVES[command.moveId];
-			if (!move || move.externalArtId !== actor.externalArtId) {
-				return reject('moveNotOwned');
+			const owned = resolveMove(actor, command.moveId);
+			if (!owned.ok) {
+				return reject(owned.reason);
 			}
-			if (actor.qi < move.qiCost) {
-				return reject('insufficientQi');
-			}
-			const target = moveTargets(next, actor, move).find((entry) =>
+			const target = moveTargets(next, actor, owned.move).find((entry) =>
 				sameCell(entry.aim, command.aim)
 			);
 			if (!target) {
 				return reject('invalidAim');
 			}
-			return resolveAttack(next, actor, move, target);
+			return resolveAttack(next, actor, owned.move, target);
 		}
 		case 'useItem':
 			// Slice 4 replaces this stub with shared-bag validation and pill use.
@@ -284,11 +281,25 @@ export function getMoveTargets(state: BattleState, moveId: MoveId): BattleMoveTa
 	if (!actor) {
 		return [];
 	}
-	const move = MOVES[moveId];
-	if (!move || move.externalArtId !== actor.externalArtId || actor.qi < move.qiCost) {
+	const owned = resolveMove(actor, moveId);
+	if (!owned.ok) {
 		return [];
 	}
-	return moveTargets(state, actor, move);
+	return moveTargets(state, actor, owned.move);
+}
+
+type OwnedMove = { ok: true; move: MoveDefinition } | { ok: false; reason: BattleRejectionReason };
+
+/** Ownership and qi gate shared by the target query and the useMove command. */
+function resolveMove(actor: BattleFighter, moveId: MoveId): OwnedMove {
+	const move = MOVES[moveId];
+	if (!move || move.externalArtId !== actor.externalArtId) {
+		return { ok: false, reason: 'moveNotOwned' };
+	}
+	if (actor.qi < move.qiCost) {
+		return { ok: false, reason: 'insufficientQi' };
+	}
+	return { ok: true, move };
 }
 
 function moveTargets(
