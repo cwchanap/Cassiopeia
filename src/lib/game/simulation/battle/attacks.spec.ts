@@ -319,8 +319,9 @@ describe('attack validation', () => {
 		expect(fighter(result.state, 'hero').qi).toBe(0);
 	});
 
-	it('rejects moves outside the acting fighter art', () => {
+	it('rejects moves outside the acting fighter art before checking qi', () => {
 		const { state } = createBattle(duel());
+		const broke = patchFighter(state, 'hero', { qi: 0 });
 
 		expect(
 			rejectionReason(applyBattleCommand(state, useMove('hero', 'staff_sweep', { x: 1, z: 0 })))
@@ -330,7 +331,11 @@ describe('attack validation', () => {
 				applyBattleCommand(state, useMove('hero', 'not_a_move' as MoveId, { x: 1, z: 0 }))
 			)
 		).toBe('moveNotOwned');
+		expect(
+			rejectionReason(applyBattleCommand(broke, useMove('hero', 'whirling_staff', { x: 1, z: 0 })))
+		).toBe('moveNotOwned');
 		expect(getMoveTargets(state, 'staff_sweep')).toEqual([]);
+		expect(getMoveTargets(broke, 'whirling_staff')).toEqual([]);
 	});
 
 	it('rejects aims that are not a legal geometry for the move', () => {
@@ -628,7 +633,26 @@ describe('guard counters', () => {
 		});
 	});
 
-	it('does not let a defender defeated by the primary hit counter', () => {
+	it('does not let a defender defeated by the primary hit counter while the battle goes on', () => {
+		const created = createBattle(
+			setup([
+				placement('hero', { x: 0, z: 0 }, { facing: 'E' }),
+				placement('lu', { x: 1, z: 0 }, { side: 'enemy', facing: 'W' }),
+				placement('brute', { x: 3, z: 3 }, { side: 'enemy', facing: 'N' })
+			])
+		);
+		const state = patchFighter(created.state, 'lu', { guarding: true, health: 6 });
+
+		const result = accept(applyBattleCommand(state, useMove('hero', 'sword_cut', { x: 1, z: 0 })));
+
+		expect(eventTypes(result.events)).toEqual(['attacked', 'damaged', 'defeated']);
+		expect(eventsOfType(result.events, 'countered')).toEqual([]);
+		expect(result.state.outcome).toBe('ongoing');
+		expect(fighter(result.state, 'lu').health).toBe(0);
+		expect(fighter(result.state, 'brute').health).toBe(100);
+	});
+
+	it('does not let a defender defeated by the primary hit counter when it is the last enemy', () => {
 		const created = createBattle(duel());
 		const state = patchFighter(created.state, 'lu', { guarding: true, health: 6 });
 
@@ -699,30 +723,36 @@ describe('guard counters', () => {
 		expect(fighter(result.state, 'hero').guarding).toBe(true);
 	});
 
-	it("ignores the attacker's stored facing and keeps its Iron Body on the counter", () => {
-		const created = createBattle(
-			duel({
-				hero: { internalArtId: 'iron_body' },
-				heroFacing: 'S',
-				lu: { power: 14 }
-			})
-		);
-		const state = patchFighter(created.state, 'lu', { guarding: true });
+	it.each(['E', 'S', 'W'] as Facing[])(
+		"ignores the attacker's stored facing %s and keeps its Iron Body on the counter",
+		(heroFacing) => {
+			const created = createBattle(
+				duel({
+					hero: { internalArtId: 'iron_body' },
+					heroFacing,
+					lu: { power: 14 }
+				})
+			);
+			const state = patchFighter(created.state, 'lu', { guarding: true });
 
-		const result = accept(applyBattleCommand(state, useMove('hero', 'sword_cut', { x: 1, z: 0 })));
-		const counterDamage = eventsOfType(result.events, 'damaged').find(
-			(event) => event.sourceId === 'lu'
-		);
+			const result = accept(
+				applyBattleCommand(state, useMove('hero', 'sword_cut', { x: 1, z: 0 }))
+			);
+			const counterDamage = eventsOfType(result.events, 'damaged').find(
+				(event) => event.sourceId === 'lu'
+			);
 
-		expect(counterDamage).toMatchObject({
-			facingPercent: 100,
-			passivePercent: 80,
-			attackPercent: 50,
-			calculated: 6
-		});
-		expect(fighter(result.state, 'hero').facing).toBe('S');
-		expect(fighter(result.state, 'lu').facing).toBe('W');
-	});
+			// Front (E), side (S) and rear (W) would be 6, 8 and 10 without the forced front.
+			expect(counterDamage).toMatchObject({
+				facingPercent: 100,
+				passivePercent: 80,
+				attackPercent: 50,
+				calculated: 6
+			});
+			expect(fighter(result.state, 'hero').facing).toBe(heroFacing);
+			expect(fighter(result.state, 'lu').facing).toBe('W');
+		}
+	);
 });
 
 describe('outcomes and automatic turn handoff', () => {
