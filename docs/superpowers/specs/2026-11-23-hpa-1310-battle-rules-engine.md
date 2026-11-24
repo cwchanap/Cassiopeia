@@ -31,28 +31,38 @@ Under `src/lib/game/simulation/battle/`:
   target geometry. Keep rule-independent math here.
 - `rules.ts`: construction, turn lifecycle, action validation, damage, counters, outcomes,
   item use, command application and forecast. Split only if a cohesive responsibility warrants it.
-- `index.ts`: public exports; tests import the same public entry point future consumers use.
+- `index.ts`: the small public API used by future consumers and the scripted journey.
+  Focused unit tests may import pure helpers directly from their owning modules.
 
 Use integer `Cell = { x, z }` and cardinal facing N/E/S/W (N = z - 1, E = x + 1).
 Do not reuse continuous-world coordinates, heading, cooldowns or legacy FighterState.
-A battle setup contains width/height, row-major terrain, ordered fighter placements with unique
-IDs, hero ID, and starting squad pill counts. Starter fighter templates provide max health,
-power, agility, external/internal art IDs; the setup supplies each cell and facing. Derived max
-qi, movement and regeneration come from the internal art and stats. All fighters start alive,
-at maximum health and qi, without Guard. Copy the input to prevent aliasing. Validate positive
-integer stats, valid art IDs, one squad hero, at least one opponent, correct terrain length,
-unique IDs and distinct standable in-bounds cells at setup; reject invalid authored fixtures
-rather than silently repair them.
+Use closed `ExternalArtId`, `InternalArtId` and `MoveId` string unions and typed
+`Record` catalogs, following the existing ItemId/ITEM_CATALOG pattern. Art records refer to
+typed move IDs; a move must still belong to the acting fighter's external art.
+Authored content is trusted TypeScript, not an untyped input format.
+
+A battle setup contains terrain as readable string rows (`.` ground, `#` obstacle,
+`~` water, `T` bamboo), ordered fighter placements with unique IDs, hero ID and
+starting squad pill counts. Row index is z, column index is x; derive width and height
+from the rows, never accept independent dimensions or a flat terrain array. A single
+typed terrain lookup maps characters to the four terrain types. Starter fighter templates
+provide max health, power, agility and art IDs; the setup supplies cell and facing.
+All fighters start alive at maximum health and derived maximum qi, without Guard.
+Copy input to prevent aliasing. Bad authored setup is a programmer error: throw on empty
+or ragged rows, unknown terrain character, nonpositive/noninteger stats, duplicate IDs,
+missing squad hero/opponent or invalid/overlapping spawn cells. Do not add runtime art-ID
+schema validation; closed IDs and typed records catch typos. A content test constructs
+every authored fixture via createBattle. No map parser framework or catalog injection.
 
 BattleState contains the map, fighters with current resources/cell/facing/guarding flag,
-hero ID, squad bag, round number, ordered turn IDs and cursor, turn phase/move-used flag and
+hero ID, squad bag, round number, ordered turn IDs and cursor, action/move-used flags and
 outcome (ongoing, victory, defeat). Defeated fighters remain addressable for playback, but no
 longer occupy cells or act. No Set/Map/classes/functions in persisted state or events;
 temporary collections inside calculations are fine.
 
 Public contract (names illustrative, semantics required):
 
-- `createBattle(setup)` returns initial state and round/turn-start events.
+- `createBattle(setup)` returns initial state and round/turn-start events; throws for invalid authored setup.
 - `getTurnOrder(state)` returns living IDs for this round (including the active ID and marking
   already acted entries separately) and next round based on currently living fighters.
   A terminal state has no active/next turn. No speculative future deaths.
@@ -60,22 +70,24 @@ Public contract (names illustrative, semantics required):
   for the active fighter (including its start at zero cost for previews/AI, not a move command).
 - `getMoveTargets(state, moveId)` returns legal aim cells and affected cells/targets for that
   move from the current position. A move from a hypothetical position is previewed by applying
-  a legal movement command to a copy of state. Queries have no side effects.
+  a legal movement command to the original state and reading its accepted result. Queries
+  and the reducer have no side effects.
 - `applyBattleCommand(state, command)` returns a discriminated accepted result with next state
   and ordered events or rejection with a stable reason, unchanged input state and no events.
   All commands identify the acting fighter to reject stale/out-of-turn input.
 - `forecastMove(state, actorId, moveId, aim)` returns the exact action resolution preview
   (or same rejection reason); no mutations, no time or randomness.
 
-Commands: move to cell, use move by move ID and aim cell, use item by pill ID and target ID,
-guard, gather qi, set facing, end turn. Explicit phase sequence:
+Commands: `move` to cell, `useMove` by move ID and aim cell, `useItem` by pill ID and
+target ID, `guard`, `gatherQi`, and `endTurn` with required actorId and facing.
+Two phases (before and after action), with a move-used flag:
 
 1. Before action: zero or one movement command. The player may act without moving.
-2. Exactly one action: a move, item, Guard or Gather qi. A movement or a facing command
-   cannot be used as the action.
-3. Pick facing (including unchanged facing), then end turn. No action or movement after the
-   action. No turn advance before facing is selected. Terminal outcomes end immediately;
-   no subsequent facing/end command is required or accepted.
+2. Exactly one action: a move, item, Guard or Gather qi.
+3. After action: choose facing (including unchanged facing) in `endTurn { actorId, facing }`.
+   This atomically applies the facing and advances the turn. No separate setFacing command,
+   faced phase or facingChanged event. Reject ending before action, or moving/acting again.
+   Terminal outcomes end immediately; no subsequent endTurn is required or accepted.
 
 A successful command is atomic and does not mutate its input; implement a simple copied state
 and shared helpers, not a state-management framework. Only the returned state becomes authoritative.
@@ -122,25 +134,32 @@ fighter's turn clears its own prior Guard, resets movement/action phase, regener
 internal art's qi amount up to maximum and emits turn-start data including any qi change.
 The first turn also regenerates, capped at the initially full pool.
 
-Damage is deterministic. Proposed starter tuning (all integers unless a multiplier):
+Damage is deterministic. Proposed starter tuning uses integer base damage, power and
+integer percentage factors (100 is neutral). No fractional intermediates or intermediate
+rounding.
 
-- Base = move base damage x attacker power / 10.
 - Determine front, side or rear relative to the defender's facing and attacker position,
   not attack direction or the attacker's facing. Compare absolute forward dot product with
   absolute lateral component: strictly dominant positive forward is front, negative rear;
-  otherwise side (including diagonal ties). Multipliers: front 1, side 1.25, rear 1.5.
-- Defender in bamboo takes 0.75x from attacks originating at Manhattan distance greater
-  than 1; adjacent attacks ignore cover.
-- Guard multiplies damage by 0.5 unless a move ignores Guard. Iron Body multiplies incoming
-  damage by 0.8. Apply all factors together and floor once, minimum 1 for a successful hit.
-  Actual HP loss is clamped to remaining HP; both calculated damage and actual loss are
+  otherwise side (including diagonal ties). Facing percentages: front 100, side 125,
+  rear 150.
+- Bamboo cover: 75 when the attacker is more than one Manhattan step away; otherwise 100.
+- Guard: 50 unless ignored by the move; otherwise 100. Iron Body: 80, otherwise 100.
+- Export one pure `computeDamage` helper from rules.ts for direct unit tests. The regular
+  attack factor is 100; a counter uses 50. Compute the integer numerator first and
+  divide/floor exactly once: `Math.floor(base * power * facing * cover * guard * passive * attackPercent / (10 * 100 ** 5))`. Clamp successful damage to at least 1. Products
+  for starter content and realistic power are well within the safe integer range.
+  Test the independent exact results of base 12/power 14/side and base 14/power 16/
+  bamboo/side (both 21, not 20), plus combined reductions and the counter factor.
+- Actual HP loss is clamped to remaining HP; both calculated damage and actual loss are
   distinguishable in forecast/events. Never let HP or qi become negative or exceed max.
 
 Guard lasts until the guarding fighter's next turn start. A surviving guarding defender
 counters an adjacent attacker from front or side, never rear; Guard's damage reduction
 still applies from rear. A move with ignoreGuard bypasses both reduction and counter.
-Counter is a single-target basic strike at 0.5x the defender's own basic base damage
-with its power and normal defender mitigation/facing; no qi cost, no turn/action consumed,
+Counter is a single-target basic strike using the defender's own basic base damage,
+attackPercent 50 in computeDamage, its power and normal defender mitigation/facing;
+no qi cost, no turn/action consumed,
 no repositioning, no area splash and no counter to a counter.
 
 Use a single resolution path: debit qi once; emit attacked with ordered affected cells;
@@ -155,12 +174,12 @@ No round/turn start events after terminal outcome.
 Gather qi restores a fixed 20 qi plus the internal art's gather bonus, capped at max.
 Gather/Guard are legal actions even if qi is full. Items are squad-only shared bag actions:
 the acting squad fighter uses a Lesser Healing Pill or Lesser Qi Pill on itself or a
-living adjacent squad ally. Reuse the existing 35 HP/35 qi effects and IDs from
-`simulation/items.ts`; extract just these two immutable effect definitions into a small
-pure `simulation/consumables.ts` shared by the existing item catalog and battle content
-if needed to avoid importing real-time combat transitively. Preserve old item behavior and
-tests. Battle owns a copy of pill counts; no ItemProgress, equipment, reward seed or save
-mutation. Reject missing pills, enemy/defeated/distant targets and full target resource
+living adjacent squad ally. Read the existing consumable effects directly from
+`ITEM_CATALOG` in `../items.ts` (pure TypeScript; its combat.ts dependency contains pure
+constants/helpers). No extraction or change to the village item module. Use a closed
+`BattlePillId` union of lesser_healing_pill and lesser_qi_pill and a
+`Partial<Record<BattlePillId, number>>` bag. Battle owns a copy of pill counts; do not
+call the mutating useConsumable helper or change ItemProgress, equipment, reward seed or save. Reject missing pills, enemy/defeated/distant targets and full target resource
 without spending the action or pill. Consume exactly one and clamp restoration on success.
 Enemy item use is not allowed (no enemy bag in this ticket).
 
@@ -179,18 +198,18 @@ base damage / qi cost / geometry; power 10 means baseline damage before mitigati
 - Willow Darts: Dart Toss 7/0/single cardinal range 3; Twin Darts 12/20/single cardinal
   range 4; Falling Willow 20/40/single cardinal range 4.
 
-Internal art record fields: maxQi, qiRegen, gatherBonus, damageTakenMultiplier and
-moveBonus; neutral defaults where not used. Sect Breathing Method: max 100, regen 10,
-gather bonus 10. Iron Body: max 70, regen 8, damage taken multiplier 0.8.
+Internal art record fields: maxQi, qiRegen, gatherBonus, damageTakenPercent and
+moveBonus; neutral defaults where not used (damageTakenPercent 100). Sect Breathing
+Method: max 100, regen 10, gather bonus 10. Iron Body: max 70, regen 8, damageTakenPercent 80.
 Flowing Cloud Steps: max 90, regen 10, move bonus 1.
 Use art IDs for lookup only; no art-name branches in rule code. Adding an art that combines
-existing fields and shapes must only require a data edit.
+existing fields and shapes requires only extending the typed IDs and content records.
 
 Include a starter hero template (100 HP, power 10, agility 20, sword/breathing) and Lu
 opponent (100 HP, power 9, agility 10, sword/breathing), plus small deterministic test
 fixtures spanning all arts/terrain. These are headless data, not the final HPA-1315 map,
-encounter, or character stats. Use a 12 x 12 fixture for the scripted battle; exercise
-16 x 16 as well. No encounter editor or map art.
+encounter, or character stats. Use a 12 x 12 fixture for the scripted battle; use small
+rectangular fixtures for grid unit tests. No separate large-map test or encounter editor/map art.
 
 ## Events and exact forecast
 
@@ -199,14 +218,15 @@ future playback, never references to mutable fighter objects. At minimum: roundS
 (order), turnStarted (actor, regeneration), moved (full path), attacked (move, actor,
 aim, cells, qi before/after), damaged (source/target, calculated and actual damage,
 facing, mitigation, HP before/after), guarded, qiGathered, itemUsed (resource delta,
-bag count), countered, defeated, facingChanged, turnEnded and battleEnded (outcome).
+bag count), countered, defeated, turnEnded (actor, facing before/after) and battleEnded (outcome).
 On initialization, roundStarted precedes turnStarted. On transition, turnEnded precedes
 any roundStarted and next turnStarted. For attack, attacked precedes damaged/defeated;
 countered precedes its damage/defeat. Battle-ended is last. No events for failed commands.
 
 Forecast must be a projection of the same validated action resolution used by
-applyBattleCommand, not an independent formula. Run the resolver on a copy, derive a
-forecast from the result/events (per-hit facing modifier, cover/Guard/passive modifiers,
+applyBattleCommand, not an independent formula. Call the non-mutating reducer directly
+with useMove; derive a forecast from the result/events (per-hit facing percentage,
+cover/Guard/passive percentages,
 HP before/after, actual damage, qi cost and actor qi after, ordered counter damage and
 actor HP after, possible defeat/outcome). Compare all affected fighters and the actor;
 do not merely compare the first target's damage. No hidden RNG, Math.random, wall clock,
@@ -219,10 +239,12 @@ command changes state. JSON round trip of state must preserve legal queries and 
 See the companion plan for explicit test cases. The headless public-API journey is the
 feature's E2E gate (not a private-helper-only test): construct an authored battle, move,
 attack, observe opposing turns, item/Qi/Guard and facing, finish at victory, assert
-event ordering and final resources. A second journey reaches hero defeat with a living
-companion. Run via the coding agent's execution MCP with test evidence.
-All existing check, lint, unit and browser E2E tests remain green. As no UI changes or
-HPA-1310 mockups exist, use browser-capable MCP to capture before/after screenshots
-of the same existing village HUD and real-time spar state, verifying no visual or
-interaction regression; no new tactical HUD or mockup parity expected yet. Attach
-evidence to the same PR, not a human acceptance gate.
+event ordering and final resources. Replay this one journey twice with a JSON round trip.
+A focused combat unit test covers hero defeat with a living companion.
+Run the journey through the coding agent's execution MCP and retain test output.
+The full check, lint and test commands (test includes unit and Playwright) remain green.
+No live UI files change and HPA-1310 has no mockup, so retain only a lightweight
+browser MCP screenshot check of the existing village HUD after implementation,
+reusing the existing browser smoke flow where possible. No paired before/after
+replay, new screenshot baseline or separate spar screenshot gate is needed.
+Record evidence in the same PR; no human acceptance gate.
