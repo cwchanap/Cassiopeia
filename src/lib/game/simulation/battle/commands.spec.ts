@@ -102,6 +102,15 @@ describe('actor and terminal validation', () => {
 			accepted: false,
 			reason: 'wrongActor'
 		});
+
+		const guarded = accept(applyBattleCommand(state, { type: 'guard', actorId: 'hero' }));
+		expect(
+			applyBattleCommand(guarded.state, {
+				type: 'move',
+				actorId: 'lu',
+				cell: { x: 3, z: 0 }
+			})
+		).toEqual({ accepted: false, reason: 'wrongActor' });
 		expect(state).toEqual(snapshot);
 	});
 
@@ -116,6 +125,10 @@ describe('actor and terminal validation', () => {
 				reason: 'terminal'
 			});
 		}
+		expect(applyBattleCommand(terminal, { type: 'guard', actorId: 'lu' })).toEqual({
+			accepted: false,
+			reason: 'terminal'
+		});
 		expect(terminal).toEqual(snapshot);
 	});
 
@@ -125,6 +138,11 @@ describe('actor and terminal validation', () => {
 
 		expect(
 			rejectionReason(applyBattleCommand(state, { type: 'endTurn', actorId: 'hero', facing: 'E' }))
+		).toBe('wrongPhase');
+		expect(
+			rejectionReason(
+				applyBattleCommand(state, { type: 'endTurn', actorId: 'hero', facing: 'X' as Facing })
+			)
 		).toBe('wrongPhase');
 		expect(state).toEqual(snapshot);
 	});
@@ -146,6 +164,15 @@ describe('actor and terminal validation', () => {
 					actorId: 'hero',
 					moveId: 'sword_cut',
 					aim: { x: 1, z: 0 }
+				})
+			)
+		).toBe('wrongPhase');
+		expect(
+			rejectionReason(
+				applyBattleCommand(guarded.state, {
+					type: 'move',
+					actorId: 'hero',
+					cell: { x: 99, z: 99 }
 				})
 			)
 		).toBe('wrongPhase');
@@ -660,17 +687,24 @@ describe('isolation and serialization', () => {
 
 		expect(state).toEqual(snapshot);
 		expect(moved.state).not.toBe(state);
+		expect(moved.state.map).not.toBe(state.map);
+		expect(moved.state.map.terrain).not.toBe(state.map.terrain);
+		expect(moved.state.map.terrain[0]).not.toBe(state.map.terrain[0]);
 		expect(moved.state.fighters).not.toBe(state.fighters);
 		expect(moved.state.fighters[0]).not.toBe(state.fighters[0]);
 		expect(moved.state.turnOrder).not.toBe(state.turnOrder);
 		expect(moved.state.squadBag).not.toBe(state.squadBag);
 
 		const path = moved.events[0].type === 'moved' ? moved.events[0].path : [];
+		moved.state.map.width = 99;
+		moved.state.map.terrain[0][0] = 'obstacle';
 		moved.state.fighters[0].cell.x = 4;
 		moved.state.fighters[0].health = 1;
 		moved.state.turnOrder.push('lu');
 
 		expect(state).toEqual(snapshot);
+		expect(state.map.width).toBe(5);
+		expect(state.map.terrain[0][0]).toBe('ground');
 		expect(path).toEqual([
 			{ x: 0, z: 0 },
 			{ x: 1, z: 0 },

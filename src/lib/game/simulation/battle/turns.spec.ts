@@ -461,6 +461,23 @@ describe('initiative and turn order', () => {
 		});
 
 		const guarded = accept(applyBattleCommand(state, { type: 'guard', actorId: 'hero' }));
+		expect(getTurnOrder(guarded.state)).toEqual({
+			round: 1,
+			activeId: 'hero',
+			order: ['hero', 'lu'],
+			actedIds: ['hero'],
+			nextRound: ['hero', 'lu']
+		});
+
+		const gathered = accept(applyBattleCommand(state, { type: 'gatherQi', actorId: 'hero' }));
+		expect(getTurnOrder(gathered.state)).toEqual({
+			round: 1,
+			activeId: 'hero',
+			order: ['hero', 'lu'],
+			actedIds: ['hero'],
+			nextRound: ['hero', 'lu']
+		});
+
 		const ended = accept(
 			applyBattleCommand(guarded.state, { type: 'endTurn', actorId: 'hero', facing: 'E' })
 		);
