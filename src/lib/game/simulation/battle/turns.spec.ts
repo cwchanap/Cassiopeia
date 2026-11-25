@@ -159,14 +159,26 @@ describe('battle construction', () => {
 	});
 
 	it('copies the authored setup instead of aliasing it', () => {
-		const authored = starter();
+		const terrain = [...OPEN_ROWS];
+		const heroTemplate = { ...SECT_HERO_TEMPLATE };
+		const hero: FighterSetup = {
+			id: 'hero',
+			side: 'squad',
+			template: heroTemplate,
+			cell: { x: 0, z: 0 },
+			facing: 'E'
+		};
+		const authored = setup(
+			[hero, placement('lu', { x: 4, z: 4 }, { side: 'enemy', facing: 'W' })],
+			{ terrain }
+		);
 		authored.squadBag = { lesser_healing_pill: 1 };
 		const { state } = createBattle(authored);
 
 		authored.fighters[0].cell.x = 3;
-		authored.fighters[0].template.maxHealth = 1;
+		heroTemplate.maxHealth = 1;
 		authored.squadBag.lesser_healing_pill = 9;
-		authored.terrain[0] = '#####';
+		terrain[0] = '#####';
 
 		expect(state.fighters[0]).toMatchObject({ cell: { x: 0, z: 0 }, maxHealth: 100 });
 		expect(state.squadBag).toEqual({ lesser_healing_pill: 1 });

@@ -206,7 +206,7 @@ export const SENIOR_BROTHER_LU_TEMPLATE: FighterTemplate = deepFreeze({
 });
 
 /** 12 x 12 scripted-battle fixture. Grid unit tests author their own smaller maps. */
-export const STARTER_BATTLE_TERRAIN: string[] = deepFreeze([
+export const STARTER_BATTLE_TERRAIN: readonly string[] = deepFreeze([
 	'............',
 	'..T.....#...',
 	'..T.....#...',
