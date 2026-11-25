@@ -139,6 +139,22 @@ describe('actor and terminal validation', () => {
 		expect(terminal).toEqual(snapshot);
 	});
 
+	it('rejects an unknown command type instead of falling through', () => {
+		const { state } = createBattle(starter());
+		const snapshot = JSON.parse(JSON.stringify(state));
+		const command = { type: 'wait', actorId: 'hero' } as unknown as BattleCommand;
+
+		expect(applyBattleCommand(state, command)).toEqual({
+			accepted: false,
+			reason: 'invalidCommand'
+		});
+		expect(applyBattleCommand(state, { type: 'wait' } as unknown as BattleCommand)).toEqual({
+			accepted: false,
+			reason: 'invalidCommand'
+		});
+		expect(state).toEqual(snapshot);
+	});
+
 	it('rejects ending the turn before taking an action', () => {
 		const { state } = createBattle(starter());
 		const snapshot = JSON.parse(JSON.stringify(state));

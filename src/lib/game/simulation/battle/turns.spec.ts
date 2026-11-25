@@ -10,6 +10,7 @@ import { applyBattleCommand, createBattle, getTurnOrder } from './rules';
 import type {
 	BattleCommandResult,
 	BattleEvent,
+	BattleSide,
 	BattleFighter,
 	BattleSetup,
 	BattleState,
@@ -266,6 +267,15 @@ describe('invalid authored setup', () => {
 				])
 		},
 		{
+			name: 'an unknown side',
+			setup: () =>
+				setup([
+					placement('hero', { x: 0, z: 0 }),
+					placement('lu', { x: 4, z: 4 }, { side: 'enemy' }),
+					{ ...placement('neutral', { x: 1, z: 0 }), side: 'neutral' as BattleSide }
+				])
+		},
+		{
 			name: 'overlapping spawns',
 			setup: () =>
 				setup([
@@ -350,7 +360,7 @@ describe('invalid authored setup', () => {
 		expect(() => createBattle(makeSetup())).toThrow();
 	});
 
-	it('rejects sparse terrain rows instead of leaking a gap', () => {
+	it('reports non-string and sparse terrain rows as the wrong type', () => {
 		const fighters = [
 			placement('hero', { x: 0, z: 0 }),
 			placement('lu', { x: 2, z: 2 }, { side: 'enemy' })
@@ -361,10 +371,18 @@ describe('invalid authored setup', () => {
 		const missingMiddle = new Array<string>(3);
 		missingMiddle[0] = '...';
 		missingMiddle[2] = '...';
+		const nonStringTerrains = [
+			[null],
+			[123],
+			['...', null, '...'],
+			['...', 123, '...'],
+			missingFirst,
+			missingMiddle
+		] as unknown as string[][];
 
-		for (const terrain of [missingFirst, missingMiddle]) {
+		for (const terrain of nonStringTerrains) {
 			expect(() => createBattle(setup(fighters, { terrain }))).toThrow(
-				'battle terrain rows must all have the same width'
+				'battle terrain rows must be strings'
 			);
 		}
 	});

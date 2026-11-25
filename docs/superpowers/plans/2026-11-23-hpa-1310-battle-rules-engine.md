@@ -5,7 +5,7 @@
 **Base:** main at `10dfbe788cbeafdced2b6b5523774682a9159e00`.  
 **Delivery:** One PR, initially draft. Add implementation and test commits to this same PR.
 Do not open a separate coding PR.  
-**Status:** Planning only.
+**Status:** Implemented; acceptance checklist complete.
 
 ## Working approach
 
@@ -202,21 +202,21 @@ existing Playwright screenshot via an available MCP/artifact viewer. Retain comm
 output/CI and screenshot evidence in the same PR. One Chromium desktop environment
 is sufficient; no separate browser pass, new screenshot baseline or OS/device matrix.
 
-- [ ] All four terrains, four external arts, three internal arts, turn/facing phases,
+- [x] All four terrains, four external arts, three internal arts, turn/facing phases,
       Guard/counters, Gather, shared pills, qi regeneration and outcomes are implemented
       according to the design. The unit test cases in slices 1–4 cover both legal and
       rejected commands and deterministic event order.
-- [ ] One public API scripted victory journey passes in the existing Vitest server
+- [x] One public API scripted victory journey passes in the existing Vitest server
       project with no renderer, production integration, AI or new runtime dependency.
       Use execution MCP; assert forecasts, resources, turn order, event sequence and
       deterministic replay end-to-end. Focused unit tests prove terminal hero defeat
       with a surviving companion and automatic turn advancement after non-terminal
       counter-kills, including forecast parity for that handoff.
-- [ ] `bun run check`, `bun run lint` and `bun run test` pass (test already runs
+- [x] `bun run check`, `bun run lint` and `bun run test` pass (test already runs
       the unit suite with --run plus Playwright). Existing first-day quest, real-time
       duel and inventory/save browser tests pass unchanged. Use the repository-pinned
       Bun and existing Playwright/CI setup; no duplicate full unit run or new workflows.
-- [ ] HPA-1310 changes no UI and has no mockup. Reuse the 960 x 640
+- [x] HPA-1310 changes no UI and has no mockup. Reuse the 960 x 640
       `hud-1-explore.png` already produced by `attachHudShot` in
       `src/routes/wuxia-mvp.e2e.ts` during the existing Playwright suite.
       Inspect that image from test-results or the uploaded `playwright-report` CI
@@ -224,9 +224,9 @@ is sufficient; no separate browser pass, new screenshot baseline or OS/device ma
       Verify canvas, vitals, quest scroll, minimap and technique bar remain intact;
       link the run/artifact in the PR. No extra browser run or screenshot capture,
       before/after replay, new baseline, future mockup comparison or committed images.
-- [ ] Review changed paths/imports: no Three.js/DOM/Svelte imports in battle; no
+- [x] Review changed paths/imports: no Three.js/DOM/Svelte imports in battle; no
       new live game path, AI, art, audio, save changes or real-time combat deletion.
       Data and events are JSON-serializable, input remains unchanged on forecast/rejection,
       and consumers can use public functions without copying any combat rules.
-- [ ] One PR for HPA-1310 contains design, plan, implementation and evidence.
+- [x] One PR for HPA-1310 contains design, plan, implementation and evidence.
       HPA-1311 and HPA-1315 remain separate dependent tickets.

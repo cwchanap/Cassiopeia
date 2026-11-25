@@ -130,6 +130,9 @@ export function computeReachableCells(
  * walk each cardinal ray up to their range; line and arc moves use their adjacent aim cell.
  */
 export function legalAimCells(map: BattleMap, origin: Cell, targeting: MoveTargeting): Cell[] {
+	if (!canTargetFrom(map, origin)) {
+		return [];
+	}
 	if (targeting.shape !== 'single') {
 		return CARDINAL_FACINGS.map((facing) => stepCell(origin, facing)).filter(
 			(aim) => affectedCells(map, origin, aim, targeting).length > 0
@@ -161,6 +164,9 @@ export function affectedCells(
 	aim: Cell,
 	targeting: MoveTargeting
 ): Cell[] {
+	if (!canTargetFrom(map, origin)) {
+		return [];
+	}
 	// Validate the real aim before arithmetic: a tiny fractional offset can round to an integer
 	// delta, which would otherwise pass the cardinal checks below.
 	if (!inBounds(map, aim)) {
@@ -175,6 +181,10 @@ export function affectedCells(
 		case 'arc':
 			return arcAffectedCells(map, origin, aim);
 	}
+}
+
+function canTargetFrom(map: BattleMap, origin: Cell): boolean {
+	return canEnterTerrain(terrainAt(map, origin));
 }
 
 function singleAffectedCells(map: BattleMap, origin: Cell, aim: Cell, range: number): Cell[] {

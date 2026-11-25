@@ -46,6 +46,15 @@ const BATTLE_PILLS: Readonly<Record<BattlePillId, true>> = {
 	lesser_qi_pill: true
 };
 
+const BATTLE_COMMAND_TYPES: Readonly<Record<BattleCommand['type'], true>> = {
+	move: true,
+	useMove: true,
+	useItem: true,
+	guard: true,
+	gatherQi: true,
+	endTurn: true
+};
+
 /** One division for every hit: base, power and five integer percentage factors. */
 const DAMAGE_DENOMINATOR = 10 * 100 ** 5;
 const FRONT_FACING_PERCENT = 100;
@@ -104,6 +113,9 @@ export function createBattle(setup: BattleSetup): BattleCreation {
 		}
 		ids.add(placement.id);
 
+		if (placement.side !== 'squad' && placement.side !== 'enemy') {
+			throw new Error(`invalid side for fighter ${placement.id}: ${placement.side}`);
+		}
 		if (!CARDINAL_FACINGS.includes(placement.facing)) {
 			throw new Error(`invalid facing for fighter ${placement.id}: ${placement.facing}`);
 		}
@@ -158,6 +170,9 @@ export function applyBattleCommand(
 	state: BattleState,
 	command: BattleCommand
 ): BattleCommandResult {
+	if (BATTLE_COMMAND_TYPES[command.type] !== true) {
+		return reject('invalidCommand');
+	}
 	const check = validateActiveActor(state, command.actorId);
 	if (!check.ok) {
 		return reject(check.reason);
@@ -732,6 +747,8 @@ function validatePhase(state: BattleState, command: BattleCommand): BattleReject
 		case 'useMove':
 		case 'useItem':
 			return state.hasActed ? 'wrongPhase' : null;
+		default:
+			return 'invalidCommand';
 	}
 }
 
@@ -844,7 +861,7 @@ function parseTerrain(rows: readonly string[]): BattleMap {
 		throw new Error('battle terrain must have at least one non-empty row');
 	}
 	if (typeof rows[0] !== 'string') {
-		throw new Error('battle terrain rows must all have the same width');
+		throw new Error('battle terrain rows must be strings');
 	}
 	if (rows[0].length === 0) {
 		throw new Error('battle terrain must have at least one non-empty row');
@@ -852,7 +869,10 @@ function parseTerrain(rows: readonly string[]): BattleMap {
 	const width = rows[0].length;
 	for (let index = 0; index < rows.length; index++) {
 		const row = rows[index];
-		if (typeof row !== 'string' || row.length !== width) {
+		if (typeof row !== 'string') {
+			throw new Error('battle terrain rows must be strings');
+		}
+		if (row.length !== width) {
 			throw new Error('battle terrain rows must all have the same width');
 		}
 	}
