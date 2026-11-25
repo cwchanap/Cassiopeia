@@ -698,7 +698,12 @@ describe('grid and public data boundary', () => {
 	});
 
 	it('rejects an aim whose fractional offset cancels to a cardinal step', () => {
-		const { state } = createBattle(starter());
+		const { state } = createBattle(
+			setup([
+				placement('hero', { x: 1, z: 0 }),
+				placement('lu', { x: 0, z: 0 }, { side: 'enemy', template: SENIOR_BROTHER_LU_TEMPLATE })
+			])
+		);
 		const aim = { x: 1e-20, z: 0 };
 
 		expect(affectedCells(state.map, { x: 1, z: 0 }, aim, { shape: 'single', range: 1 })).toEqual(
@@ -721,6 +726,16 @@ describe('grid and public data boundary', () => {
 				aim
 			})
 		).toEqual({ accepted: false, reason: 'invalidAim' });
+		for (const moveId of ['sword_cut', 'piercing_thrust'] as const) {
+			expect(
+				applyBattleCommand(state, {
+					type: 'useMove',
+					actorId: 'hero',
+					moveId,
+					aim: { x: 0, z: 0 }
+				}).accepted
+			).toBe(true);
+		}
 	});
 
 	it('strips caller metadata, aliases and negative zero at the public boundary', () => {
