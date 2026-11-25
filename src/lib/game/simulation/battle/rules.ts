@@ -54,6 +54,15 @@ const REAR_FACING_PERCENT = 150;
 const BAMBOO_COVER_PERCENT = 75;
 const GUARD_PERCENT = 50;
 const COUNTER_ATTACK_PERCENT = 50;
+const MAX_MOVE_BASE_DAMAGE = Math.max(...Object.values(MOVES).map((move) => move.baseDamage));
+const MAX_DAMAGE_TAKEN_PERCENT = Math.max(
+	...Object.values(INTERNAL_ARTS).map((art) => art.damageTakenPercent)
+);
+/** Keeps every authored hit's whole numerator an exact integer before the single division. */
+const MAX_POWER = Math.floor(
+	Number.MAX_SAFE_INTEGER /
+		(MAX_MOVE_BASE_DAMAGE * REAR_FACING_PERCENT * 100 ** 3 * MAX_DAMAGE_TAKEN_PERCENT)
+);
 
 export type DamageFactors = {
 	baseDamage: number;
@@ -831,12 +840,21 @@ function copyMap(map: BattleMap): BattleMap {
 }
 
 function parseTerrain(rows: readonly string[]): BattleMap {
-	if (rows.length === 0 || rows[0].length === 0) {
+	if (rows.length === 0) {
+		throw new Error('battle terrain must have at least one non-empty row');
+	}
+	if (typeof rows[0] !== 'string') {
+		throw new Error('battle terrain rows must all have the same width');
+	}
+	if (rows[0].length === 0) {
 		throw new Error('battle terrain must have at least one non-empty row');
 	}
 	const width = rows[0].length;
-	if (rows.some((row) => row.length !== width)) {
-		throw new Error('battle terrain rows must all have the same width');
+	for (let index = 0; index < rows.length; index++) {
+		const row = rows[index];
+		if (typeof row !== 'string' || row.length !== width) {
+			throw new Error('battle terrain rows must all have the same width');
+		}
 	}
 
 	return {
@@ -856,10 +874,16 @@ function parseTerrain(rows: readonly string[]): BattleMap {
 
 function createFighter(placement: FighterSetup): BattleFighter {
 	const { template } = placement;
-	for (const stat of [template.maxHealth, template.power, template.agility]) {
+	if (!Number.isSafeInteger(template.maxHealth) || template.maxHealth <= 0) {
+		throw new Error(`invalid stats for fighter ${placement.id}`);
+	}
+	for (const stat of [template.power, template.agility]) {
 		if (!Number.isInteger(stat) || stat <= 0) {
 			throw new Error(`invalid stats for fighter ${placement.id}`);
 		}
+	}
+	if (template.power > MAX_POWER) {
+		throw new Error(`invalid stats for fighter ${placement.id}`);
 	}
 
 	const internalArt = INTERNAL_ARTS[template.internalArtId];
@@ -896,7 +920,7 @@ function copyBag(
 		if (count === undefined) {
 			continue;
 		}
-		if (!Number.isInteger(count) || count < 0) {
+		if (!Number.isSafeInteger(count) || count < 0) {
 			throw new Error(`invalid starting bag count for ${pillId}`);
 		}
 		// Unknown inventory keys are validated above but never enter the battle bag.
