@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SECT_HERO_TEMPLATE, SENIOR_BROTHER_LU_TEMPLATE } from './content';
+import { affectedCells } from './grid';
 import {
 	applyBattleCommand,
 	createBattle,
@@ -692,6 +693,32 @@ describe('grid and public data boundary', () => {
 				actorId: 'hero',
 				moveId: 'piercing_thrust',
 				aim: { x: 0.5, z: 0.5 }
+			})
+		).toEqual({ accepted: false, reason: 'invalidAim' });
+	});
+
+	it('rejects an aim whose fractional offset cancels to a cardinal step', () => {
+		const { state } = createBattle(starter());
+		const aim = { x: 1e-20, z: 0 };
+
+		expect(affectedCells(state.map, { x: 1, z: 0 }, aim, { shape: 'single', range: 1 })).toEqual(
+			[]
+		);
+		expect(affectedCells(state.map, { x: 1, z: 0 }, aim, { shape: 'line', length: 2 })).toEqual([]);
+		expect(
+			applyBattleCommand(state, {
+				type: 'useMove',
+				actorId: 'hero',
+				moveId: 'sword_cut',
+				aim
+			})
+		).toEqual({ accepted: false, reason: 'invalidAim' });
+		expect(
+			applyBattleCommand(state, {
+				type: 'useMove',
+				actorId: 'hero',
+				moveId: 'piercing_thrust',
+				aim
 			})
 		).toEqual({ accepted: false, reason: 'invalidAim' });
 	});
