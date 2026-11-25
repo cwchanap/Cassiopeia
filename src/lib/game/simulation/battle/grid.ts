@@ -161,6 +161,12 @@ export function affectedCells(
 	aim: Cell,
 	targeting: MoveTargeting
 ): Cell[] {
+	// Validate the real aim before arithmetic: a tiny fractional offset can round to an integer
+	// delta, which would otherwise pass the cardinal checks below.
+	if (!inBounds(map, aim)) {
+		return [];
+	}
+
 	switch (targeting.shape) {
 		case 'single':
 			return singleAffectedCells(map, origin, aim, targeting.range);

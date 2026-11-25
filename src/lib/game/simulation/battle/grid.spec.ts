@@ -294,6 +294,18 @@ describe('single-cell targeting', () => {
 		expect(affectedCells(map, cell(1, 1), { x: 1, z: 0.5 }, arc)).toEqual([]);
 	});
 
+	it('rejects an aim whose fractional offset cancels to a cardinal step', () => {
+		const map = mapFromRows(['.....', '.....', '.....']);
+		const line: MoveTargeting = { shape: 'line', length: 2 };
+
+		// 1e-20 is below the ulp of 1, so 1e-20 - 1 rounds to exactly -1.
+		expect(affectedCells(map, cell(1, 0), { x: 1e-20, z: 0 }, adjacent)).toEqual([]);
+		expect(affectedCells(map, cell(1, 0), { x: 1e-20, z: 0 }, line)).toEqual([]);
+		// A real cardinal aim from the same origin keeps its geometry.
+		expect(affectedCells(map, cell(1, 0), cell(0, 0), adjacent)).toEqual([cell(0, 0)]);
+		expect(affectedCells(map, cell(1, 0), cell(0, 0), line)).toEqual([cell(0, 0)]);
+	});
+
 	it('rejects aims beyond the darts range and counts obstacles as blocking even at aim', () => {
 		const map = mapFromRows(['.......', '.......', '.......']);
 		const darts: MoveTargeting = { shape: 'single', range: 3 };
