@@ -3,7 +3,7 @@
 **Linear:** [HPA-1310](https://linear.app/cwchanap/issue/HPA-1310/battle-rules-engine-for-turn-based-combat)  
 **Base:** main at `10dfbe788cbeafdced2b6b5523774682a9159e00` (existing village quest, real-time duel and ink-and-paper HUD).  
 **Delivery:** One draft PR for the specification, plan and eventual implementation.  
-**Status:** Proposed design; no code or acceptance result is claimed.
+**Status:** Implemented in this PR; acceptance evidence is tracked in the companion plan.
 
 ## Goal and boundaries
 
@@ -53,9 +53,9 @@ provide max health, power, agility and art IDs; the setup supplies cell and faci
 All fighters start alive at maximum health and derived maximum qi, without Guard.
 Copy input to prevent aliasing. Bad authored setup is a programmer error: throw on empty
 or ragged rows, unknown terrain character, nonpositive/noninteger stats, duplicate IDs,
-missing squad hero/opponent, invalid/overlapping spawn cells, or a negative/noninteger
-starting squadBag count (zero or absent means none). Do not add runtime art-ID schema
-validation; closed IDs and typed records catch typos. A content test constructs
+missing squad hero/opponent, unknown fighter side, invalid/overlapping spawn cells, or a
+negative/noninteger starting squadBag count (zero or absent means none). Do not add runtime
+art-ID schema validation; closed IDs and typed records catch typos. A content test constructs
 every authored fixture via createBattle. No map parser framework or catalog injection.
 
 BattleState contains the map, fighters with current resources/cell/facing/guarding flag,
@@ -110,9 +110,9 @@ Two phases (before and after action), with a move-used flag:
 
 A successful command is atomic and does not mutate its input; implement a simple copied state
 and shared helpers, not a state-management framework. Only the returned state becomes authoritative.
-Rejections (wrong actor, wrong phase, occupied/unreachable cell, invalid aim, insufficient qi,
-invalid item/target, terminal state) never change resources, phase, events or order.
-Use a straightforward typed reason union, not exceptions for expected input errors.
+Rejections (invalid command, wrong actor, wrong phase, occupied/unreachable cell, invalid aim,
+insufficient qi, invalid item/target, terminal state) never change resources, phase, events or
+order. Use a straightforward typed reason union, not exceptions for expected input errors.
 
 ## Grid and targeting
 
@@ -139,10 +139,11 @@ shape primitives are data-driven:
   cells Manhattan distance 2 as part of the area. Clip out-of-bounds and obstacle cells;
   this is not a straight-line ray. No independent diagonal line-of-sight calculation.
 
-Aim is a cell, not a mandatory fighter ID, so an arc or thrust can hit enemies even if its
-anchor is empty. A legal attack must affect at least one living enemy; no friendly fire,
-self-hit or wasted qi on empty attacks. A blocked/out-of-bounds aim is invalid. In all cases
-use the same grid helper for target enumeration, forecast and actual resolution. Stable
+The origin must be a standable integer cell; target helpers return no cells for off-map,
+fractional, water or obstacle origins. Aim is a cell, not a mandatory fighter ID, so an arc or
+thrust can hit enemies even if its anchor is empty. A legal attack must affect at least one
+living enemy; no friendly fire, self-hit or wasted qi on empty attacks. A blocked/out-of-bounds
+aim is invalid. In all cases use the same grid helper for target enumeration, forecast and actual resolution. Stable
 pattern order (line near to far; arc center then left then right) determines target/event order.
 
 ## Combat and rounds

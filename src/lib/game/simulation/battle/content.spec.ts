@@ -270,6 +270,12 @@ describe('protected rules catalogs', () => {
 		}
 	});
 
+	it('freezes the starter fighter templates and terrain fixture', () => {
+		expect(Object.isFrozen(SECT_HERO_TEMPLATE)).toBe(true);
+		expect(Object.isFrozen(SENIOR_BROTHER_LU_TEMPLATE)).toBe(true);
+		expect(Object.isFrozen(STARTER_BATTLE_TERRAIN)).toBe(true);
+	});
+
 	it('rejects consumer writes so unchanged state keeps its results', () => {
 		expect(() => {
 			// @ts-expect-error move catalogs are readonly

@@ -189,24 +189,24 @@ export const INTERNAL_ARTS: Readonly<Record<InternalArtId, InternalArtDefinition
 	}
 });
 
-export const SECT_HERO_TEMPLATE: FighterTemplate = {
+export const SECT_HERO_TEMPLATE: FighterTemplate = deepFreeze({
 	maxHealth: 100,
 	power: 10,
 	agility: 20,
 	externalArtId: 'sect_sword_form',
 	internalArtId: 'sect_breathing'
-};
+});
 
-export const SENIOR_BROTHER_LU_TEMPLATE: FighterTemplate = {
+export const SENIOR_BROTHER_LU_TEMPLATE: FighterTemplate = deepFreeze({
 	maxHealth: 100,
 	power: 9,
 	agility: 10,
 	externalArtId: 'sect_sword_form',
 	internalArtId: 'sect_breathing'
-};
+});
 
 /** 12 x 12 scripted-battle fixture. Grid unit tests author their own smaller maps. */
-export const STARTER_BATTLE_TERRAIN: string[] = [
+export const STARTER_BATTLE_TERRAIN: string[] = deepFreeze([
 	'............',
 	'..T.....#...',
 	'..T.....#...',
@@ -219,4 +219,4 @@ export const STARTER_BATTLE_TERRAIN: string[] = [
 	'............',
 	'............',
 	'............'
-];
+]);

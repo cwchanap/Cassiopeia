@@ -174,6 +174,7 @@ export type BattleCommand =
 
 export type BattleRejectionReason =
 	| 'terminal'
+	| 'invalidCommand'
 	| 'wrongActor'
 	| 'wrongPhase'
 	| 'invalidCell'

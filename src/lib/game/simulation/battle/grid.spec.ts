@@ -306,6 +306,25 @@ describe('single-cell targeting', () => {
 		expect(affectedCells(map, cell(1, 0), cell(0, 0), line)).toEqual([cell(0, 0)]);
 	});
 
+	it('rejects origins that are not standable integer map cells', () => {
+		const open = mapFromRows(['...', '...', '...']);
+		const fractionalOrigin = { x: 1e-20, z: 0 };
+
+		expect(affectedCells(open, cell(-1, 0), cell(0, 0), adjacent)).toEqual([]);
+		expect(legalAimCells(open, cell(-1, 0), adjacent)).toEqual([]);
+		expect(affectedCells(open, fractionalOrigin, cell(1, 0), adjacent)).toEqual([]);
+		expect(legalAimCells(open, fractionalOrigin, adjacent)).toEqual([]);
+
+		for (const rows of [
+			['.~.', '...'],
+			['.#.', '...']
+		]) {
+			const map = mapFromRows(rows);
+			expect(affectedCells(map, cell(1, 0), cell(0, 0), adjacent)).toEqual([]);
+			expect(legalAimCells(map, cell(1, 0), adjacent)).toEqual([]);
+		}
+	});
+
 	it('rejects aims beyond the darts range and counts obstacles as blocking even at aim', () => {
 		const map = mapFromRows(['.......', '.......', '.......']);
 		const darts: MoveTargeting = { shape: 'single', range: 3 };
