@@ -162,7 +162,7 @@ describe('battle construction', () => {
 		authored.squadBag = { lesser_healing_pill: 1 };
 		const { state } = createBattle(authored);
 
-		authored.fighters[0].cell = { x: 3, z: 3 };
+		authored.fighters[0].cell.x = 3;
 		authored.fighters[0].template.maxHealth = 1;
 		authored.squadBag.lesser_healing_pill = 9;
 		authored.terrain[0] = '#####';
@@ -175,7 +175,7 @@ describe('battle construction', () => {
 		state.fighters[0].health = 1;
 		state.squadBag.lesser_healing_pill = 0;
 
-		expect(authored.fighters[0].cell).toEqual({ x: 3, z: 3 });
+		expect(authored.fighters[0].cell).toEqual({ x: 3, z: 0 });
 		expect(authored.squadBag.lesser_healing_pill).toBe(9);
 		expect(authored.terrain[0]).toBe('#####');
 	});
@@ -207,7 +207,7 @@ describe('invalid authored setup', () => {
 		},
 		{
 			name: 'an unknown terrain character',
-			setup: () => ({ ...starter(), terrain: ['..x', '...', '...'] })
+			setup: () => ({ ...starter(), terrain: ['..x..', '.....', '.....', '.....', '.....'] })
 		},
 		{ name: 'no fighters', setup: () => ({ ...starter(), fighters: [] }) },
 		{
@@ -282,10 +282,38 @@ describe('invalid authored setup', () => {
 				])
 		},
 		{
+			name: 'unsafe integer max health',
+			setup: () =>
+				setup([
+					placement(
+						'hero',
+						{ x: 0, z: 0 },
+						{
+							template: { ...SECT_HERO_TEMPLATE, maxHealth: 2 ** 60 }
+						}
+					),
+					placement('lu', { x: 4, z: 4 }, { side: 'enemy' })
+				])
+		},
+		{
 			name: 'fractional power',
 			setup: () =>
 				setup([
 					placement('hero', { x: 0, z: 0 }, { template: { ...SECT_HERO_TEMPLATE, power: 9.5 } }),
+					placement('lu', { x: 4, z: 4 }, { side: 'enemy' })
+				])
+		},
+		{
+			name: 'power beyond the exact damage range',
+			setup: () =>
+				setup([
+					placement(
+						'hero',
+						{ x: 0, z: 0 },
+						{
+							template: { ...SECT_HERO_TEMPLATE, power: Number.MAX_SAFE_INTEGER }
+						}
+					),
 					placement('lu', { x: 4, z: 4 }, { side: 'enemy' })
 				])
 		},
@@ -306,6 +334,10 @@ describe('invalid authored setup', () => {
 			setup: () => setup(starter().fighters, { squadBag: { lesser_qi_pill: 1.5 } })
 		},
 		{
+			name: 'an unsafe integer pill count',
+			setup: () => setup(starter().fighters, { squadBag: { lesser_qi_pill: 2 ** 54 } })
+		},
+		{
 			name: 'a negative unknown bag count',
 			setup: () =>
 				setup(starter().fighters, {
@@ -316,6 +348,25 @@ describe('invalid authored setup', () => {
 
 	it.each(invalidSetups)('throws for $name', ({ setup: makeSetup }) => {
 		expect(() => createBattle(makeSetup())).toThrow();
+	});
+
+	it('rejects sparse terrain rows instead of leaking a gap', () => {
+		const fighters = [
+			placement('hero', { x: 0, z: 0 }),
+			placement('lu', { x: 2, z: 2 }, { side: 'enemy' })
+		];
+		const missingFirst = new Array<string>(3);
+		missingFirst[1] = '...';
+		missingFirst[2] = '...';
+		const missingMiddle = new Array<string>(3);
+		missingMiddle[0] = '...';
+		missingMiddle[2] = '...';
+
+		for (const terrain of [missingFirst, missingMiddle]) {
+			expect(() => createBattle(setup(fighters, { terrain }))).toThrow(
+				'battle terrain rows must all have the same width'
+			);
+		}
 	});
 });
 
@@ -629,7 +680,7 @@ describe('initiative and turn order', () => {
 				)
 			])
 		);
-		const state = patchFighter(created.state, 'ally', { qi: 65 });
+		const state = patchFighter(created.state, 'ally', { qi: 55 });
 
 		const heroGuarded = accept(applyBattleCommand(state, { type: 'guard', actorId: 'hero' }));
 		const heroEnded = accept(
@@ -642,7 +693,7 @@ describe('initiative and turn order', () => {
 
 		expect(heroEnded.events).toEqual([
 			{ type: 'turnEnded', actorId: 'hero', facingBefore: 'N', facingAfter: 'N' },
-			{ type: 'turnStarted', actorId: 'ally', qiBefore: 65, qiAfter: 70 }
+			{ type: 'turnStarted', actorId: 'ally', qiBefore: 55, qiAfter: 63 }
 		]);
 	});
 

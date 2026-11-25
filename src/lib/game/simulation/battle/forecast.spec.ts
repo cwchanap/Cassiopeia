@@ -144,6 +144,9 @@ function expectForecastToMirror(
 	if (!attacked) {
 		throw new Error('accepted attack emitted no attacked event');
 	}
+	expect(forecast.actorId).toBe(attacked.actorId);
+	expect(forecast.moveId).toBe(attacked.moveId);
+	expect(forecast.aim).toEqual(attacked.aim);
 	expect(forecast.qiBefore).toBe(attacked.qiBefore);
 	expect(forecast.qiAfter).toBe(attacked.qiAfter);
 	expect(forecast.qiCost).toBe(attacked.qiBefore - attacked.qiAfter);

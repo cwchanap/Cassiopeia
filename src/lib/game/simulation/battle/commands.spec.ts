@@ -670,16 +670,23 @@ describe('reachable cells', () => {
 
 	it('returns exactly the destinations a move command accepts', () => {
 		const { state } = createBattle(starter());
+		const key = (cell: Cell) => `${cell.x},${cell.z}`;
+		const queried = getReachableCells(state)
+			.filter((candidate) => candidate.cost > 0)
+			.map((candidate) => key(candidate.cell))
+			.sort();
+		const accepted: string[] = [];
 
-		for (const entry of getReachableCells(state).filter((candidate) => candidate.cost > 0)) {
-			expect(
-				applyBattleCommand(state, {
-					type: 'move',
-					actorId: 'hero',
-					cell: entry.cell
-				}).accepted
-			).toBe(true);
+		for (let z = 0; z < state.map.height; z++) {
+			for (let x = 0; x < state.map.width; x++) {
+				const cell = { x, z };
+				if (applyBattleCommand(state, { type: 'move', actorId: 'hero', cell }).accepted) {
+					accepted.push(key(cell));
+				}
+			}
 		}
+
+		expect(queried).toEqual(accepted.sort());
 	});
 });
 
