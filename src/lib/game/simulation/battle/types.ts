@@ -76,11 +76,11 @@ export type InternalArtDefinition = {
 };
 
 export type FighterTemplate = {
-	maxHealth: number;
-	power: number;
-	agility: number;
-	externalArtId: ExternalArtId;
-	internalArtId: InternalArtId;
+	readonly maxHealth: number;
+	readonly power: number;
+	readonly agility: number;
+	readonly externalArtId: ExternalArtId;
+	readonly internalArtId: InternalArtId;
 };
 
 export type FighterSetup = {
@@ -93,7 +93,7 @@ export type FighterSetup = {
 
 export type BattleSetup = {
 	/** Terrain rows indexed by z, columns by x. Characters: . ground, # obstacle, ~ water, T bamboo. */
-	terrain: string[];
+	terrain: readonly string[];
 	fighters: FighterSetup[];
 	heroId: string;
 	/** Starting shared squad pills. Absent or zero means none. */

@@ -293,6 +293,14 @@ describe('protected rules catalogs', () => {
 			// @ts-expect-error internal art definitions are readonly
 			INTERNAL_ARTS.iron_body.maxQi = 1;
 		}).toThrow(TypeError);
+		expect(() => {
+			// @ts-expect-error starter fighter templates are readonly
+			SECT_HERO_TEMPLATE.maxHealth = 1;
+		}).toThrow(TypeError);
+		expect(() => {
+			// @ts-expect-error starter terrain rows are readonly
+			STARTER_BATTLE_TERRAIN[0] = '############';
+		}).toThrow(TypeError);
 
 		expect(MOVES.sword_cut).toMatchObject({ id: 'sword_cut', qiCost: 0, baseDamage: 12 });
 		expect(EXTERNAL_ARTS.sect_sword_form.moves).toEqual({
