@@ -427,11 +427,11 @@ describe('representative battle AI frame benchmark', () => {
 			const cpuSamples: number[] = [];
 			const plannedCommands: BattleCommand[][] = [];
 			for (let iteration = 0; iteration < TIMED_DECISIONS; iteration++) {
-				const started = performance.now();
 				const cpuStarted = process.cpuUsage();
+				const started = performance.now();
 				const commands = planBattleTurn(fixture.state, fixture.activeId, fixture.profile);
-				const cpuEnded = process.cpuUsage(cpuStarted);
 				const elapsed = performance.now() - started;
+				const cpuEnded = process.cpuUsage(cpuStarted);
 				samples.push(elapsed);
 				cpuSamples.push((cpuEnded.user + cpuEnded.system) / 1000);
 				plannedCommands.push(commands);

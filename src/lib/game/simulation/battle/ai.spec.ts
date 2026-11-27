@@ -1204,6 +1204,66 @@ describe('terminal and side behavior', () => {
 		expect(replayed.state.outcome).toBe('ongoing');
 	});
 
+	it('ranks a low-damage immediate win above a higher-scoring ongoing attack', () => {
+		const created = battleState(
+			setup([
+				placement('hero', { x: 2, z: 1 }, { facing: 'S' }),
+				placement(
+					'champion',
+					{ x: 3, z: 2 },
+					{ template: { maxHealth: 400, agility: 10 }, facing: 'E' }
+				),
+				placement(
+					'raider',
+					{ x: 2, z: 2 },
+					{ side: 'enemy', template: luTemplate({ power: 200, agility: 30 }), facing: 'N' }
+				)
+			])
+		);
+		expect(getTurnOrder(created).activeId).toBe('raider');
+		const weakened = patchFighter(created, 'hero', { health: 1 });
+		const spent = patchFighter(weakened, 'raider', { qi: 10 });
+		const state: BattleState = { ...spent, hasMoved: true };
+
+		const highScore = accept(
+			applyBattleCommand(state, {
+				type: 'useMove',
+				actorId: 'raider',
+				moveId: 'sword_cut',
+				aim: { x: 3, z: 2 }
+			})
+		);
+		expect(highScore.state.outcome).toBe('ongoing');
+		expect(highScore.events).toContainEqual(
+			expect.objectContaining({
+				type: 'damaged',
+				targetId: 'champion',
+				applied: 360,
+				healthAfter: 40
+			})
+		);
+
+		const immediateWin = accept(
+			applyBattleCommand(state, {
+				type: 'useMove',
+				actorId: 'raider',
+				moveId: 'sword_cut',
+				aim: { x: 2, z: 1 }
+			})
+		);
+		expect(immediateWin.state.outcome).toBe('defeat');
+		expect(immediateWin.events).toContainEqual(
+			expect.objectContaining({ type: 'damaged', targetId: 'hero', applied: 1, healthAfter: 0 })
+		);
+
+		const commands = planBattleTurn(state, 'raider', AGGRESSOR);
+		const replayed = replayCommands(state, commands);
+
+		expect(useMoveIn(commands).aim).toEqual(fighter(state, 'hero').cell);
+		expect(commands.some((command) => command.type === 'endTurn')).toBe(false);
+		expect(replayed.state.outcome).toBe('defeat');
+	});
+
 	it('omits endTurn when the chosen attack ends the battle', () => {
 		const adjacent = battleState(starter({ x: 1, z: 1 }, { x: 2, z: 1 }));
 		const state = patchFighter(adjacent, 'lu', { health: 5 });
