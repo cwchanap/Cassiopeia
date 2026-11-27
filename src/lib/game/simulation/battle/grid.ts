@@ -22,6 +22,14 @@ const FACING_STEPS: Record<Facing, Cell> = {
 const TURN_LEFT: Record<Facing, Facing> = { N: 'W', E: 'N', S: 'E', W: 'S' };
 const TURN_RIGHT: Record<Facing, Facing> = { N: 'E', E: 'S', S: 'W', W: 'N' };
 
+type ReachabilityKey = number | string;
+
+type ReachableNode = {
+	cell: Cell;
+	cost: number;
+	parent: number;
+};
+
 export function facingStep(facing: Facing): Cell {
 	return { ...FACING_STEPS[facing] };
 }
@@ -68,26 +76,28 @@ export function computeReachableCells(
 	budget: number,
 	occupied: readonly Cell[] = []
 ): ReachableCell[] {
-	const startKey = cellKey(start);
-	const blocked = new Set(occupied.map(cellKey));
+	const startKey = reachabilityKey(map, start);
+	const blocked = new Set(occupied.map((cell) => reachabilityKey(map, cell)));
 	blocked.delete(startKey);
 
-	const costs = new Map<string, number>([[startKey, 0]]);
-	const paths = new Map<string, Cell[]>([[startKey, [{ ...start }]]]);
-	const frontier: { cell: Cell; cost: number }[] = [{ cell: { ...start }, cost: 0 }];
+	const nodes: ReachableNode[] = [{ cell: { ...start }, cost: 0, parent: -1 }];
+	const nodeByKey = new Map<ReachabilityKey, number>([[startKey, 0]]);
+	const frontier: { nodeIndex: number; cost: number }[] = [{ nodeIndex: 0, cost: 0 }];
 
 	while (frontier.length > 0) {
 		const current = takeCheapest(frontier);
-		const currentKey = cellKey(current.cell);
-		const currentCost = costs.get(currentKey);
-		if (currentCost === undefined || current.cost > currentCost) {
+		const node = nodes[current.nodeIndex];
+		if (current.cost > node.cost) {
 			continue;
 		}
 
 		for (const facing of CARDINAL_FACINGS) {
-			const next = stepCell(current.cell, facing);
-			const nextKey = cellKey(next);
-			if (!inBounds(map, next) || blocked.has(nextKey)) {
+			const next = stepCell(node.cell, facing);
+			if (!inBounds(map, next)) {
+				continue;
+			}
+			const nextKey = reachabilityKey(map, next);
+			if (blocked.has(nextKey)) {
 				continue;
 			}
 
@@ -101,28 +111,32 @@ export function computeReachableCells(
 				continue;
 			}
 
-			const knownCost = costs.get(nextKey);
-			if (knownCost !== undefined && knownCost <= totalCost) {
+			const knownIndex = nodeByKey.get(nextKey);
+			if (knownIndex !== undefined && nodes[knownIndex].cost <= totalCost) {
 				continue;
 			}
 
-			costs.set(nextKey, totalCost);
-			paths.set(nextKey, [...paths.get(currentKey)!, next]);
-			frontier.push({ cell: next, cost: totalCost });
+			let nextIndex = knownIndex;
+			if (nextIndex === undefined) {
+				nextIndex = nodes.length;
+				nodes.push({ cell: next, cost: totalCost, parent: current.nodeIndex });
+				nodeByKey.set(nextKey, nextIndex);
+			} else {
+				nodes[nextIndex].cost = totalCost;
+				nodes[nextIndex].parent = current.nodeIndex;
+			}
+			frontier.push({ nodeIndex: nextIndex, cost: totalCost });
 		}
 	}
 
-	return [...costs.entries()]
-		.sort(([, firstCost], [, secondCost]) => firstCost - secondCost)
-		.map(([cellKeyValue, cost]) => {
-			const path = paths.get(cellKeyValue)!;
-			const destination = path[path.length - 1];
-			return {
-				cell: { ...destination },
-				cost,
-				path: path.map((pathCell) => ({ ...pathCell }))
-			};
-		});
+	return nodes
+		.map((node, nodeIndex) => ({ node, nodeIndex }))
+		.sort((first, second) => first.node.cost - second.node.cost)
+		.map(({ node, nodeIndex }) => ({
+			cell: { ...node.cell },
+			cost: node.cost,
+			path: reachablePath(nodes, nodeIndex)
+		}));
 }
 
 /**
@@ -141,14 +155,7 @@ export function legalAimCells(map: BattleMap, origin: Cell, targeting: MoveTarge
 
 	const aims: Cell[] = [];
 	for (const facing of CARDINAL_FACINGS) {
-		const step = FACING_STEPS[facing];
-		for (let range = 1; range <= targeting.range; range++) {
-			const aim = { x: origin.x + step.x * range, z: origin.z + step.z * range };
-			if (affectedCells(map, origin, aim, targeting).length === 0) {
-				break;
-			}
-			aims.push(aim);
-		}
+		aims.push(...rayCells(map, origin, FACING_STEPS[facing], targeting.range));
 	}
 	return aims;
 }
@@ -281,11 +288,28 @@ export function canEnterTerrain(terrain: Terrain | null): boolean {
 	return enterCost(terrain) !== null;
 }
 
-function cellKey(cell: Cell): string {
+function reachabilityKey(map: BattleMap, cell: Cell): ReachabilityKey {
+	if (inBounds(map, cell)) {
+		return cell.z * map.width + cell.x;
+	}
 	return `${cell.x},${cell.z}`;
 }
 
-function takeCheapest(frontier: { cell: Cell; cost: number }[]): { cell: Cell; cost: number } {
+function reachablePath(nodes: readonly ReachableNode[], nodeIndex: number): Cell[] {
+	const path: Cell[] = [];
+	let cursor = nodeIndex;
+	while (cursor >= 0) {
+		const node = nodes[cursor];
+		path.push({ ...node.cell });
+		cursor = node.parent;
+	}
+	return path.reverse();
+}
+
+function takeCheapest(frontier: { nodeIndex: number; cost: number }[]): {
+	nodeIndex: number;
+	cost: number;
+} {
 	let cheapest = 0;
 	for (let index = 1; index < frontier.length; index++) {
 		if (frontier[index].cost < frontier[cheapest].cost) {

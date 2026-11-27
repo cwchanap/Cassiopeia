@@ -34,6 +34,7 @@ import type {
 	FighterSetup,
 	MoveDefinition,
 	MoveId,
+	MoveTargeting,
 	ReachableCell
 } from './types';
 
@@ -82,6 +83,16 @@ export type DamageFactors = {
 	passivePercent: number;
 	attackPercent: number;
 };
+
+/** Battle-module-only memoization for pure lookups over immutable states within one planner decision. */
+export type BattleRuleCache = {
+	reachable: WeakMap<BattleState, Map<string, ReachableCell[]>>;
+	moveTargets: WeakMap<BattleState, Map<string, BattleMoveTarget[]>>;
+};
+
+export function createBattleRuleCache(): BattleRuleCache {
+	return { reachable: new WeakMap(), moveTargets: new WeakMap() };
+}
 
 /** Single pure damage formula shared by every primary hit and every counter. */
 export function computeDamage(factors: DamageFactors): number {
@@ -170,6 +181,23 @@ export function applyBattleCommand(
 	state: BattleState,
 	command: BattleCommand
 ): BattleCommandResult {
+	return applyBattleCommandInternal(state, command);
+}
+
+/** The same reducer with battle-module-local memoization for one immutable planner decision. */
+export function applyBattleCommandWithRuleCache(
+	state: BattleState,
+	command: BattleCommand,
+	cache: BattleRuleCache
+): BattleCommandResult {
+	return applyBattleCommandInternal(state, command, cache);
+}
+
+function applyBattleCommandInternal(
+	state: BattleState,
+	command: BattleCommand,
+	cache?: BattleRuleCache
+): BattleCommandResult {
 	if (BATTLE_COMMAND_TYPES[command.type] !== true) {
 		return reject('invalidCommand');
 	}
@@ -183,16 +211,16 @@ export function applyBattleCommand(
 		return reject(phase);
 	}
 
-	const next = copyState(state);
-	const actor = fighterIn(next, command.actorId);
+	const next = cache ? copyStateForPlanning(state) : copyState(state);
+	const actor = mutableFighter(next, state, command.actorId);
 
 	switch (command.type) {
 		case 'move': {
 			if (!isStandable(next.map, command.cell) || sameCell(command.cell, actor.cell)) {
 				return reject('invalidCell');
 			}
-			const destination = reachableFrom(next, actor).find((entry) =>
-				sameCell(entry.cell, command.cell)
+			const destination = cachedReachable(state, fighterIn(state, command.actorId), cache).find(
+				(entry) => sameCell(entry.cell, command.cell)
 			);
 			if (!destination) {
 				return reject('unreachable');
@@ -239,7 +267,7 @@ export function applyBattleCommand(
 				return reject('invalidFacing');
 			}
 			const events: BattleEvent[] = [];
-			finishTurn(next, actor, command.facing, events);
+			finishTurn(next, state, actor, command.facing, events);
 			return { accepted: true, state: next, events };
 		}
 		case 'useMove': {
@@ -247,13 +275,16 @@ export function applyBattleCommand(
 			if (!owned.ok) {
 				return reject(owned.reason);
 			}
-			const target = moveTargets(next, actor, owned.move).find((entry) =>
-				sameCell(entry.aim, command.aim)
-			);
+			const target = cachedMoveTargets(
+				state,
+				fighterIn(state, command.actorId),
+				owned.move,
+				cache
+			).find((entry) => sameCell(entry.aim, command.aim));
 			if (!target) {
 				return reject('invalidAim');
 			}
-			return resolveAttack(next, actor, owned.move, target);
+			return resolveAttack(next, state, actor, owned.move, target);
 		}
 		case 'useItem': {
 			const pill = resolvePill(next, actor, command.pillId, command.targetId);
@@ -261,7 +292,8 @@ export function applyBattleCommand(
 				return reject(pill.reason);
 			}
 
-			const { effect, target } = pill;
+			const { effect } = pill;
+			const target = mutableFighter(next, state, pill.target.id);
 			const resourceBefore = effect.resource === 'health' ? target.health : target.qi;
 			const maximum = effect.resource === 'health' ? target.maxHealth : target.maxQi;
 			const resourceAfter = Math.min(maximum, resourceBefore + effect.amount);
@@ -348,6 +380,23 @@ export function getReachableCells(state: BattleState, fighterId?: string): Reach
  * aim is accepted by `useMove` on the unchanged state. Empty when the state or move is unusable.
  */
 export function getMoveTargets(state: BattleState, moveId: MoveId): BattleMoveTarget[] {
+	return moveTargetsQuery(state, moveId);
+}
+
+/** The same target query with battle-module-local memoization for one immutable planner decision. */
+export function getMoveTargetsWithRuleCache(
+	state: BattleState,
+	moveId: MoveId,
+	cache: BattleRuleCache
+): BattleMoveTarget[] {
+	return moveTargetsQuery(state, moveId, cache);
+}
+
+function moveTargetsQuery(
+	state: BattleState,
+	moveId: MoveId,
+	cache?: BattleRuleCache
+): BattleMoveTarget[] {
 	if (state.outcome !== 'ongoing' || state.hasActed) {
 		return [];
 	}
@@ -359,7 +408,7 @@ export function getMoveTargets(state: BattleState, moveId: MoveId): BattleMoveTa
 	if (!owned.ok) {
 		return [];
 	}
-	return moveTargets(state, actor, owned.move);
+	return cachedMoveTargets(state, actor, owned.move, cache);
 }
 
 /** Accepted attack data shared by the public forecast and the battle-module AI scorer. */
@@ -427,7 +476,8 @@ export function summarizeAttack(
 		actorHealthAfter: actor.health,
 		actorDefeated: actor.health === 0,
 		outcome: result.state.outcome,
-		activeFighterId: getTurnOrder(result.state).activeId,
+		activeFighterId:
+			result.state.outcome === 'ongoing' ? (activeFighter(result.state)?.id ?? null) : null,
 		round: result.state.round
 	};
 }
@@ -510,9 +560,13 @@ function moveTargets(
 	move: MoveDefinition
 ): BattleMoveTarget[] {
 	const targets: BattleMoveTarget[] = [];
+	const hostileIds = hostileIdsByCell(state, actor);
 	for (const aim of legalAimCells(state.map, actor.cell, move.targeting)) {
-		const cells = affectedCells(state.map, actor.cell, aim, move.targeting);
-		const targetIds = hostileIdsIn(state, actor, cells);
+		const cells =
+			move.targeting.shape === 'single'
+				? [{ ...aim }]
+				: affectedCells(state.map, actor.cell, aim, move.targeting);
+		const targetIds = hostileIdsIn(hostileIds, cells);
 		if (targetIds.length > 0) {
 			targets.push({ aim, cells, targetIds });
 		}
@@ -531,15 +585,113 @@ function reachableFrom(state: BattleState, fighter: BattleFighter): ReachableCel
 	);
 }
 
-function hostileIdsIn(state: BattleState, actor: BattleFighter, cells: readonly Cell[]): string[] {
+function cachedReachable(
+	state: BattleState,
+	fighter: BattleFighter,
+	cache: BattleRuleCache | undefined
+): ReachableCell[] {
+	if (!cache) {
+		return reachableFrom(state, fighter);
+	}
+	let byFighter = cache.reachable.get(state);
+	if (!byFighter) {
+		byFighter = new Map();
+		cache.reachable.set(state, byFighter);
+	}
+	const cached = byFighter.get(fighter.id);
+	if (cached) {
+		return cached;
+	}
+	const reachable = reachableFrom(state, fighter);
+	byFighter.set(fighter.id, reachable);
+	return reachable;
+}
+
+function targetingCacheKey(targeting: MoveTargeting): string {
+	if (targeting.shape === 'single') {
+		return `single:${targeting.range}`;
+	}
+	if (targeting.shape === 'line') {
+		return `line:${targeting.length}`;
+	}
+	return 'arc';
+}
+
+function cachedMoveTargets(
+	state: BattleState,
+	actor: BattleFighter,
+	move: MoveDefinition,
+	cache: BattleRuleCache | undefined
+): BattleMoveTarget[] {
+	if (!cache) {
+		return moveTargets(state, actor, move);
+	}
+	let byMove = cache.moveTargets.get(state);
+	if (!byMove) {
+		byMove = new Map();
+		cache.moveTargets.set(state, byMove);
+	}
+	const key = `${actor.id}:${targetingCacheKey(move.targeting)}`;
+	const cached = byMove.get(key);
+	if (cached) {
+		return cached;
+	}
+	if (move.targeting.shape === 'single') {
+		const maximumRange = maximumOwnedSingleRange(actor);
+		if (maximumRange > move.targeting.range) {
+			const range = move.targeting.range;
+			const scanKey = `${actor.id}:single-scan:${maximumRange}`;
+			let broadTargets = byMove.get(scanKey);
+			if (!broadTargets) {
+				broadTargets = moveTargets(state, actor, {
+					...move,
+					targeting: { shape: 'single', range: maximumRange }
+				});
+				byMove.set(scanKey, broadTargets);
+			}
+			const targets = broadTargets.filter(
+				(target) => cellDistance(actor.cell, target.aim) <= range
+			);
+			byMove.set(key, targets);
+			return targets;
+		}
+	}
+	const targets = moveTargets(state, actor, move);
+	byMove.set(key, targets);
+	return targets;
+}
+
+function maximumOwnedSingleRange(actor: BattleFighter): number {
+	let maximum = 0;
+	for (const moveId of Object.values(EXTERNAL_ARTS[actor.externalArtId].moves)) {
+		const targeting = MOVES[moveId].targeting;
+		if (targeting.shape === 'single') {
+			maximum = Math.max(maximum, targeting.range);
+		}
+	}
+	return maximum;
+}
+
+function hostileIdsByCell(state: BattleState, actor: BattleFighter): Map<string, string> {
+	const ids = new Map<string, string>();
+	for (const fighter of state.fighters) {
+		if (fighter.health === 0 || fighter.side === actor.side) {
+			continue;
+		}
+		const key = cellKey(fighter.cell);
+		if (!ids.has(key)) {
+			ids.set(key, fighter.id);
+		}
+	}
+	return ids;
+}
+
+function hostileIdsIn(hostileIds: ReadonlyMap<string, string>, cells: readonly Cell[]): string[] {
 	const ids: string[] = [];
 	for (const cell of cells) {
-		const fighter = state.fighters.find(
-			(candidate) =>
-				candidate.health > 0 && candidate.side !== actor.side && sameCell(candidate.cell, cell)
-		);
-		if (fighter) {
-			ids.push(fighter.id);
+		const fighterId = hostileIds.get(cellKey(cell));
+		if (fighterId !== undefined) {
+			ids.push(fighterId);
 		}
 	}
 	return ids;
@@ -552,6 +704,7 @@ function hostileIdsIn(state: BattleState, actor: BattleFighter, cells: readonly 
  */
 function resolveAttack(
 	state: BattleState,
+	sourceState: BattleState,
 	actor: BattleFighter,
 	move: MoveDefinition,
 	target: BattleMoveTarget
@@ -570,7 +723,9 @@ function resolveAttack(
 		qiAfter: actor.qi
 	});
 
-	const defenders = target.targetIds.map((fighterId) => fighterIn(state, fighterId));
+	const defenders = target.targetIds.map((fighterId) =>
+		mutableFighter(state, sourceState, fighterId)
+	);
 	for (const defender of defenders) {
 		resolveHit(state, events, actor, defender, {
 			baseDamage: move.baseDamage,
@@ -613,7 +768,7 @@ function resolveAttack(
 
 	if (actor.health === 0) {
 		// Terminal hero and last-enemy deaths already ended the battle above.
-		finishTurn(state, actor, actor.facing, events);
+		finishTurn(state, sourceState, actor, actor.facing, events);
 	}
 	return { accepted: true, state, events };
 }
@@ -727,6 +882,7 @@ function battleOutcome(state: BattleState): BattleOutcome {
  */
 function finishTurn(
 	state: BattleState,
+	sourceState: BattleState,
 	actor: BattleFighter,
 	facingAfter: Facing,
 	events: BattleEvent[]
@@ -738,7 +894,7 @@ function finishTurn(
 		const next = livingFighter(state, state.turnOrder[index]);
 		if (next) {
 			state.turnIndex = index;
-			beginTurn(state, next, events);
+			beginTurn(state, mutableFighter(state, sourceState, next.id), events);
 			return;
 		}
 	}
@@ -752,7 +908,7 @@ function finishTurn(
 	if (!first) {
 		throw new Error('ongoing battle has no living fighter');
 	}
-	beginTurn(state, first, events);
+	beginTurn(state, mutableFighter(state, sourceState, first.id), events);
 }
 
 /** Clears the fighter's prior Guard, resets the phase flags and regenerates qi. */
@@ -873,15 +1029,51 @@ function fighterIn(state: BattleState, fighterId: string): BattleFighter {
 	return fighter;
 }
 
+/** Clone a shallow-copied fighter before mutation; already-copied public states pass through. */
+function mutableFighter(state: BattleState, source: BattleState, fighterId: string): BattleFighter {
+	const index = state.fighters.findIndex((candidate) => candidate.id === fighterId);
+	if (index < 0) {
+		throw new Error(`unknown fighter: ${fighterId}`);
+	}
+	const fighter = state.fighters[index];
+	if (fighter !== source.fighters[index]) {
+		return fighter;
+	}
+	const copy = { ...fighter, cell: fighter.cell };
+	state.fighters[index] = copy;
+	return copy;
+}
+
 /** Movement points from agility and the internal art; exported only inside the battle module. */
 export function movementBudget(fighter: BattleFighter): number {
 	return 2 + Math.floor(fighter.agility / 10) + INTERNAL_ARTS[fighter.internalArtId].moveBonus;
 }
 
+/** Planner-local copy: mutable fighters are cloned on write because speculative states never escape. */
+function copyStateForPlanning(state: BattleState): BattleState {
+	return {
+		map: state.map,
+		fighters: state.fighters.slice(),
+		heroId: state.heroId,
+		squadBag: { ...state.squadBag },
+		round: state.round,
+		turnOrder: state.turnOrder,
+		turnIndex: state.turnIndex,
+		hasMoved: state.hasMoved,
+		hasActed: state.hasActed,
+		outcome: state.outcome
+	};
+}
+
 function copyState(state: BattleState): BattleState {
+	const fighters: BattleFighter[] = new Array(state.fighters.length);
+	for (let index = 0; index < state.fighters.length; index++) {
+		const fighter = state.fighters[index];
+		fighters[index] = { ...fighter, cell: { ...fighter.cell } };
+	}
 	return {
 		map: copyMap(state.map),
-		fighters: state.fighters.map((fighter) => ({ ...fighter, cell: { ...fighter.cell } })),
+		fighters,
 		heroId: state.heroId,
 		squadBag: { ...state.squadBag },
 		round: state.round,
@@ -894,10 +1086,14 @@ function copyState(state: BattleState): BattleState {
 }
 
 function copyMap(map: BattleMap): BattleMap {
+	const terrain: BattleMap['terrain'] = new Array(map.terrain.length);
+	for (let index = 0; index < map.terrain.length; index++) {
+		terrain[index] = map.terrain[index].slice();
+	}
 	return {
 		width: map.width,
 		height: map.height,
-		terrain: map.terrain.map((row) => [...row])
+		terrain
 	};
 }
 
