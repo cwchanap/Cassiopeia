@@ -11,14 +11,16 @@ import {
 } from './grid';
 import {
 	applyBattleCommand,
+	applyBattleCommandWithRuleCache,
+	createBattleRuleCache,
 	facingPercentFor,
-	getMoveTargets,
+	getMoveTargetsWithRuleCache,
 	getReachableCells,
 	getTurnOrder,
 	movementBudget,
 	summarizeAttack
 } from './rules';
-import type { AttackSummary } from './rules';
+import type { AttackSummary, BattleRuleCache } from './rules';
 import type {
 	AiArchetypeWeights,
 	BattleAiProfile,
@@ -29,7 +31,8 @@ import type {
 	BattleState,
 	Cell,
 	Facing,
-	MoveSlot
+	MoveSlot,
+	MoveTargeting
 } from './types';
 
 type AcceptedCommandResult = Extract<BattleCommandResult, { accepted: true }>;
@@ -40,10 +43,16 @@ type PositionCandidate = {
 };
 
 type Candidate = {
-	commands: BattleCommand[];
 	actionResult: AcceptedCommandResult;
+	endTurnFacing: Facing | null;
 	rank: number;
 	score: number;
+};
+
+type WinningCandidate = {
+	position: PositionCandidate;
+	action: BattleCommand;
+	candidate: Candidate;
 };
 
 /** Battle-module threat estimate: hostile id, threatened cell key, then unique attack origins. */
@@ -53,11 +62,18 @@ type DecisionContext = {
 	profile: BattleAiProfile;
 	weights: AiArchetypeWeights;
 	threatMap: ActorExcludedThreatMap;
+	maximumMoveReach: number;
+	finalFacings: readonly Facing[];
 };
 
 type ThreateningHostile = {
 	fighter: BattleFighter;
 	origins: Cell[];
+};
+
+type PositionAssessment = {
+	facingIndependentScore: number;
+	threats: ThreateningHostile[];
 };
 
 const MOVE_SLOTS: readonly MoveSlot[] = ['basic', 'technique', 'finisher'];
@@ -88,27 +104,29 @@ export function planBattleTurn(
 	const decision: DecisionContext = {
 		profile,
 		weights: AI_ARCHETYPES[profile.archetype],
-		threatMap: buildActorExcludedThreatMap(state, actor)
+		threatMap: buildActorExcludedThreatMap(state, actor),
+		maximumMoveReach: maximumMoveReach(actor),
+		finalFacings: finalFacings(actor.facing)
 	};
 	if (state.hasActed) {
 		return planEndTurnOnly(state, actor, decision);
 	}
 
-	let best: Candidate | null = null;
-	for (const position of enumeratePositions(state, actor)) {
-		for (const action of enumerateActions(position.state, actor)) {
-			const actionResult = applyBattleCommand(position.state, action);
+	const ruleCache = createBattleRuleCache();
+	let best: WinningCandidate | null = null;
+	for (const position of enumeratePositions(state, actor, ruleCache)) {
+		for (const action of enumerateActions(position.state, actor, ruleCache)) {
+			const actionResult = applyBattleCommandWithRuleCache(position.state, action, ruleCache);
 			if (!actionResult.accepted) {
 				throw new Error(`battle AI enumerated action was rejected: ${actionResult.reason}`);
 			}
-			for (const candidate of completeCandidates(position, action, actionResult, actor, decision)) {
-				if (
-					!best ||
-					candidate.rank > best.rank ||
-					(candidate.rank === best.rank && candidate.score > best.score)
-				) {
-					best = candidate;
-				}
+			const candidate = completeCandidate(action, actionResult, actor, decision);
+			if (
+				!best ||
+				candidate.rank > best.candidate.rank ||
+				(candidate.rank === best.candidate.rank && candidate.score > best.candidate.score)
+			) {
+				best = { position, action, candidate };
 			}
 		}
 	}
@@ -116,14 +134,20 @@ export function planBattleTurn(
 	if (!best) {
 		throw new Error('battle AI found no legal action candidates');
 	}
-	const endTurn = best.commands.find((command) => command.type === 'endTurn');
-	if (endTurn) {
-		const validation = applyBattleCommand(best.actionResult.state, endTurn);
+	const commands = [...best.position.commands, best.action];
+	if (best.candidate.endTurnFacing !== null) {
+		const endTurn: BattleCommand = {
+			type: 'endTurn',
+			actorId: actor.id,
+			facing: best.candidate.endTurnFacing
+		};
+		const validation = applyBattleCommand(best.candidate.actionResult.state, endTurn);
 		if (!validation.accepted) {
 			throw new Error(`battle AI winning endTurn was rejected: ${validation.reason}`);
 		}
+		commands.push(endTurn);
 	}
-	return best.commands.map(copyCommand);
+	return commands.map(copyCommand);
 }
 
 /**
@@ -139,6 +163,7 @@ export function buildActorExcludedThreatMap(
 	for (const hostile of state.fighters.filter(
 		(fighter) => fighter.health > 0 && fighter.side !== actor.side
 	)) {
+		const threatenedByIndex = new Map<number, Cell[]>();
 		const threatenedByCell = new Map<string, Cell[]>();
 		threatMap.set(hostile.id, threatenedByCell);
 		const occupied = state.fighters
@@ -156,30 +181,68 @@ export function buildActorExcludedThreatMap(
 			hostile.maxQi,
 			hostile.qi + INTERNAL_ARTS[hostile.internalArtId].qiRegen
 		);
-		const affordableMoves = MOVE_SLOTS.map(
-			(slot) => MOVES[EXTERNAL_ARTS[hostile.externalArtId].moves[slot]]
-		).filter((move) => move.qiCost <= qiAfterRegen);
+		const affordableTargeting: MoveTargeting[] = [];
+		const seenTargeting = new Set<string>();
+		for (const slot of MOVE_SLOTS) {
+			const move = MOVES[EXTERNAL_ARTS[hostile.externalArtId].moves[slot]];
+			if (move.qiCost > qiAfterRegen) {
+				continue;
+			}
+			const key = targetingKey(move.targeting);
+			if (!seenTargeting.has(key)) {
+				seenTargeting.add(key);
+				affordableTargeting.push(move.targeting);
+			}
+		}
 
 		for (const entry of reachable) {
-			const threatenedKeys = new Set<string>();
-			for (const move of affordableMoves) {
-				for (const aim of legalAimCells(state.map, entry.cell, move.targeting)) {
-					for (const threatened of affectedCells(state.map, entry.cell, aim, move.targeting)) {
-						threatenedKeys.add(cellKey(threatened));
+			const threatenedIndexes = new Set<number>();
+			for (const targeting of affordableTargeting) {
+				for (const aim of legalAimCells(state.map, entry.cell, targeting)) {
+					if (targeting.shape === 'single') {
+						threatenedIndexes.add(threatIndex(state.map, aim));
+						continue;
+					}
+					for (const threatened of affectedCells(state.map, entry.cell, aim, targeting)) {
+						threatenedIndexes.add(threatIndex(state.map, threatened));
 					}
 				}
 			}
-			for (const key of threatenedKeys) {
-				const origins = threatenedByCell.get(key);
+			const origin = copyCell(entry.cell);
+			for (const index of threatenedIndexes) {
+				const origins = threatenedByIndex.get(index);
 				if (origins) {
-					origins.push(copyCell(entry.cell));
+					origins.push(origin);
 				} else {
-					threatenedByCell.set(key, [copyCell(entry.cell)]);
+					threatenedByIndex.set(index, [origin]);
 				}
 			}
 		}
+		for (const [index, origins] of threatenedByIndex) {
+			threatenedByCell.set(threatKey(state.map, index), origins);
+		}
 	}
 	return threatMap;
+}
+
+function threatIndex(map: BattleMap, cell: Cell): number {
+	return cell.z * map.width + cell.x;
+}
+
+function threatKey(map: BattleMap, index: number): string {
+	const x = index % map.width;
+	const z = Math.floor(index / map.width);
+	return `${x},${z}`;
+}
+
+function targetingKey(targeting: MoveTargeting): string {
+	if (targeting.shape === 'single') {
+		return `single:${targeting.range}`;
+	}
+	if (targeting.shape === 'line') {
+		return `line:${targeting.length}`;
+	}
+	return 'arc';
 }
 
 /** Profile authoring is external state, so validate the runtime shape before every early exit. */
@@ -228,10 +291,11 @@ function planEndTurnOnly(
 	actor: BattleFighter,
 	decision: DecisionContext
 ): BattleCommand[] {
+	const assessment = assessPosition(state, actor, decision);
 	let facing = actor.facing;
 	let bestScore: number | null = null;
-	for (const candidateFacing of finalFacings(actor.facing)) {
-		const score = scorePosition(state, actor, candidateFacing, decision);
+	for (const candidateFacing of decision.finalFacings) {
+		const score = scorePosition(assessment, actor, candidateFacing, decision.weights);
 		if (bestScore === null || score > bestScore) {
 			facing = candidateFacing;
 			bestScore = score;
@@ -247,7 +311,11 @@ function planEndTurnOnly(
 }
 
 /** Stay first, then legal moves in the movement query's stable cost/discovery order. */
-function enumeratePositions(state: BattleState, actor: BattleFighter): PositionCandidate[] {
+function enumeratePositions(
+	state: BattleState,
+	actor: BattleFighter,
+	ruleCache: BattleRuleCache
+): PositionCandidate[] {
 	if (state.hasMoved) {
 		return [{ state, commands: [] }];
 	}
@@ -266,7 +334,7 @@ function enumeratePositions(state: BattleState, actor: BattleFighter): PositionC
 			actorId: actor.id,
 			cell: copyCell(entry.cell)
 		};
-		const moved = applyBattleCommand(state, command);
+		const moved = applyBattleCommandWithRuleCache(state, command, ruleCache);
 		if (!moved.accepted) {
 			throw new Error(`battle AI legal move was rejected: ${moved.reason}`);
 		}
@@ -279,12 +347,16 @@ function enumeratePositions(state: BattleState, actor: BattleFighter): PositionC
 }
 
 /** Owned slots in fixed order, every legal aim returned for each, then Guard and Gather qi. */
-function enumerateActions(state: BattleState, actor: BattleFighter): BattleCommand[] {
+function enumerateActions(
+	state: BattleState,
+	actor: BattleFighter,
+	ruleCache: BattleRuleCache
+): BattleCommand[] {
 	const actions: BattleCommand[] = [];
 	const art = EXTERNAL_ARTS[actor.externalArtId];
 	for (const slot of MOVE_SLOTS) {
 		const moveId = art.moves[slot];
-		for (const target of getMoveTargets(state, moveId)) {
+		for (const target of getMoveTargetsWithRuleCache(state, moveId, ruleCache)) {
 			actions.push({
 				type: 'useMove',
 				actorId: actor.id,
@@ -298,42 +370,51 @@ function enumerateActions(state: BattleState, actor: BattleFighter): BattleComma
 	return actions;
 }
 
-function completeCandidates(
-	position: PositionCandidate,
+function completeCandidate(
 	action: BattleCommand,
 	actionResult: AcceptedCommandResult,
 	actor: BattleFighter,
 	decision: DecisionContext
-): Candidate[] {
+): Candidate {
 	const attack = action.type === 'useMove' ? summarizeAttack(actionResult, actor.id) : null;
 	const rank = outcomeRank(actionResult.state, actor);
 	const actionScore = scoreAction(actionResult, actor, action, attack, decision.weights);
 	const actorAfter = fighterIn(actionResult.state, actor.id);
+	const assessment = assessPosition(actionResult.state, actorAfter, decision);
 	const outcome = attack ? attack.outcome : actionResult.state.outcome;
 	const actorDefeated = attack ? attack.actorDefeated : actorAfter.health === 0;
-	const activeFighterId = attack
-		? attack.activeFighterId
-		: getTurnOrder(actionResult.state).activeId;
+	const activeFighterId = attack ? attack.activeFighterId : actor.id;
 	const canEndTurn = outcome === 'ongoing' && !actorDefeated && activeFighterId === actor.id;
 
 	if (!canEndTurn) {
-		return [
-			{
-				commands: [...position.commands, action],
-				actionResult,
-				rank,
-				score:
-					actionScore + scorePosition(actionResult.state, actorAfter, actorAfter.facing, decision)
-			}
-		];
+		return {
+			actionResult,
+			endTurnFacing: null,
+			rank,
+			score:
+				actionScore + scorePosition(assessment, actorAfter, actorAfter.facing, decision.weights)
+		};
 	}
 
-	return finalFacings(actorAfter.facing).map((facing) => ({
-		commands: [...position.commands, action, { type: 'endTurn', actorId: actor.id, facing }],
+	let facing = actorAfter.facing;
+	let bestPositionScore: number | null = null;
+	for (const candidateFacing of decision.finalFacings) {
+		const positionScore = scorePosition(assessment, actorAfter, candidateFacing, decision.weights);
+		if (bestPositionScore === null || positionScore > bestPositionScore) {
+			facing = candidateFacing;
+			bestPositionScore = positionScore;
+		}
+	}
+	if (bestPositionScore === null) {
+		throw new Error('battle AI found no final facing candidates');
+	}
+
+	return {
 		actionResult,
+		endTurnFacing: facing,
 		rank,
-		score: actionScore + scorePosition(actionResult.state, actorAfter, facing, decision)
-	}));
+		score: actionScore + bestPositionScore
+	};
 }
 
 /** Terminal outcomes rank two when the actor's side won and zero when it lost. */
@@ -386,17 +467,16 @@ function scoreAction(
 }
 
 /**
- * Scores the post-action position for one hypothetical final facing. Terminal states and dead
- * actors skip these terms; killed hostiles are filtered from the one precomputed threat lookup.
+ * Computes every post-action positional term that does not depend on final facing. Terminal states
+ * and dead actors skip these terms; killed hostiles are filtered from the one precomputed threat lookup.
  */
-function scorePosition(
+function assessPosition(
 	state: BattleState,
 	actor: BattleFighter,
-	facing: Facing,
 	decision: DecisionContext
-): number {
+): PositionAssessment {
 	if (state.outcome !== 'ongoing' || actor.health === 0) {
-		return 0;
+		return { facingIndependentScore: 0, threats: [] };
 	}
 
 	const weights = decision.weights;
@@ -405,16 +485,22 @@ function scorePosition(
 		score += weights.bamboo;
 	}
 
-	const hostiles = state.fighters.filter(
-		(fighter) => fighter.health > 0 && fighter.side !== actor.side
-	);
-	if (hostiles.length > 0) {
-		const nearest = Math.min(...hostiles.map((hostile) => cellDistance(actor.cell, hostile.cell)));
-		const preferredRange = Math.min(weights.preferredRange, maximumMoveReach(actor));
+	let nearest: number | null = null;
+	let adjacentHostiles = 0;
+	for (const hostile of state.fighters) {
+		if (hostile.health === 0 || hostile.side === actor.side) {
+			continue;
+		}
+		const distance = cellDistance(actor.cell, hostile.cell);
+		nearest = nearest === null ? distance : Math.min(nearest, distance);
+		if (distance === 1) {
+			adjacentHostiles += 1;
+		}
+	}
+	if (nearest !== null) {
+		const preferredRange = Math.min(weights.preferredRange, decision.maximumMoveReach);
 		score += weights.rangeDeviation * Math.abs(nearest - preferredRange);
-		score +=
-			weights.adjacentHostile *
-			hostiles.filter((hostile) => cellDistance(actor.cell, hostile.cell) === 1).length;
+		score += weights.adjacentHostile * adjacentHostiles;
 	}
 	if (decision.profile.archetype === 'guardian') {
 		score += weights.postDistance * cellDistance(actor.cell, decision.profile.post);
@@ -422,20 +508,32 @@ function scorePosition(
 
 	const threats = threateningHostiles(state, actor, decision.threatMap);
 	score += weights.threatCount * threats.length;
+	if (actor.guarding && threats.length > 0) {
+		score += weights.guard;
+	}
+	return { facingIndependentScore: score, threats };
+}
+
+/** Adds only the rear-threat and current-exposure terms for one hypothetical final facing. */
+function scorePosition(
+	assessment: PositionAssessment,
+	actor: BattleFighter,
+	facing: Facing,
+	weights: AiArchetypeWeights
+): number {
 	let rearThreats = 0;
 	let currentExposure = 0;
-	for (const threat of threats) {
+	for (const threat of assessment.threats) {
 		if (threat.origins.some((origin) => facingPercentFor(actor.cell, facing, origin) === 150)) {
 			rearThreats += 1;
 		}
 		currentExposure += facingSteps(facingPercentFor(actor.cell, facing, threat.fighter.cell));
 	}
-	score += weights.rearThreat * rearThreats;
-	score += weights.currentExposure * currentExposure;
-	if (actor.guarding && threats.length > 0) {
-		score += weights.guard;
-	}
-	return score;
+	return (
+		assessment.facingIndependentScore +
+		weights.rearThreat * rearThreats +
+		weights.currentExposure * currentExposure
+	);
 }
 
 function threateningHostiles(
@@ -444,9 +542,10 @@ function threateningHostiles(
 	threatMap: ActorExcludedThreatMap
 ): ThreateningHostile[] {
 	const threats: ThreateningHostile[] = [];
-	for (const hostile of state.fighters.filter(
-		(fighter) => fighter.health > 0 && fighter.side !== actor.side
-	)) {
+	for (const hostile of state.fighters) {
+		if (hostile.health === 0 || hostile.side === actor.side) {
+			continue;
+		}
 		const origins = threatMap.get(hostile.id)?.get(cellKey(actor.cell));
 		if (origins && origins.length > 0) {
 			threats.push({ fighter: hostile, origins });
