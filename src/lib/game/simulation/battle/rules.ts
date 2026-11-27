@@ -674,7 +674,7 @@ function maximumOwnedSingleRange(actor: BattleFighter): number {
 function hostileIdsByCell(state: BattleState, actor: BattleFighter): Map<string, string> {
 	const ids = new Map<string, string>();
 	for (const fighter of state.fighters) {
-		if (fighter.health === 0 || fighter.side === actor.side) {
+		if (fighter.health <= 0 || fighter.side === actor.side) {
 			continue;
 		}
 		const key = cellKey(fighter.cell);
