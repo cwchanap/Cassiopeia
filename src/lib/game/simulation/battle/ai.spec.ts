@@ -1207,7 +1207,7 @@ describe('terminal and side behavior', () => {
 	it('ranks a low-damage immediate win above a higher-scoring ongoing attack', () => {
 		const created = battleState(
 			setup([
-				placement('hero', { x: 2, z: 1 }, { facing: 'S' }),
+				placement('hero', { x: 2, z: 1 }, { template: { maxHealth: 1 }, facing: 'S' }),
 				placement(
 					'champion',
 					{ x: 3, z: 2 },
@@ -1221,9 +1221,7 @@ describe('terminal and side behavior', () => {
 			])
 		);
 		expect(getTurnOrder(created).activeId).toBe('raider');
-		const weakened = patchFighter(created, 'hero', { health: 1 });
-		const spent = patchFighter(weakened, 'raider', { qi: 10 });
-		const state: BattleState = { ...spent, hasMoved: true };
+		const state = created;
 
 		const highScore = accept(
 			applyBattleCommand(state, {
