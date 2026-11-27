@@ -638,23 +638,22 @@ function cachedMoveTargets(
 	}
 	if (move.targeting.shape === 'single') {
 		const maximumRange = maximumOwnedSingleRange(actor);
-		if (maximumRange > move.targeting.range) {
-			const range = move.targeting.range;
-			const scanKey = `${actor.id}:single-scan:${maximumRange}`;
-			let broadTargets = byMove.get(scanKey);
-			if (!broadTargets) {
-				broadTargets = moveTargets(state, actor, {
-					...move,
-					targeting: { shape: 'single', range: maximumRange }
-				});
-				byMove.set(scanKey, broadTargets);
-			}
-			const targets = broadTargets.filter(
-				(target) => cellDistance(actor.cell, target.aim) <= range
-			);
-			byMove.set(key, targets);
-			return targets;
+		const range = move.targeting.range;
+		const scanKey = `${actor.id}:single-scan:${maximumRange}`;
+		let broadTargets = byMove.get(scanKey);
+		if (!broadTargets) {
+			broadTargets = moveTargets(state, actor, {
+				...move,
+				targeting: { shape: 'single', range: maximumRange }
+			});
+			byMove.set(scanKey, broadTargets);
 		}
+		const targets =
+			range === maximumRange
+				? broadTargets
+				: broadTargets.filter((target) => cellDistance(actor.cell, target.aim) <= range);
+		byMove.set(key, targets);
+		return targets;
 	}
 	const targets = moveTargets(state, actor, move);
 	byMove.set(key, targets);

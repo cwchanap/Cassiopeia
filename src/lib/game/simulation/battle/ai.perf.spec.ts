@@ -1,4 +1,5 @@
 import { arch, cpus, platform, release } from 'node:os';
+import { performance } from 'node:perf_hooks';
 import { describe, expect, it } from 'vitest';
 import {
 	EXTERNAL_ARTS,
@@ -423,13 +424,16 @@ describe('representative battle AI frame benchmark', () => {
 			}
 
 			const samples: number[] = [];
+			const cpuSamples: number[] = [];
 			const plannedCommands: BattleCommand[][] = [];
 			for (let iteration = 0; iteration < TIMED_DECISIONS; iteration++) {
-				const started = process.cpuUsage();
+				const started = performance.now();
+				const cpuStarted = process.cpuUsage();
 				const commands = planBattleTurn(fixture.state, fixture.activeId, fixture.profile);
-				const ended = process.cpuUsage(started);
-				const elapsed = (ended.user + ended.system) / 1000;
+				const cpuEnded = process.cpuUsage(cpuStarted);
+				const elapsed = performance.now() - started;
 				samples.push(elapsed);
+				cpuSamples.push((cpuEnded.user + cpuEnded.system) / 1000);
 				plannedCommands.push(commands);
 			}
 
@@ -444,6 +448,11 @@ describe('representative battle AI frame benchmark', () => {
 				p95: nearestRankPercentile(samples, 95),
 				max: Math.max(...samples)
 			};
+			const cpuMilliseconds = {
+				median: median(cpuSamples),
+				p95: nearestRankPercentile(cpuSamples, 95),
+				max: Math.max(...cpuSamples)
+			};
 			const report = {
 				fixture: {
 					name: FIXTURE_NAME,
@@ -457,8 +466,9 @@ describe('representative battle AI frame benchmark', () => {
 				counts: analysis,
 				warmupDecisions: WARMUP_DECISIONS,
 				timedDecisions: TIMED_DECISIONS,
-				timing: 'process CPU milliseconds per synchronous decision',
+				timing: 'monotonic elapsed milliseconds per synchronous decision',
 				milliseconds,
+				cpuMilliseconds,
 				host: hostDescription(),
 				runtime: runtimeDescription()
 			};
