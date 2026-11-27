@@ -4,6 +4,7 @@ import {
 	AI_SHARED_WEIGHTS,
 	applyBattleCommand,
 	createBattle,
+	getMoveTargets,
 	getReachableCells,
 	planBattleTurn,
 	SECT_HERO_TEMPLATE,
@@ -333,9 +334,63 @@ describe('candidate enumeration and deterministic action choice', () => {
 		replayCommands(moved, commands);
 	});
 
-	it('enumerates the finisher slot and uses a unique arc aim after movement', () => {
+	it('keeps the first arc aim when later aims hit the same enemy', () => {
 		const initial = battleState(starter({ x: 0, z: 0 }, { x: 2, z: 2 }));
 		const moved = movedState(initial, 'hero', { x: 1, z: 1 });
+		const targets = getMoveTargets(moved, 'cloud_sweep');
+
+		expect(targets.map((target) => target.aim)).toEqual([
+			{ x: 2, z: 1 },
+			{ x: 1, z: 2 }
+		]);
+		expect(targets.map((target) => target.targetIds)).toEqual([['lu'], ['lu']]);
+
+		const commands = planBattleTurn(moved, 'hero', AGGRESSOR);
+
+		expect(commands[0]).toEqual({
+			type: 'useMove',
+			actorId: 'hero',
+			moveId: 'cloud_sweep',
+			aim: { x: 2, z: 1 }
+		});
+		expect(commands[1]?.type).toBe('endTurn');
+		replayCommands(moved, commands);
+	});
+
+	it('chooses a later arc aim when it hits an additional enemy', () => {
+		const rows = Array.from({ length: 5 }, () => '.....');
+		const initial = battleState(
+			setup(
+				[
+					placement('hero', { x: 1, z: 2 }, { facing: 'E' }),
+					placement(
+						'north',
+						{ x: 1, z: 0 },
+						{ side: 'enemy', template: luTemplate(), facing: 'S' }
+					),
+					placement('east', { x: 2, z: 1 }, { side: 'enemy', template: luTemplate(), facing: 'W' }),
+					placement(
+						'diagonal',
+						{ x: 2, z: 2 },
+						{ side: 'enemy', template: luTemplate(), facing: 'W' }
+					)
+				],
+				{ terrain: rows }
+			)
+		);
+		const moved = movedState(initial, 'hero', { x: 1, z: 1 });
+		const targets = getMoveTargets(moved, 'cloud_sweep');
+
+		expect(targets.map((target) => target.aim)).toEqual([
+			{ x: 1, z: 0 },
+			{ x: 2, z: 1 },
+			{ x: 1, z: 2 }
+		]);
+		expect(targets.map((target) => target.targetIds)).toEqual([
+			['north'],
+			['east', 'diagonal'],
+			['diagonal']
+		]);
 
 		const commands = planBattleTurn(moved, 'hero', AGGRESSOR);
 
@@ -486,16 +541,52 @@ describe('planner purity and replayability', () => {
 		replayCommands(state, commands);
 	});
 
-	it('returns commands that own their cell coordinates rather than aliasing fighter cells', () => {
-		const initial = battleState(starter({ x: 0, z: 0 }, { x: 1, z: 1 }));
-		const state = movedState(initial, 'hero', { x: 0, z: 1 });
+	it('returns move and attack coordinates independent of input fighter cells', () => {
+		const rows = ['.....', '.TTT.', '..#..', '.....', '.....'];
+		const created = battleState(
+			setup(
+				[
+					placement('hero', { x: 1, z: 2 }, { facing: 'E' }),
+					placement('lu', { x: 3, z: 2 }, { side: 'enemy', template: luTemplate(), facing: 'W' }),
+					placement(
+						'fallen',
+						{ x: 3, z: 3 },
+						{ side: 'enemy', template: luTemplate(), facing: 'W' }
+					)
+				],
+				{ terrain: rows }
+			)
+		);
+		const state = patchFighter(created, 'fallen', { health: 0 });
+		const heroCell = fighter(state, 'hero').cell;
+		const luCell = fighter(state, 'lu').cell;
+		const fallenCell = fighter(state, 'fallen').cell;
+		const inputCells = [heroCell, luCell, fallenCell];
+
 		const commands = planBattleTurn(state, 'hero', AGGRESSOR);
+		const moveCommand = commands.find((command) => command.type === 'move');
+		if (!moveCommand || moveCommand.type !== 'move') {
+			throw new Error('planner did not return a move command');
+		}
+		const attackCommand = commands.find((command) => command.type === 'useMove');
+		if (!attackCommand || attackCommand.type !== 'useMove') {
+			throw new Error('planner did not return an attack command');
+		}
+
+		expect(moveCommand.cell).toEqual({ x: 3, z: 3 });
+		expect(attackCommand.aim).toEqual({ x: 3, z: 2 });
+		for (const inputCell of inputCells) {
+			expect(moveCommand.cell).not.toBe(inputCell);
+			expect(attackCommand.aim).not.toBe(inputCell);
+		}
+		replayCommands(state, commands);
 		const beforeMutation = JSON.parse(JSON.stringify(commands));
 
-		fighter(state, 'hero').cell = { x: 4, z: 4 };
-		fighter(state, 'lu').cell = { x: 4, z: 3 };
+		for (const inputCell of inputCells) {
+			inputCell.x = -1;
+			inputCell.z = -1;
+		}
 
 		expect(JSON.parse(JSON.stringify(commands))).toEqual(beforeMutation);
-		replayCommands(initial, [{ type: 'move', actorId: 'hero', cell: { x: 0, z: 1 } }, ...commands]);
 	});
 });
