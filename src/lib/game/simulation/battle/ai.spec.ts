@@ -11,6 +11,7 @@ import {
 	planBattleTurn,
 	SECT_HERO_TEMPLATE,
 	SENIOR_BROTHER_LU_TEMPLATE,
+	STARTER_BATTLE_TERRAIN,
 	type AiArchetypeId,
 	type AiArchetypeWeights,
 	type BattleAiProfile,
@@ -890,6 +891,36 @@ describe('archetype scoring behavior', () => {
 
 		expect(cellDistance(move.cell, fighter(state, 'lu').cell)).toBe(3);
 		expect(state.map.terrain[move.cell.z][move.cell.x]).toBe('bamboo');
+		replayCommands(state, commands);
+	});
+
+	it('breaks a Monk Staff Marksman mutual-Guard standoff when a sweep is reachable', () => {
+		const created = battleState(
+			setup(
+				[
+					placement(
+						'hero',
+						{ x: 2, z: 1 },
+						{ template: { externalArtId: 'monk_staff' }, facing: 'S' }
+					),
+					placement(
+						'lu',
+						{ x: 2, z: 3 },
+						{
+							side: 'enemy',
+							template: luTemplate({ externalArtId: 'monk_staff' }),
+							facing: 'N'
+						}
+					)
+				],
+				{ terrain: STARTER_BATTLE_TERRAIN }
+			)
+		);
+		const state = patchFighter(created, 'lu', { guarding: true });
+
+		const commands = planBattleTurn(state, 'hero', { archetype: 'marksman' });
+
+		expect(commands.some((command) => command.type === 'useMove')).toBe(true);
 		replayCommands(state, commands);
 	});
 

@@ -56,7 +56,7 @@ export const AI_ARCHETYPES: Readonly<Record<AiArchetypeId, AiArchetypeWeights>> 
 		flank: 200,
 		counterLoss: -150,
 		gatherQi: 22,
-		guard: 500,
+		guard: 400,
 		bamboo: 400,
 		threatCount: -400,
 		rearThreat: -200,
