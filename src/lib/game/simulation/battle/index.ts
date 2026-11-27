@@ -7,6 +7,7 @@
 export type * from './types';
 export * from './content';
 export { affectedCells, cellDistance, legalAimCells } from './grid';
+export { planBattleTurn } from './ai';
 export {
 	applyBattleCommand,
 	createBattle,

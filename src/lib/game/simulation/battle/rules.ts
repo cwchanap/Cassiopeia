@@ -362,22 +362,31 @@ export function getMoveTargets(state: BattleState, moveId: MoveId): BattleMoveTa
 	return moveTargets(state, actor, owned.move);
 }
 
-/**
- * Exact action resolution preview. It calls the same non-mutating reducer as `useMove`, so a
- * rejection is the command's own reason and an accepted forecast projects that result's events and
- * state: per-hit mitigation and HP, the attack's qi delta and the resulting turn or handoff.
- */
-export function forecastMove(
-	state: BattleState,
-	actorId: string,
-	moveId: MoveId,
-	aim: Cell
-): BattleForecastResult {
-	const result = applyBattleCommand(state, { type: 'useMove', actorId, moveId, aim });
-	if (!result.accepted) {
-		return { accepted: false, reason: result.reason };
-	}
+/** Accepted attack data shared by the public forecast and the battle-module AI scorer. */
+export type AttackSummary = {
+	moveId: MoveId;
+	aim: Cell;
+	qiCost: number;
+	qiBefore: number;
+	qiAfter: number;
+	hits: BattleForecastHit[];
+	counters: BattleForecastHit[];
+	actorHealthAfter: number;
+	actorDefeated: boolean;
+	outcome: BattleOutcome;
+	activeFighterId: string | null;
+	round: number;
+};
 
+/**
+ * Parses the one accepted attack result without applying or re-deriving any rules. Counters are
+ * associated with their countered event, while actor HP and qi come from the original actor rather
+ * than a later fighter's automatic turn start.
+ */
+export function summarizeAttack(
+	result: Extract<BattleCommandResult, { accepted: true }>,
+	actorId: string
+): AttackSummary {
 	const attacked = result.events.find(
 		(event): event is Extract<BattleEvent, { type: 'attacked' }> => event.type === 'attacked'
 	);
@@ -406,25 +415,56 @@ export function forecastMove(
 		counters.push(forecastHit(event, counterMoveId));
 	}
 
-	// Read the original actor's HP and the action's own qi delta, never the next fighter's
-	// turn-start regeneration after an automatic handoff.
 	const actor = fighterIn(result.state, actorId);
+	return {
+		moveId: attacked.moveId,
+		aim: { ...attacked.aim },
+		qiCost: attacked.qiBefore - attacked.qiAfter,
+		qiBefore: attacked.qiBefore,
+		qiAfter: attacked.qiAfter,
+		hits,
+		counters,
+		actorHealthAfter: actor.health,
+		actorDefeated: actor.health === 0,
+		outcome: result.state.outcome,
+		activeFighterId: getTurnOrder(result.state).activeId,
+		round: result.state.round
+	};
+}
+
+/**
+ * Exact action resolution preview. It calls the same non-mutating reducer as `useMove`, so a
+ * rejection is the command's own reason and an accepted forecast projects that result's events and
+ * state: per-hit mitigation and HP, the attack's qi delta and the resulting turn or handoff.
+ */
+export function forecastMove(
+	state: BattleState,
+	actorId: string,
+	moveId: MoveId,
+	aim: Cell
+): BattleForecastResult {
+	const result = applyBattleCommand(state, { type: 'useMove', actorId, moveId, aim });
+	if (!result.accepted) {
+		return { accepted: false, reason: result.reason };
+	}
+
+	const summary = summarizeAttack(result, actorId);
 	return {
 		accepted: true,
 		forecast: {
 			actorId,
 			moveId,
-			aim: { ...attacked.aim },
-			qiCost: attacked.qiBefore - attacked.qiAfter,
-			qiBefore: attacked.qiBefore,
-			qiAfter: attacked.qiAfter,
-			hits,
-			counters,
-			actorHealthAfter: actor.health,
-			actorDefeated: actor.health === 0,
-			outcome: result.state.outcome,
-			activeFighterId: getTurnOrder(result.state).activeId,
-			round: result.state.round
+			aim: { ...summary.aim },
+			qiCost: summary.qiCost,
+			qiBefore: summary.qiBefore,
+			qiAfter: summary.qiAfter,
+			hits: summary.hits,
+			counters: summary.counters,
+			actorHealthAfter: summary.actorHealthAfter,
+			actorDefeated: summary.actorDefeated,
+			outcome: summary.outcome,
+			activeFighterId: summary.activeFighterId,
+			round: summary.round
 		}
 	};
 }
