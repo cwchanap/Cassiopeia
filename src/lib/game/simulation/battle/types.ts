@@ -17,6 +17,30 @@ export type BattleSide = 'squad' | 'enemy';
 
 export type BattleOutcome = 'ongoing' | 'victory' | 'defeat';
 
+export type AiArchetypeId = 'aggressor' | 'marksman' | 'guardian';
+
+export type BattleAiProfile =
+	| { archetype: 'aggressor' | 'marksman' }
+	| { archetype: 'guardian'; post: Cell };
+
+/** Integer per-archetype feature weights for the deterministic single-turn battle planner. */
+export type AiArchetypeWeights = {
+	readonly weakTarget: number;
+	readonly flank: number;
+	readonly counterLoss: number;
+	readonly gatherQi: number;
+	readonly guard: number;
+	readonly bamboo: number;
+	readonly threatCount: number;
+	readonly rearThreat: number;
+	readonly currentExposure: number;
+	readonly rangeDeviation: number;
+	readonly adjacentHostile: number;
+	readonly postDistance: number;
+	/** Preferred Manhattan distance in cells; this is a range value, not a score weight. */
+	readonly preferredRange: number;
+};
+
 /** Parsed battlefield. Rows are indexed by z, columns by x; both dimensions are derived. */
 export type BattleMap = {
 	width: number;

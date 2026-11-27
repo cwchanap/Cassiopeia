@@ -1,4 +1,6 @@
 import type {
+	AiArchetypeId,
+	AiArchetypeWeights,
 	ExternalArtDefinition,
 	ExternalArtId,
 	FighterTemplate,
@@ -18,6 +20,68 @@ function deepFreeze<T>(value: T): T {
 	}
 	return value;
 }
+
+export const AI_SHARED_WEIGHTS: Readonly<{
+	damage: number;
+	defeat: number;
+	selfDefeat: number;
+	qiSpent: number;
+}> = deepFreeze({
+	damage: 100,
+	defeat: 3500,
+	selfDefeat: -10000,
+	qiSpent: -10
+});
+
+export const AI_ARCHETYPES: Readonly<Record<AiArchetypeId, AiArchetypeWeights>> = deepFreeze<
+	Record<AiArchetypeId, AiArchetypeWeights>
+>({
+	aggressor: {
+		weakTarget: 1200,
+		flank: 300,
+		counterLoss: -50,
+		gatherQi: 18,
+		guard: 0,
+		bamboo: 100,
+		threatCount: -100,
+		rearThreat: -100,
+		currentExposure: -100,
+		rangeDeviation: -400,
+		adjacentHostile: 0,
+		postDistance: 0,
+		preferredRange: 1
+	},
+	marksman: {
+		weakTarget: 400,
+		flank: 200,
+		counterLoss: -150,
+		gatherQi: 22,
+		guard: 500,
+		bamboo: 400,
+		threatCount: -400,
+		rearThreat: -200,
+		currentExposure: -200,
+		rangeDeviation: -400,
+		adjacentHostile: -800,
+		postDistance: 0,
+		preferredRange: 3
+	},
+	guardian: {
+		weakTarget: 300,
+		flank: 200,
+		counterLoss: -150,
+		gatherQi: 20,
+		guard: 600,
+		bamboo: 300,
+		threatCount: -200,
+		rearThreat: -200,
+		currentExposure: -200,
+		rangeDeviation: -100,
+		adjacentHostile: 0,
+		postDistance: -500,
+		preferredRange: 1
+	}
+});
 
 export const MOVES: Readonly<Record<MoveId, MoveDefinition>> = deepFreeze<
 	Record<MoveId, MoveDefinition>
