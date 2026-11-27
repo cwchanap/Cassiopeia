@@ -3,9 +3,11 @@ import {
 	AI_ARCHETYPES,
 	AI_SHARED_WEIGHTS,
 	applyBattleCommand,
+	cellDistance,
 	createBattle,
 	getMoveTargets,
 	getReachableCells,
+	getTurnOrder,
 	planBattleTurn,
 	SECT_HERO_TEMPLATE,
 	SENIOR_BROTHER_LU_TEMPLATE,
@@ -23,6 +25,8 @@ import {
 	type FighterSetup,
 	type FighterTemplate
 } from './index';
+import { buildActorExcludedThreatMap } from './ai';
+import { facingPercentFor, movementBudget } from './rules';
 
 const OPEN_ROWS = ['.....', '.....', '.....', '.....', '.....'];
 const POST_ROWS = ['.....', '.#T..', '.~...', '.....', '.....'];
@@ -121,6 +125,69 @@ function deepFreeze<T>(value: T): T {
 
 function movedState(initial: BattleState, actorId: string, destination: Cell): BattleState {
 	return accept(applyBattleCommand(initial, { type: 'move', actorId, cell: destination })).state;
+}
+
+function willowTemplate(overrides: Partial<FighterTemplate> = {}): Partial<FighterTemplate> {
+	return {
+		...SECT_HERO_TEMPLATE,
+		externalArtId: 'willow_darts',
+		internalArtId: 'flowing_cloud_steps',
+		...overrides
+	};
+}
+
+function openRows(size: number): string[] {
+	return Array.from({ length: size }, () => '.'.repeat(size));
+}
+
+function moveIn(commands: BattleCommand[]): Extract<BattleCommand, { type: 'move' }> {
+	const command = commands.find((candidate) => candidate.type === 'move');
+	if (!command || command.type !== 'move') {
+		throw new Error('planner did not return a move command');
+	}
+	return command;
+}
+
+function useMoveIn(commands: BattleCommand[]): Extract<BattleCommand, { type: 'useMove' }> {
+	const command = commands.find((candidate) => candidate.type === 'useMove');
+	if (!command || command.type !== 'useMove') {
+		throw new Error('planner did not return a useMove command');
+	}
+	return command;
+}
+
+function endTurnIn(commands: BattleCommand[]): Extract<BattleCommand, { type: 'endTurn' }> {
+	const command = commands.find((candidate) => candidate.type === 'endTurn');
+	if (!command || command.type !== 'endTurn') {
+		throw new Error('planner did not return an endTurn command');
+	}
+	return command;
+}
+
+function cellKey(cell: Cell): string {
+	return `${cell.x},${cell.z}`;
+}
+
+function threatOrigins(
+	threats: ReturnType<typeof buildActorExcludedThreatMap>,
+	hostileId: string,
+	cell: Cell
+): Cell[] | undefined {
+	return threats.get(hostileId)?.get(cellKey(cell));
+}
+
+function threateningCount(
+	threats: ReturnType<typeof buildActorExcludedThreatMap>,
+	cell: Cell
+): number {
+	let count = 0;
+	for (const originsByCell of threats.values()) {
+		const origins = originsByCell.get(cellKey(cell));
+		if (origins && origins.length > 0) {
+			count += 1;
+		}
+	}
+	return count;
 }
 
 describe('public AI contract and catalogs', () => {
@@ -246,6 +313,223 @@ describe('profile validation before actor short-circuits', () => {
 		expect(planBattleTurn(state, 'lu', AGGRESSOR)).toEqual([]);
 		expect(planBattleTurn(deadHero, 'hero', AGGRESSOR)).toEqual([]);
 		expect(planBattleTurn(state, 'missing', AGGRESSOR)).toEqual([]);
+	});
+});
+
+describe('shared facing classification', () => {
+	it('classifies front, side, rear and diagonal ties for all four facings', () => {
+		const target = { x: 2, z: 2 };
+		const cases: {
+			facing: Facing;
+			front: Cell;
+			rear: Cell;
+			side: Cell;
+			diagonal: Cell;
+		}[] = [
+			{
+				facing: 'N',
+				front: { x: 2, z: 1 },
+				rear: { x: 2, z: 3 },
+				side: { x: 3, z: 2 },
+				diagonal: { x: 3, z: 1 }
+			},
+			{
+				facing: 'E',
+				front: { x: 3, z: 2 },
+				rear: { x: 1, z: 2 },
+				side: { x: 2, z: 3 },
+				diagonal: { x: 3, z: 3 }
+			},
+			{
+				facing: 'S',
+				front: { x: 2, z: 3 },
+				rear: { x: 2, z: 1 },
+				side: { x: 3, z: 2 },
+				diagonal: { x: 3, z: 3 }
+			},
+			{
+				facing: 'W',
+				front: { x: 1, z: 2 },
+				rear: { x: 3, z: 2 },
+				side: { x: 2, z: 3 },
+				diagonal: { x: 1, z: 3 }
+			}
+		];
+
+		for (const expected of cases) {
+			expect(facingPercentFor(target, expected.facing, expected.front)).toBe(100);
+			expect(facingPercentFor(target, expected.facing, expected.side)).toBe(125);
+			expect(facingPercentFor(target, expected.facing, expected.rear)).toBe(150);
+			expect(facingPercentFor(target, expected.facing, expected.diagonal)).toBe(125);
+		}
+	});
+});
+
+describe('actor-excluded threat geometry', () => {
+	it('registers the documented reach-through origin and is invariant to the actor move', () => {
+		const rows = Array.from({ length: 5 }, () => '........');
+		const created = battleState(
+			setup(
+				[
+					placement('hero', { x: 3, z: 2 }, { template: willowTemplate(), facing: 'E' }),
+					placement(
+						'lu',
+						{ x: 2, z: 2 },
+						{ side: 'enemy', template: luTemplate({ agility: 10 }), facing: 'E' }
+					)
+				],
+				{ terrain: rows }
+			)
+		);
+		const state = patchFighter(created, 'lu', { qi: 0 });
+
+		expect(movementBudget(fighter(state, 'lu'))).toBe(3);
+		const before = buildActorExcludedThreatMap(state, fighter(state, 'hero'));
+		expect(threatOrigins(before, 'lu', { x: 6, z: 2 })).toEqual([{ x: 5, z: 2 }]);
+
+		const moved = movedState(state, 'hero', { x: 3, z: 3 });
+		const after = buildActorExcludedThreatMap(moved, fighter(moved, 'hero'));
+		expect(after).toStrictEqual(before);
+	});
+
+	it('uses capped next-turn qi when deciding which hostile moves threaten cells', () => {
+		const rows = Array.from({ length: 5 }, () => '........');
+		const created = battleState(
+			setup(
+				[
+					placement('hero', { x: 3, z: 2 }, { template: willowTemplate(), facing: 'E' }),
+					placement(
+						'lu',
+						{ x: 2, z: 2 },
+						{ side: 'enemy', template: luTemplate({ agility: 10 }), facing: 'E' }
+					)
+				],
+				{ terrain: rows }
+			)
+		);
+
+		const unavailable = patchFighter(created, 'lu', { qi: 14 });
+		const unavailableOrigins = threatOrigins(
+			buildActorExcludedThreatMap(unavailable, fighter(unavailable, 'hero')),
+			'lu',
+			{ x: 6, z: 2 }
+		);
+		const available = patchFighter(created, 'lu', { qi: 15 });
+		const availableOrigins = threatOrigins(
+			buildActorExcludedThreatMap(available, fighter(available, 'hero')),
+			'lu',
+			{ x: 6, z: 2 }
+		);
+
+		expect(unavailableOrigins ?? []).not.toContainEqual({ x: 4, z: 2 });
+		expect(availableOrigins).toContainEqual({ x: 4, z: 2 });
+		expect(availableOrigins).toContainEqual({ x: 5, z: 2 });
+	});
+
+	it('keeps other living fighters as blockers in the approximate threat paths', () => {
+		const rows = Array.from({ length: 5 }, () => '........');
+		const created = battleState(
+			setup(
+				[
+					placement('hero', { x: 3, z: 2 }, { template: willowTemplate(), facing: 'E' }),
+					placement(
+						'lu',
+						{ x: 2, z: 2 },
+						{ side: 'enemy', template: luTemplate({ agility: 10 }), facing: 'E' }
+					),
+					placement('ally', { x: 4, z: 2 }, { facing: 'N' })
+				],
+				{ terrain: rows }
+			)
+		);
+		const state = patchFighter(created, 'lu', { qi: 0 });
+
+		const threats = buildActorExcludedThreatMap(state, fighter(state, 'hero'));
+
+		expect(threatOrigins(threats, 'lu', { x: 6, z: 2 })).toBeUndefined();
+	});
+
+	it('uses bamboo movement cost when collecting threat origins', () => {
+		const rows = ['.......', '.......', '..T....', '.......', '.......'];
+		const created = battleState(
+			setup(
+				[
+					placement('hero', { x: 0, z: 0 }, { facing: 'E' }),
+					placement(
+						'lu',
+						{ x: 1, z: 2 },
+						{ side: 'enemy', template: luTemplate({ agility: 10 }), facing: 'E' }
+					)
+				],
+				{ terrain: rows }
+			)
+		);
+		const state = patchFighter(created, 'lu', { qi: 0 });
+
+		const threats = buildActorExcludedThreatMap(state, fighter(state, 'hero'));
+
+		expect(threatOrigins(threats, 'lu', { x: 4, z: 2 })).toContainEqual({ x: 3, z: 2 });
+		expect(threatOrigins(threats, 'lu', { x: 5, z: 2 })).toBeUndefined();
+	});
+
+	it('lets threat rays cross water and bamboo but not an obstacle', () => {
+		const waterAndBambooRows = ['......', '.~T...', '......'];
+		const obstacleRows = ['......', '.#....', '......'];
+		const buildDartThreats = (rows: string[]): ReturnType<typeof buildActorExcludedThreatMap> => {
+			const state = battleState(
+				setup(
+					[
+						placement('hero', { x: 0, z: 2 }, { facing: 'N' }),
+						placement(
+							'dart',
+							{ x: 0, z: 1 },
+							{ side: 'enemy', template: willowTemplate({ agility: 1 }), facing: 'S' }
+						)
+					],
+					{ terrain: rows }
+				)
+			);
+			return buildActorExcludedThreatMap(state, fighter(state, 'hero'));
+		};
+
+		const openOrigins = threatOrigins(buildDartThreats(waterAndBambooRows), 'dart', {
+			x: 3,
+			z: 1
+		});
+		const blockedOrigins = threatOrigins(buildDartThreats(obstacleRows), 'dart', { x: 3, z: 1 });
+
+		expect(openOrigins).toContainEqual({ x: 0, z: 1 });
+		expect(blockedOrigins ?? []).not.toContainEqual({ x: 0, z: 1 });
+	});
+
+	it('records unique origins per hostile and distinct threat counts per cell', () => {
+		const created = battleState(
+			setup([
+				placement('hero', { x: 2, z: 2 }, { facing: 'N' }),
+				placement(
+					'north',
+					{ x: 2, z: 0 },
+					{ side: 'enemy', template: luTemplate({ agility: 10 }), facing: 'S' }
+				),
+				placement(
+					'west',
+					{ x: 0, z: 2 },
+					{ side: 'enemy', template: luTemplate({ agility: 10 }), facing: 'E' }
+				)
+			])
+		);
+		const lowQi = patchFighter(patchFighter(created, 'north', { qi: 0 }), 'west', { qi: 0 });
+
+		const lowQiThreats = buildActorExcludedThreatMap(lowQi, fighter(lowQi, 'hero'));
+		expect(threateningCount(lowQiThreats, { x: 2, z: 2 })).toBe(2);
+		expect(threateningCount(lowQiThreats, { x: 4, z: 0 })).toBe(1);
+
+		const fullQiThreats = buildActorExcludedThreatMap(created, fighter(created, 'hero'));
+		const origins = threatOrigins(fullQiThreats, 'north', { x: 2, z: 1 }) ?? [];
+		expect(
+			origins.filter((origin) => origin.x === 2 && origin.z === 0),
+			'the origin is recorded once even when sword, line and arc all cover the cell'
+		).toHaveLength(1);
 	});
 });
 
@@ -476,21 +760,403 @@ describe('candidate enumeration and deterministic action choice', () => {
 	});
 });
 
+describe('archetype scoring behavior', () => {
+	it('closes in and attacks when movement brings an Aggressor into reach', () => {
+		const state = battleState(
+			setup(
+				[
+					placement('hero', { x: 1, z: 3 }, { facing: 'E' }),
+					placement('lu', { x: 5, z: 3 }, { side: 'enemy', template: luTemplate(), facing: 'W' })
+				],
+				{ terrain: openRows(8) }
+			)
+		);
+
+		const commands = planBattleTurn(state, 'hero', AGGRESSOR);
+		const move = moveIn(commands);
+		const attack = useMoveIn(commands);
+
+		const startingDistance = cellDistance(fighter(state, 'hero').cell, fighter(state, 'lu').cell);
+		expect(startingDistance).toBeGreaterThan(1);
+		expect(cellDistance(move.cell, fighter(state, 'lu').cell)).toBeLessThan(startingDistance);
+		expect(attack.actorId).toBe('hero');
+		replayCommands(state, commands);
+	});
+
+	it('prefers the weaker of otherwise equal Aggressor targets', () => {
+		const created = battleState(
+			setup([
+				placement(
+					'hero',
+					{ x: 2, z: 2 },
+					{ template: { externalArtId: 'stone_palm' }, facing: 'E' }
+				),
+				placement('strong', { x: 2, z: 1 }, { side: 'enemy', template: luTemplate(), facing: 'W' }),
+				placement('weak', { x: 2, z: 3 }, { side: 'enemy', template: luTemplate(), facing: 'W' })
+			])
+		);
+		const weakened = patchFighter(created, 'weak', { health: 50 });
+		const state: BattleState = { ...weakened, hasMoved: true };
+
+		const commands = planBattleTurn(state, 'hero', AGGRESSOR);
+		const attack = useMoveIn(commands);
+		const replayed = replayCommands(state, commands);
+
+		expect(attack.aim).toEqual(fighter(state, 'weak').cell);
+		expect(
+			replayed.events.filter((event) => event.type === 'damaged').map((event) => event.targetId)
+		).toEqual(['weak']);
+	});
+
+	it('exploits a rear flank over an otherwise equal front target', () => {
+		const created = battleState(
+			setup([
+				placement(
+					'hero',
+					{ x: 2, z: 2 },
+					{ template: { externalArtId: 'stone_palm' }, facing: 'E' }
+				),
+				placement('front', { x: 2, z: 1 }, { side: 'enemy', template: luTemplate(), facing: 'S' }),
+				placement('rear', { x: 2, z: 3 }, { side: 'enemy', template: luTemplate(), facing: 'S' })
+			])
+		);
+		const state: BattleState = { ...created, hasMoved: true };
+
+		const commands = planBattleTurn(state, 'hero', AGGRESSOR);
+		const attack = useMoveIn(commands);
+
+		expect(attack.aim).toEqual(fighter(state, 'rear').cell);
+		replayCommands(state, commands);
+	});
+
+	it('moves a Marksman from adjacency to preferred standoff before shooting', () => {
+		const rows = ['###.###', '###.###', '.......', '.......', '.......', '.......', '.......'];
+		const state = battleState(
+			setup(
+				[
+					placement('hero', { x: 3, z: 1 }, { template: willowTemplate(), facing: 'N' }),
+					placement('lu', { x: 3, z: 0 }, { side: 'enemy', template: luTemplate(), facing: 'S' })
+				],
+				{ terrain: rows }
+			)
+		);
+
+		const commands = planBattleTurn(state, 'hero', { archetype: 'marksman' });
+		const move = moveIn(commands);
+		useMoveIn(commands);
+
+		expect(cellDistance(fighter(state, 'hero').cell, fighter(state, 'lu').cell)).toBe(1);
+		expect(cellDistance(move.cell, fighter(state, 'lu').cell)).toBe(3);
+		replayCommands(state, commands);
+	});
+
+	it('moves a Marksman into bamboo cover at standoff range', () => {
+		const rows = ['###.###', '###.###', '.......', '...T...', '.......', '.......', '.......'];
+		const state = battleState(
+			setup(
+				[
+					placement('hero', { x: 3, z: 1 }, { template: willowTemplate(), facing: 'N' }),
+					placement('lu', { x: 3, z: 0 }, { side: 'enemy', template: luTemplate(), facing: 'S' })
+				],
+				{ terrain: rows }
+			)
+		);
+
+		const commands = planBattleTurn(state, 'hero', { archetype: 'marksman' });
+		const move = moveIn(commands);
+
+		expect(cellDistance(move.cell, fighter(state, 'lu').cell)).toBe(3);
+		expect(state.map.terrain[move.cell.z][move.cell.x]).toBe('bamboo');
+		replayCommands(state, commands);
+	});
+
+	it('keeps a Guardian on its authored post when no punishment is available', () => {
+		const post = { x: 2, z: 2 };
+		const state = battleState(
+			setup(
+				[
+					placement('hero', post, { facing: 'E' }),
+					placement('lu', { x: 9, z: 2 }, { side: 'enemy', template: luTemplate(), facing: 'W' })
+				],
+				{ terrain: openRows(10) }
+			)
+		);
+
+		const commands = planBattleTurn(state, 'hero', { archetype: 'guardian', post });
+
+		expect(commands.some((command) => command.type === 'move')).toBe(false);
+		replayCommands(state, commands);
+	});
+
+	it('guards a threatened post the Guardian cannot attack from', () => {
+		const post = { x: 2, z: 2 };
+		const state = battleState(
+			setup(
+				[
+					placement('hero', post, { facing: 'E' }),
+					placement(
+						'dart',
+						{ x: 8, z: 2 },
+						{ side: 'enemy', template: willowTemplate({ agility: 10 }), facing: 'W' }
+					)
+				],
+				{ terrain: openRows(10) }
+			)
+		);
+
+		const commands = planBattleTurn(state, 'hero', { archetype: 'guardian', post });
+
+		expect(commands.some((command) => command.type === 'guard')).toBe(true);
+		expect(commands.some((command) => command.type === 'useMove')).toBe(false);
+		replayCommands(state, commands);
+	});
+
+	it('punishes an approaching vulnerable opponent instead of only guarding the post', () => {
+		const post = { x: 2, z: 2 };
+		const created = battleState(
+			setup(
+				[
+					placement('hero', post, { facing: 'E' }),
+					placement(
+						'vulnerable',
+						{ x: 3, z: 2 },
+						{ side: 'enemy', template: luTemplate(), facing: 'W' }
+					),
+					placement('far', { x: 9, z: 9 }, { side: 'enemy', template: luTemplate(), facing: 'W' })
+				],
+				{ terrain: openRows(10) }
+			)
+		);
+		const state = patchFighter(created, 'vulnerable', { health: 5 });
+
+		const commands = planBattleTurn(state, 'hero', { archetype: 'guardian', post });
+		const attack = useMoveIn(commands);
+		const replayed = replayCommands(state, commands);
+
+		expect(attack.aim).toEqual(fighter(state, 'vulnerable').cell);
+		expect(fighter(replayed.state, 'vulnerable').health).toBe(0);
+		expect(replayed.state.outcome).toBe('ongoing');
+	});
+});
+
+describe('multi-hit, gather, counter and facing behavior', () => {
+	it('moves away from its start to hit two enemies with one line attack', () => {
+		const rows = ['.......', '.......', '.......'];
+		const created = battleState(
+			setup(
+				[
+					placement('hero', { x: 1, z: 1 }, { facing: 'E' }),
+					placement('near', { x: 3, z: 1 }, { side: 'enemy', template: luTemplate(), facing: 'W' }),
+					placement('far', { x: 4, z: 1 }, { side: 'enemy', template: luTemplate(), facing: 'W' })
+				],
+				{ terrain: rows }
+			)
+		);
+		const state = patchFighter(created, 'hero', { qi: 30 });
+
+		const commands = planBattleTurn(state, 'hero', AGGRESSOR);
+		const attack = useMoveIn(commands);
+		const replayed = replayCommands(state, commands);
+
+		expect(commands.some((command) => command.type === 'move')).toBe(true);
+		expect(attack.moveId).toBe('piercing_thrust');
+		expect(
+			replayed.events.filter((event) => event.type === 'damaged').map((event) => event.targetId)
+		).toEqual(['near', 'far']);
+	});
+
+	it('values actual clamped Gather gain but not a zero full-qi Gather', () => {
+		const rows = Array.from({ length: 12 }, () => '............');
+		const scenarios = [
+			{ qi: 90, gathers: true, gain: 10 },
+			{ qi: 100, gathers: false, gain: 0 }
+		];
+
+		for (const scenario of scenarios) {
+			const created = battleState(
+				setup(
+					[
+						placement('hero', { x: 1, z: 6 }, { facing: 'E' }),
+						placement('lu', { x: 11, z: 6 }, { side: 'enemy', template: luTemplate(), facing: 'W' })
+					],
+					{ terrain: rows }
+				)
+			);
+			const state = patchFighter(created, 'hero', { qi: scenario.qi });
+
+			const commands = planBattleTurn(state, 'hero', AGGRESSOR);
+			const replayed = replayCommands(state, commands);
+			const gathered = replayed.events.find((event) => event.type === 'qiGathered');
+
+			expect(commands.some((command) => command.type === 'gatherQi')).toBe(scenario.gathers);
+			if (scenario.gathers) {
+				if (!gathered || gathered.type !== 'qiGathered') {
+					throw new Error('chosen Gather emitted no qiGathered event');
+				}
+				expect(gathered.qiAfter - gathered.qiBefore).toBe(scenario.gain);
+			} else {
+				expect(gathered).toBeUndefined();
+				expect(commands.some((command) => command.type === 'guard')).toBe(true);
+			}
+		}
+	});
+
+	it('accounts for Guard counters when the counter costs more than the hit gains', () => {
+		const makeState = (guarding: boolean): BattleState => {
+			const created = battleState(
+				setup([
+					placement('hero', { x: 2, z: 2 }, { template: { power: 1 }, facing: 'N' }),
+					placement(
+						'lu',
+						{ x: 2, z: 1 },
+						{ side: 'enemy', template: luTemplate({ power: 20 }), facing: 'S' }
+					)
+				])
+			);
+			const patched = patchFighter(created, 'lu', { guarding });
+			return { ...patched, hasMoved: true };
+		};
+
+		const unguardedCommands = planBattleTurn(makeState(false), 'hero', AGGRESSOR);
+		const guardedCommands = planBattleTurn(makeState(true), 'hero', AGGRESSOR);
+
+		expect(unguardedCommands.some((command) => command.type === 'useMove')).toBe(true);
+		expect(guardedCommands.some((command) => command.type === 'useMove')).toBe(false);
+	});
+
+	it('uses an ignoreGuard finisher to bypass Guard reduction and its counter', () => {
+		const created = battleState(
+			setup([
+				placement(
+					'hero',
+					{ x: 2, z: 2 },
+					{ template: { externalArtId: 'stone_palm' }, facing: 'N' }
+				),
+				placement('lu', { x: 2, z: 1 }, { side: 'enemy', template: luTemplate(), facing: 'S' })
+			])
+		);
+		const state = patchFighter(created, 'lu', { guarding: true });
+
+		const commands = planBattleTurn(state, 'hero', AGGRESSOR);
+		const attack = useMoveIn(commands);
+		const replayed = replayCommands(state, commands);
+
+		expect(attack.moveId).toBe('stone_breaker');
+		expect(replayed.events.some((event) => event.type === 'countered')).toBe(false);
+		expect(
+			replayed.events.find((event) => event.type === 'damaged' && event.targetId === 'lu')
+		).toMatchObject({ guardPercent: 100 });
+	});
+
+	it('turns toward a living threat after the actor has already acted', () => {
+		const state = battleState(
+			setup([
+				placement('hero', { x: 2, z: 2 }, { facing: 'W' }),
+				placement('lu', { x: 4, z: 2 }, { side: 'enemy', template: luTemplate(), facing: 'W' })
+			])
+		);
+		const acted = accept(applyBattleCommand(state, { type: 'guard', actorId: 'hero' })).state;
+
+		const commands = planBattleTurn(acted, 'hero', AGGRESSOR);
+
+		expect(endTurnIn(commands).facing).toBe('E');
+		replayCommands(acted, commands);
+	});
+
+	it('never treats an allied fighter as an attack target', () => {
+		const created = battleState(
+			setup([
+				placement('hero', { x: 2, z: 2 }, { facing: 'E' }),
+				placement('ally', { x: 2, z: 1 }, { facing: 'S' }),
+				placement('lu', { x: 2, z: 3 }, { side: 'enemy', template: luTemplate(), facing: 'N' })
+			])
+		);
+		const state = patchFighter(created, 'ally', { health: 5 });
+
+		const commands = planBattleTurn(state, 'hero', AGGRESSOR);
+		const attack = useMoveIn(commands);
+		const replayed = replayCommands(state, commands);
+
+		expect(attack.aim).not.toEqual(fighter(state, 'ally').cell);
+		expect(
+			replayed.events.filter((event) => event.type === 'damaged').map((event) => event.targetId)
+		).not.toContain('ally');
+		expect(fighter(replayed.state, 'ally').health).toBe(5);
+	});
+
+	it('filters a killed hostile from the threat lookup before choosing final facing', () => {
+		const rows = Array.from({ length: 12 }, () => '............');
+		const created = battleState(
+			setup(
+				[
+					placement('hero', { x: 2, z: 2 }, { facing: 'W' }),
+					placement('near', { x: 3, z: 2 }, { side: 'enemy', template: luTemplate(), facing: 'W' }),
+					placement('far', { x: 7, z: 2 }, { side: 'enemy', template: luTemplate(), facing: 'N' })
+				],
+				{ terrain: rows }
+			)
+		);
+		const weakened = patchFighter(patchFighter(created, 'near', { health: 5 }), 'far', { qi: 0 });
+		const state: BattleState = { ...weakened, hasMoved: true };
+
+		const commands = planBattleTurn(state, 'hero', AGGRESSOR);
+		const replayed = replayCommands(state, commands);
+
+		expect(fighter(replayed.state, 'near').health).toBe(0);
+		expect(replayed.state.outcome).toBe('ongoing');
+		expect(endTurnIn(commands).facing).toBe('W');
+	});
+});
+
 describe('terminal and side behavior', () => {
+	it('ranks an ongoing turn above a high-scoring terminal self-defeat', () => {
+		const created = battleState(
+			setup([
+				placement('hero', { x: 2, z: 2 }, { template: { power: 100, agility: 30 }, facing: 'N' }),
+				placement(
+					'center',
+					{ x: 2, z: 1 },
+					{
+						side: 'enemy',
+						template: luTemplate({ power: 100, internalArtId: 'iron_body' }),
+						facing: 'S'
+					}
+				),
+				placement('left', { x: 1, z: 1 }, { side: 'enemy', template: luTemplate(), facing: 'S' }),
+				placement('right', { x: 3, z: 1 }, { side: 'enemy', template: luTemplate(), facing: 'S' })
+			])
+		);
+		const weakened = patchFighter(patchFighter(created, 'left', { health: 5 }), 'right', {
+			health: 5
+		});
+		const guarded = patchFighter(patchFighter(weakened, 'hero', { health: 5 }), 'center', {
+			guarding: true
+		});
+		const state: BattleState = { ...guarded, hasMoved: true };
+		const suicide = accept(
+			applyBattleCommand(state, {
+				type: 'useMove',
+				actorId: 'hero',
+				moveId: 'cloud_sweep',
+				aim: { x: 2, z: 1 }
+			})
+		);
+		expect(suicide.state.outcome).toBe('defeat');
+
+		const commands = planBattleTurn(state, 'hero', AGGRESSOR);
+		const replayed = replayCommands(state, commands);
+
+		expect(replayed.state.outcome).toBe('ongoing');
+	});
+
 	it('omits endTurn when the chosen attack ends the battle', () => {
 		const adjacent = battleState(starter({ x: 1, z: 1 }, { x: 2, z: 1 }));
 		const state = patchFighter(adjacent, 'lu', { health: 5 });
 
 		const commands = planBattleTurn(state, 'hero', AGGRESSOR);
 
-		expect(commands).toEqual([
-			{
-				type: 'useMove',
-				actorId: 'hero',
-				moveId: 'sword_cut',
-				aim: { x: 2, z: 1 }
-			}
-		]);
+		expect(commands.some((command) => command.type === 'useMove')).toBe(true);
+		expect(commands.some((command) => command.type === 'endTurn')).toBe(false);
 		const replayed = replayCommands(state, commands);
 		expect(replayed.state.outcome).toBe('victory');
 		expect(replayed.events.some((event) => event.type === 'battleEnded')).toBe(true);
@@ -519,14 +1185,88 @@ describe('terminal and side behavior', () => {
 		const commands = planBattleTurn(state, 'lu', AGGRESSOR);
 
 		expect(commands.some((command) => command.type === 'useItem')).toBe(false);
-		expect(commands[0]).toMatchObject({ type: 'useMove', actorId: 'lu', moveId: 'sword_cut' });
+		expect(commands.some((command) => command.type === 'useMove' && command.actorId === 'lu')).toBe(
+			true
+		);
 		const replayed = replayCommands(state, commands);
 		expect(replayed.state.outcome).toBe('defeat');
 		expect(replayed.state.squadBag).toEqual({ lesser_healing_pill: 2, lesser_qi_pill: 2 });
 	});
 });
 
+describe('counter-kill handoff', () => {
+	it('accepts a worthwhile non-terminal counter kill without appending a stale endTurn', () => {
+		const created = battleState(
+			setup([
+				placement('hero', { x: 0, z: 4 }, { template: { agility: 1 }, facing: 'N' }),
+				placement('ally', { x: 2, z: 2 }, { template: { power: 100, agility: 30 }, facing: 'N' }),
+				placement(
+					'center',
+					{ x: 2, z: 1 },
+					{
+						side: 'enemy',
+						template: luTemplate({ power: 100, internalArtId: 'iron_body' }),
+						facing: 'S'
+					}
+				),
+				placement('left', { x: 1, z: 1 }, { side: 'enemy', template: luTemplate(), facing: 'S' }),
+				placement('right', { x: 3, z: 1 }, { side: 'enemy', template: luTemplate(), facing: 'S' })
+			])
+		);
+		const weakened = patchFighter(patchFighter(created, 'left', { health: 5 }), 'right', {
+			health: 5
+		});
+		const guarded = patchFighter(patchFighter(weakened, 'ally', { health: 5 }), 'center', {
+			guarding: true
+		});
+		const state: BattleState = { ...guarded, hasMoved: true };
+		const probe = accept(
+			applyBattleCommand(state, {
+				type: 'useMove',
+				actorId: 'ally',
+				moveId: 'cloud_sweep',
+				aim: { x: 2, z: 1 }
+			})
+		);
+		expect(probe.state.outcome).toBe('ongoing');
+		expect(fighter(probe.state, 'ally').health).toBe(0);
+		expect(getTurnOrder(probe.state).activeId).not.toBe('ally');
+		expect(probe.events.some((event) => event.type === 'turnStarted')).toBe(true);
+
+		const commands = planBattleTurn(state, 'ally', AGGRESSOR);
+		const attack = useMoveIn(commands);
+		const replayed = replayCommands(state, commands);
+
+		expect(attack.moveId).toBe('cloud_sweep');
+		expect(commands.some((command) => command.type === 'endTurn')).toBe(false);
+		expect(replayed.state.outcome).toBe('ongoing');
+		expect(fighter(replayed.state, 'ally').health).toBe(0);
+		expect(getTurnOrder(replayed.state).activeId).not.toBe('ally');
+		expect(replayed.events.some((event) => event.type === 'turnEnded')).toBe(true);
+		expect(replayed.events.some((event) => event.type === 'turnStarted')).toBe(true);
+	});
+});
+
 describe('planner purity and replayability', () => {
+	it('repeats identical commands for identical decisions', () => {
+		const rows = ['.....', '.TTT.', '..#..', '.....', '.....'];
+		const state = battleState(
+			setup(
+				[
+					placement('hero', { x: 1, z: 2 }, { facing: 'E' }),
+					placement('lu', { x: 3, z: 2 }, { side: 'enemy', template: luTemplate(), facing: 'W' })
+				],
+				{ terrain: rows }
+			)
+		);
+
+		const first = planBattleTurn(state, 'hero', AGGRESSOR);
+		const second = planBattleTurn(state, 'hero', AGGRESSOR);
+
+		expect(second).toStrictEqual(first);
+		replayCommands(state, first);
+	});
+
 	it('does not mutate a deep-frozen input state or profile and every command replays legally', () => {
 		const state = battleState(starter({ x: 1, z: 1 }, { x: 2, z: 1 }));
 		const snapshot = JSON.parse(JSON.stringify(state));

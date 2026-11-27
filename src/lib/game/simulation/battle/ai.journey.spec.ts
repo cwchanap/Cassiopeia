@@ -309,9 +309,9 @@ describe('enemy AI public-API journeys', () => {
 		const roundTripped = playAiBattle(mixedBattleSetup(), mixedBattleProfiles(), true);
 
 		expectTerminalBattle(fresh);
-		expect(roundTripped.commands).toEqual(fresh.commands);
-		expect(roundTripped.events).toEqual(fresh.events);
-		expect(roundTripped.finalState).toEqual(fresh.finalState);
+		expect(roundTripped.commands).toStrictEqual(fresh.commands);
+		expect(roundTripped.events).toStrictEqual(fresh.events);
+		expect(roundTripped.finalState).toStrictEqual(fresh.finalState);
 		expect(roundTripped.plannedTurns).toBe(fresh.plannedTurns);
 	});
 });
