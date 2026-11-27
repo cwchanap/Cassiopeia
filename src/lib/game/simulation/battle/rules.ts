@@ -633,7 +633,8 @@ function resolveHit(
 	target: BattleFighter,
 	options: HitOptions
 ): void {
-	const facingPercent = options.facingPercent ?? facingPercentFor(target, source.cell);
+	const facingPercent =
+		options.facingPercent ?? facingPercentFor(target.cell, target.facing, source.cell);
 	const coverPercent = coverPercentFor(state, source.cell, target.cell);
 	const guardPercent = target.guarding && !options.ignoreGuard ? GUARD_PERCENT : 100;
 	const passivePercent = INTERNAL_ARTS[target.internalArtId].damageTakenPercent;
@@ -673,15 +674,18 @@ function canCounter(defender: BattleFighter, attacker: BattleFighter): boolean {
 	return (
 		defender.guarding &&
 		cellDistance(defender.cell, attacker.cell) === 1 &&
-		facingPercentFor(defender, attacker.cell) !== REAR_FACING_PERCENT
+		facingPercentFor(defender.cell, defender.facing, attacker.cell) !== REAR_FACING_PERCENT
 	);
 }
 
-/** Front, side or rear from the defender's own facing and the attacker's position. */
-function facingPercentFor(defender: BattleFighter, attackerCell: Cell): number {
-	const forward = facingStep(defender.facing);
-	const dx = attackerCell.x - defender.cell.x;
-	const dz = attackerCell.z - defender.cell.z;
+/**
+ * Front, side or rear for a hypothetical defender cell/facing and attacker position. Diagonal
+ * ties remain side hits; this is the only classification used by damage, counters and the AI.
+ */
+export function facingPercentFor(targetCell: Cell, facing: Facing, attackerCell: Cell): number {
+	const forward = facingStep(facing);
+	const dx = attackerCell.x - targetCell.x;
+	const dz = attackerCell.z - targetCell.z;
 	const ahead = dx * forward.x + dz * forward.z;
 	const lateral = dx * forward.z - dz * forward.x;
 	if (Math.abs(ahead) > Math.abs(lateral)) {
@@ -869,7 +873,8 @@ function fighterIn(state: BattleState, fighterId: string): BattleFighter {
 	return fighter;
 }
 
-function movementBudget(fighter: BattleFighter): number {
+/** Movement points from agility and the internal art; exported only inside the battle module. */
+export function movementBudget(fighter: BattleFighter): number {
 	return 2 + Math.floor(fighter.agility / 10) + INTERNAL_ARTS[fighter.internalArtId].moveBonus;
 }
 
