@@ -531,6 +531,29 @@ describe('actor-excluded threat geometry', () => {
 			'the origin is recorded once even when sword, line and arc all cover the cell'
 		).toHaveLength(1);
 	});
+
+	it('planner scoring treats several origins from one hostile as one threat', () => {
+		const post = { x: 2, z: 4 };
+		const state = battleState(
+			setup(
+				[
+					placement('hero', post, { facing: 'E' }),
+					placement('lu', { x: 2, z: 1 }, { side: 'enemy', template: luTemplate(), facing: 'S' })
+				],
+				{ terrain: openRows(9) }
+			)
+		);
+		const threats = buildActorExcludedThreatMap(state, fighter(state, 'hero'));
+
+		expect(threatOrigins(threats, 'lu', { x: 2, z: 2 })?.length).toBeGreaterThan(1);
+
+		const commands = planBattleTurn(state, 'hero', { archetype: 'guardian', post });
+
+		// Counting each origin separately adds enough penalty to make the Guardian abandon this attack.
+		expect(moveIn(commands).cell).toEqual({ x: 2, z: 2 });
+		expect(useMoveIn(commands).moveId).toBe('cloud_sweep');
+		replayCommands(state, commands);
+	});
 });
 
 describe('turn phase handling', () => {
@@ -888,27 +911,59 @@ describe('archetype scoring behavior', () => {
 		replayCommands(state, commands);
 	});
 
-	it('guards a threatened post the Guardian cannot attack from', () => {
+	it('guards a threatened fixed post but gathers there without a threat', () => {
 		const post = { x: 2, z: 2 };
-		const state = battleState(
-			setup(
-				[
-					placement('hero', post, { facing: 'E' }),
-					placement(
-						'dart',
-						{ x: 8, z: 2 },
-						{ side: 'enemy', template: willowTemplate({ agility: 10 }), facing: 'W' }
-					)
-				],
-				{ terrain: openRows(10) }
+		const fixedState = (enemyX: number): BattleState => {
+			const created = battleState(
+				setup(
+					[
+						placement('hero', post, { facing: 'E' }),
+						placement(
+							'dart',
+							{ x: enemyX, z: 2 },
+							{ side: 'enemy', template: willowTemplate({ agility: 1 }), facing: 'W' }
+						)
+					],
+					{ terrain: openRows(10) }
+				)
+			);
+			const lowQi = patchFighter(patchFighter(created, 'hero', { qi: 99 }), 'dart', { qi: 0 });
+			return { ...lowQi, hasMoved: true };
+		};
+		const profile: BattleAiProfile = { archetype: 'guardian', post };
+
+		const threatenedState = fixedState(8);
+		expect(
+			threatOrigins(
+				buildActorExcludedThreatMap(threatenedState, fighter(threatenedState, 'hero')),
+				'dart',
+				post
 			)
-		);
+		).toBeDefined();
+		const threatenedCommands = planBattleTurn(threatenedState, 'hero', profile);
+		const threatenedReplay = replayCommands(threatenedState, threatenedCommands);
 
-		const commands = planBattleTurn(state, 'hero', { archetype: 'guardian', post });
+		expect(threatenedCommands.map((command) => command.type)).toEqual(['guard', 'endTurn']);
+		expect(fighter(threatenedReplay.state, 'hero').cell).toEqual(post);
 
-		expect(commands.some((command) => command.type === 'guard')).toBe(true);
-		expect(commands.some((command) => command.type === 'useMove')).toBe(false);
-		replayCommands(state, commands);
+		const clearState = fixedState(9);
+		expect(
+			threatOrigins(
+				buildActorExcludedThreatMap(clearState, fighter(clearState, 'hero')),
+				'dart',
+				post
+			)
+		).toBeUndefined();
+		const clearCommands = planBattleTurn(clearState, 'hero', profile);
+		const clearReplay = replayCommands(clearState, clearCommands);
+		const gathered = clearReplay.events.find((event) => event.type === 'qiGathered');
+
+		expect(clearCommands.map((command) => command.type)).toEqual(['gatherQi', 'endTurn']);
+		expect(fighter(clearReplay.state, 'hero').cell).toEqual(post);
+		if (!gathered || gathered.type !== 'qiGathered') {
+			throw new Error('chosen Gather emitted no qiGathered event');
+		}
+		expect(gathered.qiAfter - gathered.qiBefore).toBe(1);
 	});
 
 	it('punishes an approaching vulnerable opponent instead of only guarding the post', () => {
