@@ -1038,7 +1038,7 @@ function mutableFighter(state: BattleState, source: BattleState, fighterId: stri
 	if (fighter !== source.fighters[index]) {
 		return fighter;
 	}
-	const copy = { ...fighter, cell: fighter.cell };
+	const copy = { ...fighter, cell: { ...fighter.cell } };
 	state.fighters[index] = copy;
 	return copy;
 }

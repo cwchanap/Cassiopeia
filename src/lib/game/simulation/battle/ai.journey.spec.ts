@@ -90,10 +90,67 @@ function mutualReachDuelSetup(): BattleSetup {
 	};
 }
 
+/** A short wall touches the map edge, so the only attack route is a multi-turn detour. */
+function walledAggressorDuelSetup(): BattleSetup {
+	return {
+		terrain: ['...#...', '...#...', '...#...', '.......', '.......'],
+		fighters: [
+			{
+				id: 'hero',
+				side: 'squad',
+				template: SECT_HERO_TEMPLATE,
+				cell: { x: 2, z: 0 },
+				facing: 'E'
+			},
+			{
+				id: 'lu',
+				side: 'enemy',
+				template: SENIOR_BROTHER_LU_TEMPLATE,
+				cell: { x: 4, z: 0 },
+				facing: 'W'
+			}
+		],
+		heroId: 'hero',
+		squadBag: {}
+	};
+}
+
+/** Willow Darts fighters start on the starter map's obstacle row with a wall directly between them. */
+function willowObstacleDuelSetup(): BattleSetup {
+	return {
+		terrain: STARTER_BATTLE_TERRAIN,
+		fighters: [
+			{
+				id: 'hero',
+				side: 'squad',
+				template: marksmanTemplate(SECT_HERO_TEMPLATE),
+				cell: { x: 1, z: 8 },
+				facing: 'E'
+			},
+			{
+				id: 'lu',
+				side: 'enemy',
+				template: marksmanTemplate(SENIOR_BROTHER_LU_TEMPLATE),
+				cell: { x: 9, z: 8 },
+				facing: 'W'
+			}
+		],
+		heroId: 'hero',
+		squadBag: {}
+	};
+}
+
 function aggressorDuelProfiles(): Map<string, BattleAiProfile> {
 	const profiles = new Map<string, BattleAiProfile>();
 	profiles.set('hero', { archetype: 'aggressor' });
 	profiles.set('lu', { archetype: 'aggressor' });
+	return profiles;
+}
+
+function marksmanDuelProfiles(): Map<string, BattleAiProfile> {
+	const profiles = new Map<string, BattleAiProfile>();
+	profiles.set('hero', { archetype: 'marksman' });
+	profiles.set('lu', { archetype: 'marksman' });
 	return profiles;
 }
 
@@ -292,6 +349,20 @@ function expectRoundFourDamage(transcript: AiJourneyTranscript): void {
 describe('enemy AI public-API journeys', () => {
 	it('fights an Aggressor hero versus Aggressor Lu mutual-reach duel to a real outcome', () => {
 		const transcript = playAiBattle(mutualReachDuelSetup(), aggressorDuelProfiles(), false);
+
+		expectTerminalBattle(transcript);
+		expectRoundFourDamage(transcript);
+	});
+
+	it('fights an Aggressor duel around a short wall to a real outcome', () => {
+		const transcript = playAiBattle(walledAggressorDuelSetup(), aggressorDuelProfiles(), false);
+
+		expectTerminalBattle(transcript);
+		expectRoundFourDamage(transcript);
+	});
+
+	it('fights a Willow Darts duel across the starter-map obstacle to a real outcome', () => {
+		const transcript = playAiBattle(willowObstacleDuelSetup(), marksmanDuelProfiles(), false);
 
 		expectTerminalBattle(transcript);
 		expectRoundFourDamage(transcript);

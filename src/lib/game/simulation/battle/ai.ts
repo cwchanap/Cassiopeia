@@ -5,6 +5,7 @@ import {
 	canEnterTerrain,
 	cellDistance,
 	computeReachableCells,
+	facingStep,
 	legalAimCells,
 	sameCell,
 	terrainAt
@@ -62,6 +63,7 @@ type DecisionContext = {
 	profile: BattleAiProfile;
 	weights: AiArchetypeWeights;
 	threatMap: ActorExcludedThreatMap;
+	rangeDistances: ReadonlyMap<string, ReadonlyMap<string, number>>;
 	maximumMoveReach: number;
 	finalFacings: readonly Facing[];
 };
@@ -105,6 +107,7 @@ export function planBattleTurn(
 		profile,
 		weights: AI_ARCHETYPES[profile.archetype],
 		threatMap: buildActorExcludedThreatMap(state, actor),
+		rangeDistances: buildHostileRangeDistances(state, actor),
 		maximumMoveReach: maximumMoveReach(actor),
 		finalFacings: finalFacings(actor.facing)
 	};
@@ -243,6 +246,46 @@ function targetingKey(targeting: MoveTargeting): string {
 		return `line:${targeting.length}`;
 	}
 	return 'arc';
+}
+
+/**
+ * Terrain walking distances in cardinal steps. Fighter occupancy is transient,
+ * so only terrain blocks.
+ */
+function buildHostileRangeDistances(
+	state: BattleState,
+	actor: BattleFighter
+): Map<string, Map<string, number>> {
+	const distancesByHostile = new Map<string, Map<string, number>>();
+	for (const hostile of state.fighters) {
+		if (hostile.health === 0 || hostile.side === actor.side) {
+			continue;
+		}
+		distancesByHostile.set(hostile.id, walkingDistanceField(state.map, hostile.cell));
+	}
+	return distancesByHostile;
+}
+
+function walkingDistanceField(map: BattleMap, start: Cell): Map<string, number> {
+	const distances = new Map<string, number>([[cellKey(start), 0]]);
+	const frontier: { cell: Cell; distance: number }[] = [{ cell: { ...start }, distance: 0 }];
+	for (let index = 0; index < frontier.length; index++) {
+		const current = frontier[index];
+		for (const facing of CARDINAL_FACINGS) {
+			const step = facingStep(facing);
+			const next = { x: current.cell.x + step.x, z: current.cell.z + step.z };
+			if (!canEnterTerrain(terrainAt(map, next))) {
+				continue;
+			}
+			const key = cellKey(next);
+			if (distances.has(key)) {
+				continue;
+			}
+			distances.set(key, current.distance + 1);
+			frontier.push({ cell: next, distance: current.distance + 1 });
+		}
+	}
+	return distances;
 }
 
 /** Profile authoring is external state, so validate the runtime shape before every early exit. */
@@ -486,20 +529,30 @@ function assessPosition(
 	}
 
 	let nearest: number | null = null;
+	let nearestHostiles: BattleFighter[] = [];
 	let adjacentHostiles = 0;
 	for (const hostile of state.fighters) {
 		if (hostile.health === 0 || hostile.side === actor.side) {
 			continue;
 		}
-		const distance = cellDistance(actor.cell, hostile.cell);
-		nearest = nearest === null ? distance : Math.min(nearest, distance);
-		if (distance === 1) {
+		const distance = decision.rangeDistances.get(hostile.id)?.get(cellKey(actor.cell));
+		if (distance !== undefined && (nearest === null || distance < nearest)) {
+			nearest = distance;
+			nearestHostiles = [hostile];
+		} else if (distance !== undefined && distance === nearest) {
+			nearestHostiles.push(hostile);
+		}
+		if (cellDistance(actor.cell, hostile.cell) === 1) {
 			adjacentHostiles += 1;
 		}
 	}
 	if (nearest !== null) {
 		const preferredRange = Math.min(weights.preferredRange, decision.maximumMoveReach);
-		score += weights.rangeDeviation * Math.abs(nearest - preferredRange);
+		const deviation = Math.abs(nearest - preferredRange);
+		const blockedPreferredRange =
+			deviation === 0 &&
+			!nearestHostiles.some((hostile) => hasClearShot(state.map, actor, hostile));
+		score += weights.rangeDeviation * (deviation + (blockedPreferredRange ? 1 : 0));
 		score += weights.adjacentHostile * adjacentHostiles;
 	}
 	if (decision.profile.archetype === 'guardian') {
@@ -563,6 +616,28 @@ function facingSteps(facingPercent: number): number {
 		return 1;
 	}
 	return 2;
+}
+
+/** Exact owned-move geometry without the qi gate, used only to invalidate unusable firing cells. */
+function hasClearShot(map: BattleMap, actor: BattleFighter, hostile: BattleFighter): boolean {
+	const art = EXTERNAL_ARTS[actor.externalArtId];
+	const seenTargeting = new Set<string>();
+	for (const slot of MOVE_SLOTS) {
+		const targeting = MOVES[art.moves[slot]].targeting;
+		const key = targetingKey(targeting);
+		if (seenTargeting.has(key)) {
+			continue;
+		}
+		seenTargeting.add(key);
+		for (const aim of legalAimCells(map, actor.cell, targeting)) {
+			const cells =
+				targeting.shape === 'single' ? [aim] : affectedCells(map, actor.cell, aim, targeting);
+			if (cells.some((cell) => sameCell(cell, hostile.cell))) {
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
 /** Maximum geometrical reach over equipped moves; arc sweeps reach Manhattan distance two. */

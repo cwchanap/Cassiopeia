@@ -924,6 +924,44 @@ describe('archetype scoring behavior', () => {
 		replayCommands(state, commands);
 	});
 
+	it('leaves a preferred-range cell without a clear shot for a clear firing cell', () => {
+		const created = battleState(
+			setup(
+				[
+					placement(
+						'hero',
+						{ x: 1, z: 0 },
+						{ template: willowTemplate({ power: 5 }), facing: 'N' }
+					),
+					placement(
+						'lu',
+						{ x: 3, z: 1 },
+						{
+							side: 'enemy',
+							template: luTemplate({
+								power: 1,
+								agility: 1,
+								externalArtId: 'willow_darts',
+								internalArtId: 'sect_breathing'
+							}),
+							facing: 'N'
+						}
+					)
+				],
+				{ terrain: openRows(7) }
+			)
+		);
+		const state = patchFighter(created, 'lu', { guarding: true });
+
+		const commands = planBattleTurn(state, 'hero', { archetype: 'marksman' });
+		const move = moveIn(commands);
+		const attack = useMoveIn(commands);
+
+		expect(move.cell).toEqual({ x: 0, z: 1 });
+		expect(attack.aim).toEqual(fighter(state, 'lu').cell);
+		replayCommands(state, commands);
+	});
+
 	it('keeps a Guardian on its authored post when no punishment is available', () => {
 		const post = { x: 2, z: 2 };
 		const state = battleState(
