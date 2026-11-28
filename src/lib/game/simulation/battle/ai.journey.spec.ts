@@ -140,6 +140,31 @@ function willowObstacleDuelSetup(): BattleSetup {
 	};
 }
 
+/** A Willow Darts Marksman starts beside the starter-map pool while Guardian Lu holds its far side. */
+function willowPoolDuelSetup(): BattleSetup {
+	return {
+		terrain: STARTER_BATTLE_TERRAIN,
+		fighters: [
+			{
+				id: 'hero',
+				side: 'squad',
+				template: { ...SECT_HERO_TEMPLATE, externalArtId: 'willow_darts' },
+				cell: { x: 3, z: 1 },
+				facing: 'E'
+			},
+			{
+				id: 'lu',
+				side: 'enemy',
+				template: SENIOR_BROTHER_LU_TEMPLATE,
+				cell: { x: 2, z: 3 },
+				facing: 'W'
+			}
+		],
+		heroId: 'hero',
+		squadBag: {}
+	};
+}
+
 function aggressorDuelProfiles(): Map<string, BattleAiProfile> {
 	const profiles = new Map<string, BattleAiProfile>();
 	profiles.set('hero', { archetype: 'aggressor' });
@@ -151,6 +176,13 @@ function marksmanDuelProfiles(): Map<string, BattleAiProfile> {
 	const profiles = new Map<string, BattleAiProfile>();
 	profiles.set('hero', { archetype: 'marksman' });
 	profiles.set('lu', { archetype: 'marksman' });
+	return profiles;
+}
+
+function marksmanGuardianDuelProfiles(): Map<string, BattleAiProfile> {
+	const profiles = new Map<string, BattleAiProfile>();
+	profiles.set('hero', { archetype: 'marksman' });
+	profiles.set('lu', { archetype: 'guardian', post: { x: 2, z: 3 } });
 	return profiles;
 }
 
@@ -363,6 +395,13 @@ describe('enemy AI public-API journeys', () => {
 
 	it('fights a Willow Darts duel across the starter-map obstacle to a real outcome', () => {
 		const transcript = playAiBattle(willowObstacleDuelSetup(), marksmanDuelProfiles(), false);
+
+		expectTerminalBattle(transcript);
+		expectRoundFourDamage(transcript);
+	});
+
+	it('fights a Willow Darts Marksman across the starter-map pool against Guardian Lu to a real outcome', () => {
+		const transcript = playAiBattle(willowPoolDuelSetup(), marksmanGuardianDuelProfiles(), false);
 
 		expectTerminalBattle(transcript);
 		expectRoundFourDamage(transcript);

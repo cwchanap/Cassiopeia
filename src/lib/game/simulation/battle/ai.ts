@@ -64,6 +64,8 @@ type DecisionContext = {
 	weights: AiArchetypeWeights;
 	threatMap: ActorExcludedThreatMap;
 	rangeDistances: ReadonlyMap<string, ReadonlyMap<string, number>>;
+	clearShots: Map<string, Map<string, boolean>>;
+	shotTargeting: readonly MoveTargeting[];
 	maximumMoveReach: number;
 	finalFacings: readonly Facing[];
 };
@@ -108,6 +110,8 @@ export function planBattleTurn(
 		weights: AI_ARCHETYPES[profile.archetype],
 		threatMap: buildActorExcludedThreatMap(state, actor),
 		rangeDistances: buildHostileRangeDistances(state, actor),
+		clearShots: new Map(),
+		shotTargeting: clearShotTargeting(actor),
 		maximumMoveReach: maximumMoveReach(actor),
 		finalFacings: finalFacings(actor.facing)
 	};
@@ -257,19 +261,50 @@ function buildHostileRangeDistances(
 	actor: BattleFighter
 ): Map<string, Map<string, number>> {
 	const distancesByHostile = new Map<string, Map<string, number>>();
+	const budget = state.hasMoved || state.hasActed ? 0 : movementBudget(actor);
+	const targets = movementFootprintKeys(state.map, actor.cell, budget);
 	for (const hostile of state.fighters) {
 		if (hostile.health === 0 || hostile.side === actor.side) {
 			continue;
 		}
-		distancesByHostile.set(hostile.id, walkingDistanceField(state.map, hostile.cell));
+		distancesByHostile.set(hostile.id, walkingDistanceField(state.map, hostile.cell, targets));
 	}
 	return distancesByHostile;
 }
 
-function walkingDistanceField(map: BattleMap, start: Cell): Map<string, number> {
+/** Standable cells a unit with this movement budget could possibly reach, ignoring bamboo cost. */
+function movementFootprintKeys(map: BattleMap, center: Cell, budget: number): Set<string> {
+	const keys = new Set<string>();
+	for (
+		let z = Math.max(0, center.z - budget);
+		z <= Math.min(map.height - 1, center.z + budget);
+		z++
+	) {
+		const horizontal = budget - Math.abs(center.z - z);
+		for (
+			let x = Math.max(0, center.x - horizontal);
+			x <= Math.min(map.width - 1, center.x + horizontal);
+			x++
+		) {
+			const cell = { x, z };
+			if (canEnterTerrain(terrainAt(map, cell))) {
+				keys.add(cellKey(cell));
+			}
+		}
+	}
+	return keys;
+}
+
+function walkingDistanceField(
+	map: BattleMap,
+	start: Cell,
+	targets: ReadonlySet<string>
+): Map<string, number> {
+	const remaining = new Set(targets);
 	const distances = new Map<string, number>([[cellKey(start), 0]]);
 	const frontier: { cell: Cell; distance: number }[] = [{ cell: { ...start }, distance: 0 }];
-	for (let index = 0; index < frontier.length; index++) {
+	remaining.delete(cellKey(start));
+	for (let index = 0; index < frontier.length && remaining.size > 0; index++) {
 		const current = frontier[index];
 		for (const facing of CARDINAL_FACINGS) {
 			const step = facingStep(facing);
@@ -282,6 +317,7 @@ function walkingDistanceField(map: BattleMap, start: Cell): Map<string, number> 
 				continue;
 			}
 			distances.set(key, current.distance + 1);
+			remaining.delete(key);
 			frontier.push({ cell: next, distance: current.distance + 1 });
 		}
 	}
@@ -529,18 +565,20 @@ function assessPosition(
 	}
 
 	let nearest: number | null = null;
-	let nearestHostiles: BattleFighter[] = [];
+	let nearestClearShots: boolean[] = [];
 	let adjacentHostiles = 0;
 	for (const hostile of state.fighters) {
 		if (hostile.health === 0 || hostile.side === actor.side) {
 			continue;
 		}
-		const distance = decision.rangeDistances.get(hostile.id)?.get(cellKey(actor.cell));
+		const walkingDistance = decision.rangeDistances.get(hostile.id)?.get(cellKey(actor.cell));
+		const clearShot = cachedClearShot(state.map, actor, hostile, decision);
+		const distance = clearShot ? cellDistance(actor.cell, hostile.cell) : walkingDistance;
 		if (distance !== undefined && (nearest === null || distance < nearest)) {
 			nearest = distance;
-			nearestHostiles = [hostile];
+			nearestClearShots = [clearShot];
 		} else if (distance !== undefined && distance === nearest) {
-			nearestHostiles.push(hostile);
+			nearestClearShots.push(clearShot);
 		}
 		if (cellDistance(actor.cell, hostile.cell) === 1) {
 			adjacentHostiles += 1;
@@ -550,8 +588,7 @@ function assessPosition(
 		const preferredRange = Math.min(weights.preferredRange, decision.maximumMoveReach);
 		const deviation = Math.abs(nearest - preferredRange);
 		const blockedPreferredRange =
-			deviation === 0 &&
-			!nearestHostiles.some((hostile) => hasClearShot(state.map, actor, hostile));
+			deviation === 0 && !nearestClearShots.some((clearShot) => clearShot);
 		score += weights.rangeDeviation * (deviation + (blockedPreferredRange ? 1 : 0));
 		score += weights.adjacentHostile * adjacentHostiles;
 	}
@@ -618,21 +655,63 @@ function facingSteps(facingPercent: number): number {
 	return 2;
 }
 
-/** Exact owned-move geometry without the qi gate, used only to invalidate unusable firing cells. */
-function hasClearShot(map: BattleMap, actor: BattleFighter, hostile: BattleFighter): boolean {
+function cachedClearShot(
+	map: BattleMap,
+	actor: BattleFighter,
+	hostile: BattleFighter,
+	decision: DecisionContext
+): boolean {
+	let byCell = decision.clearShots.get(hostile.id);
+	if (!byCell) {
+		byCell = new Map();
+		decision.clearShots.set(hostile.id, byCell);
+	}
+	const key = cellKey(actor.cell);
+	const cached = byCell.get(key);
+	if (cached !== undefined) {
+		return cached;
+	}
+	const clearShot = hasClearShot(map, actor.cell, hostile.cell, decision.shotTargeting);
+	byCell.set(key, clearShot);
+	return clearShot;
+}
+
+/** The longest single-target scan subsumes shorter scans because every single move hits nearer cells. */
+function clearShotTargeting(actor: BattleFighter): readonly MoveTargeting[] {
 	const art = EXTERNAL_ARTS[actor.externalArtId];
+	const targetings: MoveTargeting[] = [];
 	const seenTargeting = new Set<string>();
+	let maximumSingleRange = 0;
 	for (const slot of MOVE_SLOTS) {
 		const targeting = MOVES[art.moves[slot]].targeting;
-		const key = targetingKey(targeting);
-		if (seenTargeting.has(key)) {
+		if (targeting.shape === 'single') {
+			maximumSingleRange = Math.max(maximumSingleRange, targeting.range);
 			continue;
 		}
-		seenTargeting.add(key);
-		for (const aim of legalAimCells(map, actor.cell, targeting)) {
+		const key = targetingKey(targeting);
+		if (!seenTargeting.has(key)) {
+			seenTargeting.add(key);
+			targetings.push(targeting);
+		}
+	}
+	if (maximumSingleRange > 0) {
+		return [{ shape: 'single', range: maximumSingleRange }, ...targetings];
+	}
+	return targetings;
+}
+
+/** Exact owned-move geometry without the qi gate, used for firing-range scoring. */
+function hasClearShot(
+	map: BattleMap,
+	origin: Cell,
+	hostileCell: Cell,
+	targetings: readonly MoveTargeting[]
+): boolean {
+	for (const targeting of targetings) {
+		for (const aim of legalAimCells(map, origin, targeting)) {
 			const cells =
-				targeting.shape === 'single' ? [aim] : affectedCells(map, actor.cell, aim, targeting);
-			if (cells.some((cell) => sameCell(cell, hostile.cell))) {
+				targeting.shape === 'single' ? [aim] : affectedCells(map, origin, aim, targeting);
+			if (cells.some((cell) => sameCell(cell, hostileCell))) {
 				return true;
 			}
 		}

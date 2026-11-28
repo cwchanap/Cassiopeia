@@ -477,7 +477,7 @@ describe('representative battle AI frame benchmark', () => {
 			expect(analysis.reachableCells).toBe(analysis.positionCandidates);
 			expect(analysis.actionCandidates).toBeGreaterThan(0);
 			expect(analysis.targetableGuardingEnemies.length).toBeGreaterThanOrEqual(2);
-			expect(cpuMilliseconds.p95).toBeLessThanOrEqual(FRAME_BUDGET_MS);
+			expect(milliseconds.p95).toBeLessThanOrEqual(FRAME_BUDGET_MS);
 		},
 		30_000
 	);
