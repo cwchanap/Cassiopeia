@@ -37,7 +37,7 @@ export type AiArchetypeWeights = {
 	readonly rangeDeviation: number;
 	readonly adjacentHostile: number;
 	readonly postDistance: number;
-	/** Preferred Manhattan distance in cells; this is a range value, not a score weight. */
+	/** Preferred walking distance in cardinal steps; this is a range value, not a score weight. */
 	readonly preferredRange: number;
 };
 
