@@ -33,7 +33,11 @@ Use the existing hero and Lu templates, Aggressor AI, and propose hero (1, 3)
 facing E and Lu (5, 3) facing W, subject to the encounter test.
 
 Before fixing the terrain, draw the grid over the actual loaded courtyard and
-inspect a browser screenshot. Three procedural posts are at z = -5.2 and
+inspect loaded-GLB and forced-fallback browser screenshots. Remove the obsolete
+MVP `createShrine` inside the fallback courtyard at (-4.2, -3.35), not the
+actual shrine/bell at the authored distant village location. Flatten/remove
+the fallback raised stepping slabs at z = -3.2 so ground overlays remain
+visible above the pad. Three procedural posts are at z = -5.2 and
 x = -1.8, 0, 1.8; move them to appropriate cell centres if necessary. Bamboo
 and lantern footprints near grid edges and the existing wall at z ≈ -7 must
 be checked against both GLB and fallback, using the existing world layout
@@ -73,7 +77,13 @@ finalize command, or return protocol. The renderer reads presentation only.
   separately from the new authoritative state; never mutate a BattleState
   shared with either. Store its ordered event batch. Rejections leave battle
   and events unchanged; reuse item feedback for a short reason.
-- While pending, stepGame advances the presentation timer only. Discard all
+- Initialize `shown` from `createBattle(setup).state` with `pending = []`;
+  initial round/turn are already reflected in state, so Round 1 is ready
+  immediately. Apply the same initialization on Retry.
+- Age battle-local effects and expire item feedback on every unpaused battle
+  tick, including busy, idle hero/enemy and terminal result. Preserve the
+  existing 0.65 s damage-number fade; pause freezes those timers too.
+  While pending, advance the presentation timer without running commands. Discard all
   combat inputs during playback (including direct HUD commands), not buffer
   them. Fold after-values from events into shown: path interpolation for
   moved, strike/counter pose, healthAfter and applied damage number, fall,
@@ -82,7 +92,8 @@ finalize command, or return protocol. The renderer reads presentation only.
   show the next turn/terminal outcome or final HP early; reconcile shown to
   authoritative battle when drained. Reuse damage-number snapshot/component
   and simple model poses; no attack timing or hitstun rules. Keep a
-  battle-local effect list so frozen village effects aren't changed.
+  battle-local effect list so frozen village effects aren't changed; never
+  leave the final damage number or rejection toast frozen on the result panel.
 - When idle and enemy active, call planBattleTurn(battle, activeId, LU_PROFILE)
   and reduce **only its first command**. Replan at the next drained boundary.
   The merged planner supports already-moved and already-acted fighters; no
@@ -121,9 +132,17 @@ Counts/availability come from battle.squadBag and shown resources, not
 the frozen persistent inventory. Shared pill IDs across slots use the
 same count. Disable empty/full-resource/spent/enemy/busy slots. Reuse the
 quick-slot portion of TechniqueBar or its existing markup; no new item
-submenu. Village bag still permits equipment and quick-slot assignment,
-but remove village pill activation (nothing spends HP or qi there). Keep
-exploration vitals as an equipment preview, not a second battle resource.
+submenu. Village bag still permits equipment and quick-slot assignment.
+Keep exploration `quick-slot-1..3` visible, with labels/counts and
+`usable: false` as read-only loadout indicators for quest step 3; the
+bag toggle and slot assignment controls remain usable. Remove village pill
+activation entirely: delete `useConsumable`, `InventoryCommand.useItem`,
+`handleQuickSlotUse`/`useInventoryItem`, runtime `useInventoryItem`, the page
+handler and `bag-use-*` buttons, and their obsolete tests/types. Keep
+`ITEM_CATALOG[id].consumable` because the battle reducer reads it. Narrow
+slot assignment to a `BattlePillId` for a battle intent; no second resource
+mutation path. Keep exploration vitals as an equipment preview, not a second
+battle resource.
 
 On victory after playback, reconcile the two battle pill counts into items,
 including depleted counts and consistent slot normalization, then call
@@ -156,9 +175,9 @@ movement, interaction and dash remain unchanged.
 | Moves | Choose move button, select aim, then Confirm | J/K/L choose basic/technique/finisher; arrows/WASD; Enter |
 | Item | Click assigned quick slot | 1/2/3 |
 | Guard / Gather | Click action | G / Q |
-| Face / end turn | Choose facing, Confirm | E; arrows/WASD; Enter |
+| Face / end turn | Automatically enter facing after action; choose facing, Confirm | E focuses facing; arrows/WASD; Enter |
 | Result | Retry (defeat) / Return | R retries defeat; Enter returns |
-| Cancel / pause | Cancel / pause button | Escape cancels selection first, then pauses/resumes |
+| Cancel / pause | Cancel / pause button | Escape resumes, closes bag, cancels optional selection, or pauses (in that order) |
 
 Optional move → required action → facing endTurn; acting consumes movement
 opportunity. Guard/Gather can substitute for attack; no skip-action. Keyboard
@@ -169,8 +188,27 @@ clears confirmation. For quick slot use, the explicit slot click/key is the
 confirmation of the self-target action; it cannot repeat on held key.
 Invalid actions must not change authoritative state. Use public queries and
 forecast, plus reducer for validation; disable unaffordable/invalid choices.
-Prevent HUD click-through, browser scroll for consumed keys and native button
-activation duplicates. Reset cursor/selection at turn/phase/result changes.
+Automatically enter facing when the living hero has acted, after pending
+playback drains, if outcome is ongoing and the hero is still active; initialize
+to current facing. Facing-only selection cannot be canceled or return to
+an illegal move/action phase. E is optional, not a prerequisite for endTurn.
+Reset cursor/selection at turn/phase/result changes.
+
+Exact Escape precedence in stepGame: if paused, resume; else if bag open,
+close bag; else if a cancellable battle selection exists, cancel it; else
+pause. Facing and result cannot be canceled into an invalid phase. A HUD
+pause/resume button is an explicit pause action, not selection cancel.
+The global keyboard listener must not consume Enter/Space or battle hotkeys
+from focused interactive elements (buttons, inputs, links, etc.) or modal
+dialogs; let native activation and Bag focus trap work. Handle Escape and
+existing Bag I/B close shortcuts explicitly without intercepting native
+activation; suppress movement while modal/focused input owns keys. Pointer
+activation of a BattleHud action button returns focus to scene-host so the
+next Enter confirms once, while keyboard activation retains normal focus
+semantics. Prevent default only for consumed gameplay keys and avoid HUD
+click-through, held-key repeat and duplicate native/global submissions.
+Test Bag, pause, fallback Retry and battle buttons, including Enter after
+mouse move selection, focused keyboard activation and auto-facing.
 
 ## Rendering, projection and HUD
 
@@ -189,12 +227,16 @@ on selection/phase/actor/result changes. Add simple perimeter mist using
 existing rendering primitives. No new art.
 
 Keep the 45°/35° orthographic orientation and fixed battle view height
-(start at 18 m, larger than village). Centre framing on the board as the
-baseline. The ticket explicitly asks to follow the active fighter; retain
-only a small bounded focus offset toward the active fighter if it keeps
-the entire board readable at the supported viewports, rather than a new
-camera-fitting or smoothing framework. Verify both edge fighters and full
-grid visibility; no free zoom/rotation. Use existing camera follow helper,
+(start at 20 m, larger than village; tune once against HUD clearance).
+Centre framing on the board as the baseline. The ticket explicitly asks to
+follow the active fighter; cap the focus offset toward that fighter at 0.8 m
+from board centre (or tighter if needed). At 18 m the front corner has only
+~112 CSS px clearance before HUD, so prioritize visible and clickable cells
+above the bottom HUD, not merely fitting the camera frustum. In the early
+960 × 640 check and final HUD, verify cell (7,7) is not covered and can be
+hovered/picked at the worst permitted northward focus; also check all board
+edges and both fighter extremes at 1440 × 900. Prefer a compact HUD or small
+fixed height increase over generic camera fitting. No free zoom/rotation. Use existing camera follow helper,
 with actual rendered frame for all picking. If the required safe framing
 needs a strictly centered view, note that deviation in the PR rather than
 silently dropping the requirement.
@@ -224,14 +266,27 @@ and banner. No polished ink-and-paper battle layout, new fonts or icons.
 ## Cleanup and acceptance
 
 Delete real-time attack timings, hitstun, chase, cooldowns, duel ring,
-duel camera/inputs and stale tests/text; retain dash and shared movement
-helpers in world.ts. Lu is an ordinary authored village NPC outside battle.
-Update CLAUDE.md (AGENTS.md is its symlink). Deliver in the same PR with
-small independently tested commits.
+duel camera/inputs, `state.rival` and `CombatActionState` in the same
+compiling slice as the GameMode switch. Delete obsolete combat.ts after
+moving dash and shared movement helpers into world.ts. `villagerPosition`
+uses authored data for Lu like other NPCs; no duel-only rival state. Replace
+`applyFighter`'s combat-action dependency with a small presentation pose
+union (idle/strike/guard/hit/defeated; interpolation driven by shown).
+Outside battle, NPCs use idle poses and exploration player movement/dash
+remains. Replace stale unit tests and real-time HUD/status labels including
+strike/qiBurst in this slice. Update CLAUDE.md (AGENTS.md is its symlink).
+Deliver in the same PR with green commits; coordinate cross-cutting type
+changes with caller deletion rather than leave uncompilable intermediate
+commits or compatibility aliases.
 
-Use the companion plan for deterministic stepGame tests, three browser
+Use the companion plan for deterministic stepGame tests, two browser
 journeys with reduced motion and real AI, existing CI, and browser MCP
-end-to-end acceptance. Reuse browser/CI evidence rather than repeat the
+end-to-end acceptance. Retain the existing CI save bridge across the long
+step-4 shrine trek (steps 1–3 and 5 still use actual UI); reload verification
+belongs to the keyboard victory journey, not a separate browser boot.
+Preserve/update the existing all-five-step simulation journey, including
+real shrine bell interaction, so the CI shortcut cannot mask quest regressions.
+Record the shortcut explicitly; do not claim uninterrupted full browser play. Reuse browser/CI evidence rather than repeat the
 whole suite through different tools. The user requires MCP E2E acceptance
 and mockup visual parity; they are not optional. Compare a handful of
 screenshots captured by browser MCP to the actual Linear attachment
